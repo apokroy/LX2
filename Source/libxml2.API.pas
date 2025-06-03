@@ -91,6 +91,9 @@ type
   xmlCharPtr = PUTF8Char;
   xmlEnumSet = UInt32;
 
+  xmlCharPtrArrayPtr = ^xmlCharPtrArray;
+  xmlCharPtrArray = array[0..0] of xmlCharPtr;
+
 {$region 'xmlerror.h'}
 
 type
@@ -948,6 +951,13 @@ type
   /// <param name="userData">user provided data for the error callback </param>
   /// <param name="error">the error being raised </param>
   xmlStructuredErrorFunc = procedure(userData: Pointer; const error: xmlErrorPtr); cdecl;
+
+  /// <summary>
+  /// Signature of the function to use when there is an error and no parsing or validity context available .
+  /// </summary>
+  /// <param name="ctx">a parsing context</param>
+  /// <param name="msg">the message</param>
+  xmlGenericErrorFunc = procedure(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
 
 var
   /// <summary>
