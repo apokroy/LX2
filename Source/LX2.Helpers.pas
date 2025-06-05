@@ -111,7 +111,6 @@ type
     function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
     function  SelectNodes(const queryString: string; const namespaces: xmlNamespaces = nil): xmlNodeArray;
     function  SelectSingleNode(const queryString: string): xmlNodePtr;
-    function  TransformNode(const stylesheet: xmlNodePtr): string;
     function  GetElementsByTagName(const name: string): xmlNodeArray;
 
     function  GetAttribute(const name: string): string; inline;
@@ -208,6 +207,8 @@ type
     function  CreateAttribute(const name: string; const value: string = ''): xmlAttrPtr; overload;
     function  CreateEntityReference(const name: string): xmlNodePtr;
     function  GetElementsByTagName(const name: string): xmlNodeArray;
+    function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     procedure ReconciliateNs;
@@ -220,6 +221,9 @@ type
 procedure xmlDocErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 
 implementation
+
+uses
+  libxslt.API;
 
 function xmlStrPtr(const S: RawByteString): xmlCharPtr;
 begin
@@ -794,11 +798,6 @@ begin
   xmlNodeSetContent(@Self, LocalXmlStr(Value));
 end;
 
-function xmlNodeHelper.TransformNode(const stylesheet: xmlNodePtr): string;
-begin
-//TODO: Transform
-end;
-
 { xmlAttrHelper }
 
 function xmlAttrHelper.GetBaseURI: string;
@@ -1001,7 +1000,6 @@ end;
 
 class function xmlDocHelper.Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
 var
-  input: xmlParserInputPtr;
   ecb: TXmlCallback;
 begin
   var ctx := xmlNewParserCtxt();
@@ -1177,6 +1175,50 @@ begin
   XmlFree(Data);
 end;
 
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean;
+begin
+  Result := False;
+
+  XSLTLib.Initialize;
+
+  var style := xsltParseStylesheetDoc(stylesheet);
+  if style = nil then
+    Exit;
+
+  doc := xsltApplyStylesheet(style, @Self, nil);
+  Result := doc <> nil;
+
+  xsltFreeStylesheet(style);
+end;
+
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: string): Boolean;
+var
+  doc: xmlDocPtr;
+  text: xmlCharPtr;
+  len: Integer;
+begin
+  Result := False;
+
+  XSLTLib.Initialize;
+
+  var style := xsltParseStylesheetDoc(stylesheet);
+  if style = nil then
+    Exit;
+
+  doc := xsltApplyStylesheet(style, @Self, nil);
+  if doc = nil then
+    Exit;
+
+  if xsltSaveResultToString(text, len, doc, style) = 0 then
+  begin
+    S := xmlCharToStr(text, len);
+    Result := True;
+    xmlFree(text);
+  end;
+
+  xsltFreeStylesheet(style);
+end;
+
 function xmlDocHelper.ToBytes(const Encoding: string; const Format: Boolean): TBytes;
 var
   Data: Pointer;
@@ -1218,8 +1260,18 @@ begin
 end;
 
 function xmlDocHelper.ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler): Boolean;
+var
+  ecb: TXmlCallback;
 begin
-  //TODO: ValidateNode
+  var ctx := xmlNewParserCtxt;
+  if Assigned(ErrorHandler) then
+  begin
+    ecb.Handler := ErrorHandler;
+    xmlCtxtSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);
+  end;
+  var vctxt := xmlCtxtGetValidCtxt(ctx);
+  Result := xmlValidateElement(vctxt, @Self, Node) = 1;
+  xmlFreeParserCtxt(ctx);
 end;
 
 end.

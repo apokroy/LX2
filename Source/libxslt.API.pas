@@ -271,7 +271,39 @@ type
     class property LibraryFileName: string read FLibraryFileName;
   end;
 
+  TXLSErrorHandler = procedure(const Msg: string);
+
+  TXLSThreadErrorContext = record
+  public
+    class function  Start(Context: Pointer; const Handler: TXLSErrorHandler): TXLSErrorHandler; static;
+    class procedure Stop; static;
+  end;
+
 implementation
+
+threadvar
+  ThreadErrorHandler: TXLSErrorHandler;
+  ThreadErrorContext: Pointer;
+
+procedure XSLTErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
+begin
+  if Assigned(ThreadErrorHandler) then
+    ThreadErrorHandler(Msg);
+end;
+
+{ TXLSThreadErrorContext }
+
+class function TXLSThreadErrorContext.Start(Context: Pointer; const Handler: TXLSErrorHandler): TXLSErrorHandler;
+begin
+  ThreadErrorHandler := Handler;
+  ThreadErrorContext := Context;
+end;
+
+class procedure TXLSThreadErrorContext.Stop;
+begin
+  ThreadErrorHandler := nil;
+  ThreadErrorContext := nil;
+end;
 
 { XSLTLib }
 
@@ -279,6 +311,7 @@ class procedure XSLTLib.Initialize;
 begin
   if Handle = 0 then
     Load;
+  xsltSetGenericErrorFunc(nil, XSLTErrorCallback);
 end;
 
 class procedure XSLTLib.Unload;

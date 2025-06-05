@@ -173,7 +173,6 @@ type
     function Get_text: string;
     procedure Set_text(const text: string);
     function Get_xml: string;
-    function transformNode(const stylesheet: IXMLNode): string;
     function selectNodes(const queryString: string): IXMLNodeList;
     function selectSingleNode(const queryString: string): IXMLNode;
     function Get_namespaceURI: string;
@@ -311,6 +310,8 @@ type
     function getElementsByTagName(const tagName: string): IXMLNodeList;
     function createNode(&type: Integer; const name: string; const namespaceURI: string): IXMLNode;
     function nodeFromID(const idString: string): IXMLNode;
+    function Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
     function Get_readyState: Integer;
     function Get_parseError: IXMLError;
     function Get_url: string;
@@ -543,7 +544,6 @@ type
     function Get_text: string;
     procedure Set_text(const text: string);
     function Get_xml: string;
-    function transformNode(const stylesheet: IXMLNode): string;
     function selectNodes(const queryString: string): IXMLNodeList;
     function selectSingleNode(const queryString: string): IXMLNode;
     function Get_namespaceURI: string;
@@ -719,6 +719,8 @@ type
     procedure Set_resolveExternals(isResolving: Boolean);
     function  Get_preserveWhiteSpace: Boolean;
     procedure Set_preserveWhiteSpace(isPreserving: Boolean);
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
     function  Validate: IXMLError;
     function  validateNode(const node: IXMLNode): IXMLError;
     property  doctype: IXMLDocumentType read Get_doctype;
@@ -1507,11 +1509,6 @@ begin
   NodePtr.Text := text;
 end;
 
-function TXMLNode.transformNode(const stylesheet: IXMLNode): string;
-begin
-  //TODO: XSLT
-end;
-
 procedure TXMLNode.Unlink;
 begin
   if FLinked then
@@ -2190,6 +2187,20 @@ end;
 function TXMLDocument.ToUtf8(const Format: Boolean): RawByteString;
 begin
   Result := doc.ToUtf8(Format);
+end;
+
+function TXMLDocument.Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean;
+var
+  res: xmlDocPtr;
+begin
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(stylesheet.Ptr), res);
+  if Result then
+    doc := TXMLDocument.Create(res, True);
+end;
+
+function TXMLDocument.Transform(const stylesheet: IXMLDocument; out S: string): Boolean;
+begin
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(stylesheet.Ptr), S);
 end;
 
 function TXMLDocument.Validate: IXMLError;

@@ -94,6 +94,12 @@ type
   xmlCharPtrArrayPtr = ^xmlCharPtrArray;
   xmlCharPtrArray = array[0..0] of xmlCharPtr;
 
+  { Forward declarations }
+
+  ///<summary>An xmlValidCtxt is used for error reporting when validating</summary>
+  xmlValidCtxtPtr = ^xmlValidCtxt;
+  xmlValidCtxt = record end;
+
 {$region 'xmlerror.h'}
 
 type
@@ -3213,7 +3219,7 @@ type
   xmlResourceLoader         = function(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;
 
 var
-  xmlClearNodeInfoSeq       : procedure (seq: xmlParserNodeInfoSeqPtr); cdecl;
+  xmlClearNodeInfoSeq       : procedure(seq: xmlParserNodeInfoSeqPtr); cdecl;
   xmlCreateDocParserCtxt    : function (const cur: XmlCharPtr): xmlParserCtxtPtr; cdecl;
   xmlCreateEntityParserCtxt : function (URL, ID, base: xmlCharPtr): xmlParserCtxtPtr; cdecl;
   xmlCreateFileParserCtxt   : function (filename: PUTF8Char): xmlParserCtxtPtr; cdecl;
@@ -3229,6 +3235,7 @@ var
   xmlCtxtGetPrivate         : function (ctxt: xmlParserCtxtPtr): Pointer; cdecl;
   xmlCtxtGetStandalone      : function (ctxt: xmlParserCtxtPtr): Integer; cdecl;
   xmlCtxtGetStatus          : function (ctxt: xmlParserCtxtPtr): Integer; cdecl;
+  xmlCtxtGetValidCtxt       : function (ctxt: xmlParserCtxtPtr): xmlValidCtxtPtr; cdecl;
   xmlCtxtGetVersion         : function (ctxt: xmlParserCtxtPtr): xmlCharPtr; cdecl;
   xmlCtxtParseContent       : function (ctxt: xmlParserCtxtPtr; input: xmlParserInputPtr; node: xmlNodePtr; hasTextDecl: Integer): xmlNodePtr; cdecl;
   xmlCtxtParseDocument      : function (ctxt: xmlParserCtxtPtr; input: xmlParserInputPtr): xmlDocPtr; cdecl;
@@ -3237,7 +3244,7 @@ var
   xmlCtxtReadFd             : function (ctxt: xmlParserCtxtPtr; fd: Integer; const URL, encoding: xmlCharPtr; options: Integer): xmlDocPtr; cdecl;
   xmlCtxtReadFile           : function (ctxt: xmlParserCtxtPtr; const filename, encoding: xmlCharPtr; options: Integer): xmlDocPtr; cdecl;
   xmlCtxtReadIO             : function (ctxt: xmlParserCtxtPtr; ioread: xmlInputReadCallback; ioclose: xmlInputCloseCallback; ioctx: Pointer; const URL, encoding: xmlCharPtr; options: Integer): xmlDocPtr; cdecl;
-  xmlCtxtReset              : procedure(ctxt: xmlParserCtxtPtr); cdecl;
+  xmlCtxtReset             : procedure(ctxt: xmlParserCtxtPtr); cdecl;
   xmlCtxtResetPush          : function (ctxt: xmlParserCtxtPtr; const chunk: Pointer; size: Integer; const filename, encoding: PUTF8Char): Integer; cdecl;
   xmlCtxtSetCatalogs        : procedure(ctxt: xmlParserCtxtPtr; catalogs: Pointer); cdecl;
   xmlCtxtSetCharEncConvImpl : procedure(ctxt: xmlParserCtxtPtr; impl: xmlCharEncConvImpl; vctxt: Pointer); cdecl;
@@ -3343,10 +3350,6 @@ type
 
   xmlValidityErrorFunc   = procedure(ctx: Pointer; const msg: PUTF8Char); cdecl varargs;
   xmlValidityWarningFunc = procedure(ctx: Pointer; const msg: PUTF8Char); cdecl varargs;
-
-  ///<summary>An xmlValidCtxt is used for error reporting when validating</summary>
-  xmlValidCtxtPtr = ^xmlValidCtxt;
-  xmlValidCtxt = record end;
 
 var
   xmlAddIDSafe                : function (attr: xmlAttrPtr; value: xmlCharPtr): Integer; cdecl;
@@ -4297,6 +4300,7 @@ begin
   xmlCtxtGetPrivate         := GetProcAddress(Handle, 'xmlCtxtGetPrivate');
   xmlCtxtGetStandalone      := GetProcAddress(Handle, 'xmlCtxtGetStandalone');
   xmlCtxtGetStatus          := GetProcAddress(Handle, 'xmlCtxtGetStatus');
+  xmlCtxtGetValidCtxt       := GetProcAddress(Handle, 'xmlCtxtGetValidCtxt');
   xmlCtxtGetVersion         := GetProcAddress(Handle, 'xmlCtxtGetVersion');
   xmlCtxtParseContent       := GetProcAddress(Handle, 'xmlCtxtParseContent');
   xmlCtxtParseDocument      := GetProcAddress(Handle, 'xmlCtxtParseDocument');
