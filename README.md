@@ -7,7 +7,7 @@ In addition, it provides a more convenient way to work with library, based on re
 
 Also, we have a small but convenient layer above the SAX parser (LX2.SAX.pas), that contains base SAX parser wrapper and more complex version, based on context handler interfaces, that near to MS XML SAX parser interfaces.
 
-Finally, we can offer you DOM interfaces that are close to the W3C standards and the MSXML library (LX2.DOM).
+Finally, we have DOM interfaces that are close to the W3C standards and the MSXML library (LX2.DOM).
 
 >All API wrappers uses standard Delphi string type (UTF-16), but original UTF-8 encoding still accesible. 
 
