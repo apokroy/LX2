@@ -35,7 +35,7 @@ uses
   {$IFDEF POSIX}
     Posix.StdDef,
   {$ENDIF}
-  System.Types, System.SysUtils, libxml2.API;
+  System.Types, System.SysUtils, libxml2.API, LX2.Types;
 
 const
   {$IFDEF MSWINDOWS}
@@ -271,11 +271,11 @@ type
     class property LibraryFileName: string read FLibraryFileName;
   end;
 
-  TXLSErrorHandler = procedure(const Msg: string);
+  TXLSErrorHandler = procedure(Context: Pointer; const Msg: string);
 
-  TXLSThreadErrorContext = record
+  TXSLTThreadErrorContext = record
   public
-    class function  Start(Context: Pointer; const Handler: TXLSErrorHandler): TXLSErrorHandler; static;
+    class procedure Start(Context: Pointer; const Handler: TXLSErrorHandler); static;
     class procedure Stop; static;
   end;
 
@@ -288,18 +288,18 @@ threadvar
 procedure XSLTErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
 begin
   if Assigned(ThreadErrorHandler) then
-    ThreadErrorHandler(Msg);
+    ThreadErrorHandler(ThreadErrorContext, xmlCharToStr(msg));
 end;
 
-{ TXLSThreadErrorContext }
+{ TXSLTThreadErrorContext }
 
-class function TXLSThreadErrorContext.Start(Context: Pointer; const Handler: TXLSErrorHandler): TXLSErrorHandler;
+class procedure TXSLTThreadErrorContext.Start(Context: Pointer; const Handler: TXLSErrorHandler);
 begin
   ThreadErrorHandler := Handler;
   ThreadErrorContext := Context;
 end;
 
-class procedure TXLSThreadErrorContext.Stop;
+class procedure TXSLTThreadErrorContext.Stop;
 begin
   ThreadErrorHandler := nil;
   ThreadErrorContext := nil;

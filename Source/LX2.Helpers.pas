@@ -1206,14 +1206,14 @@ begin
     Exit;
 
   doc := xsltApplyStylesheet(style, @Self, nil);
-  if doc = nil then
-    Exit;
-
-  if xsltSaveResultToString(text, len, doc, style) = 0 then
+  if doc <> nil then
   begin
-    S := xmlCharToStr(text, len);
-    Result := True;
-    xmlFree(text);
+    if xsltSaveResultToString(text, len, doc, style) = 0 then
+    begin
+      S := xmlCharToStr(text, len);
+      Result := True;
+      xmlFree(text);
+    end;
   end;
 
   xsltFreeStylesheet(style);

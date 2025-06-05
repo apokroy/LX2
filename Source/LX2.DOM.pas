@@ -76,14 +76,14 @@ type
     function Get_linepos: Integer;
     function Get_filepos: Integer;
     function Get_Level: xmlErrorLevel;
-    property errorCode: Integer read Get_errorCode;
-    property url: string read Get_url;
-    property reason: string read Get_reason;
-    property srcText: string read Get_srcText;
-    property line: Integer read Get_line;
-    property linepos: Integer read Get_linepos;
-    property filepos: Integer read Get_filepos;
-    property level: xmlErrorLevel read Get_Level;
+    property ErrorCode: Integer read Get_errorCode;
+    property Url: string read Get_url;
+    property Reason: string read Get_reason;
+    property SrcText: string read Get_srcText;
+    property Line: Integer read Get_line;
+    property LinePos: Integer read Get_linepos;
+    property FilePos: Integer read Get_filepos;
+    property Level: xmlErrorLevel read Get_Level;
   end;
 
   IXMLErrors = interface
@@ -106,38 +106,38 @@ type
 
   IXMLNodeList = interface(IInvokable)
     { MSXMLDOMNodeList }
-    function Get_item(index: Integer): IXMLNode;
-    function Get_length: Integer;
-    function NextNode: IXMLNode;
+    function  Get_Item(index: NativeInt): IXMLNode;
+    function  Get_Length: NativeInt;
+    function  NextNode: IXMLNode;
     procedure Reset;
-    property Item[index: Integer]: IXMLNode read Get_item; default;
-    property Length: Integer read Get_length;
+    property  Item[index: NativeInt]: IXMLNode read Get_Item; default;
+    property  Length: NativeInt read Get_Length;
     { Delphi enumerable }
-    function GetEnumerator: IXMLEnumerator;
-    function ToArray: TArray<IXMLNode>;
+    function  GetEnumerator: IXMLEnumerator;
+    function  ToArray: TArray<IXMLNode>;
   end;
 
   IXMLNamedNodeMap = interface(IXMLNodeList)
     ['{21E36CB7-DC37-4AD0-978D-55CEE4815E8D}']
-    function getNamedItem(const name: string): IXMLNode;
-    function setNamedItem(const newItem: IXMLNode): IXMLNode;
-    function removeNamedItem(const name: string): IXMLNode;
-    function getQualifiedItem(const baseName: string; const namespaceURI: string): IXMLNode;
-    function removeQualifiedItem(const baseName: string; const namespaceURI: string): IXMLNode;
+    function GetNamedItem(const Name: string): IXMLNode;
+    function SetNamedItem(const NewItem: IXMLNode): IXMLNode;
+    function removeNamedItem(const Name: string): IXMLNode;
+    function GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
   end;
 
   IXMLAttributes = interface(IXMLNamedNodeMap)
     ['{3414F999-1B97-4926-A2EC-CF2740D3DB6D}']
     { MSXMLDOMNodeList }
-    function Get_item(index: Integer): IXMLAttribute;
-    function Get_length: Integer;
-    function NextNode: IXMLAttribute;
+    function  Get_Item(Index: NativeInt): IXMLAttribute;
+    function  Get_Length: NativeInt;
+    function  NextNode: IXMLAttribute;
     procedure Reset;
-    property Item[index: Integer]: IXMLAttribute read Get_item; default;
-    property Length: Integer read Get_length;
+    property  Item[Index: NativeInt]: IXMLAttribute read Get_Item; default;
+    property  Length: NativeInt read Get_Length;
     { Delphi enumerable }
-    function GetEnumerator: IXMLAttributesEnumerator;
-    function ToArray: TArray<IXMLAttribute>;
+    function  GetEnumerator: IXMLAttributesEnumerator;
+    function  ToArray: TArray<IXMLAttribute>;
   end;
 
   IXMLNodeBase = interface(IInvokable)
@@ -149,71 +149,71 @@ type
     function  Ptr: xmlNodePtr;
     procedure Link;
     procedure Unlink;
-    function  Get_value: string;
+    function  Get_Value: string;
     property  Value: string read Get_value;
     { MS XML DOM }
-    function Get_nodeName: string;
-    function Get_nodeValue: Variant;
-    procedure Set_nodeValue(const Value: Variant);
-    function Get_nodeType: DOMNodeType;
-    function Get_parentNode: IXMLNode;
-    function Get_childNodes: IXMLNodeList;
-    function Get_firstChild: IXMLNode;
-    function Get_lastChild: IXMLNode;
-    function Get_previousSibling: IXMLNode;
-    function Get_nextSibling: IXMLNode;
-    function Get_attributes: IXMLAttributes;
-    function insertBefore(const newChild: IXMLNode; refChild: IXMLNode) : IXMLNode;
-    function replaceChild(const newChild: IXMLNode; const oldChild: IXMLNode) : IXMLNode;
-    function removeChild(const childNode: IXMLNode): IXMLNode;
-    function appendChild(const newChild: IXMLNode): IXMLNode;
-    function hasChildNodes: Boolean;
-    function Get_ownerDocument: IXMLDocument;
-    function cloneNode(deep: WordBool): IXMLNode;
-    function Get_text: string;
-    procedure Set_text(const text: string);
-    function Get_xml: string;
-    function selectNodes(const queryString: string): IXMLNodeList;
-    function selectSingleNode(const queryString: string): IXMLNode;
-    function Get_namespaceURI: string;
-    function Get_prefix: string;
-    function Get_baseName: string;
-    property nodeName: string read Get_nodeName;
-    property nodeValue: Variant read Get_nodeValue write Set_nodeValue;
-    property nodeType: DOMNodeType read Get_nodeType;
-    property parentNode: IXMLNode read Get_parentNode;
-    property childNodes: IXMLNodeList read Get_childNodes;
-    property firstChild: IXMLNode read Get_firstChild;
-    property lastChild: IXMLNode read Get_lastChild;
-    property previousSibling: IXMLNode read Get_previousSibling;
-    property nextSibling: IXMLNode read Get_nextSibling;
-    property attributes: IXMLAttributes read Get_attributes;
-    property ownerDocument: IXMLDocument read Get_ownerDocument;
-    property text: string read Get_text write Set_text;
-    property xml: string read Get_xml;
-    property namespaceURI: string read Get_namespaceURI;
-    property prefix: string read Get_prefix;
-    property baseName: string read Get_baseName;
+    function  Get_NodeName: string;
+    function  Get_NodeValue: Variant;
+    procedure Set_NodeValue(const Value: Variant);
+    function  Get_NodeType: DOMNodeType;
+    function  Get_ParentNode: IXMLNode;
+    function  Get_ChildNodes: IXMLNodeList;
+    function  Get_FirstChild: IXMLNode;
+    function  Get_LastChild: IXMLNode;
+    function  Get_PreviousSibling: IXMLNode;
+    function  Get_NextSibling: IXMLNode;
+    function  Get_Attributes: IXMLAttributes;
+    function  InsertBefore(const newChild: IXMLNode; refChild: IXMLNode) : IXMLNode;
+    function  ReplaceChild(const newChild: IXMLNode; const oldChild: IXMLNode) : IXMLNode;
+    function  RemoveChild(const childNode: IXMLNode): IXMLNode;
+    function  AppendChild(const newChild: IXMLNode): IXMLNode;
+    function  HasChildNodes: Boolean;
+    function  Get_OwnerDocument: IXMLDocument;
+    function  CloneNode(deep: WordBool): IXMLNode;
+    function  Get_Text: string;
+    procedure Set_Text(const text: string);
+    function  Get_Xml: string;
+    function  SelectNodes(const queryString: string): IXMLNodeList;
+    function  SelectSingleNode(const queryString: string): IXMLNode;
+    function  Get_NamespaceURI: string;
+    function  Get_Prefix: string;
+    function  Get_BaseName: string;
+    property  NodeName: string read Get_NodeName;
+    property  NodeValue: Variant read Get_NodeValue write Set_NodeValue;
+    property  NodeType: DOMNodeType read Get_NodeType;
+    property  ParentNode: IXMLNode read Get_ParentNode;
+    property  ChildNodes: IXMLNodeList read Get_ChildNodes;
+    property  FirstChild: IXMLNode read Get_FirstChild;
+    property  LastChild: IXMLNode read Get_LastChild;
+    property  PreviousSibling: IXMLNode read Get_PreviousSibling;
+    property  NextSibling: IXMLNode read Get_NextSibling;
+    property  Attributes: IXMLAttributes read Get_Attributes;
+    property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
+    property  Text: string read Get_Text write Set_Text;
+    property  Xml: string read Get_Xml;
+    property  NamespaceURI: string read Get_NamespaceURI;
+    property  Prefix: string read Get_Prefix;
+    property  BaseName: string read Get_BaseName;
   end;
 
   IXMLAttribute = interface(IXMLNode)
     ['{A15B548F-C0C4-4347-90F2-D95F6B1A731E}']
-    function Get_name: string;
-    function Get_value: string;
-    procedure Set_value(const Value: string);
-    property Name: string read Get_name;
-    property Value: string read Get_value write Set_value;
+    function  Get_Name: string;
+    function  Get_Value: string;
+    procedure Set_Value(const Value: string);
+    property  Name: string read Get_name;
+    property  Value: string read Get_value write Set_value;
   end;
 
   IXMLElement = interface(IXMLNode)
     ['{3D45E8A9-911B-4144-B171-F72AA9C6C0F4}']
-    function  getAttribute(const name: string): string;
-    procedure setAttribute(const name: string; Value: string);
-    function  removeAttribute(const name: string): Boolean;
-    function  getAttributeNode(const name: string): IXMLAttribute;
-    function  removeAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
-    function  getElementsByTagName(const tagName: string): IXMLNodeList;
-    procedure normalize;
+    function  GetAttribute(const name: string): string;
+    procedure SetAttribute(const name: string; Value: string);
+    function  RemoveAttribute(const name: string): Boolean;
+    function  GetAttributeNode(const name: string): IXMLAttribute;
+    function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
+    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    procedure Normalize;
   end;
 
   IXMLDocumentFragment = interface(IXMLNode)
@@ -226,16 +226,16 @@ type
 
   IXMLCharacterData = interface(IXMLNode)
     ['{CBE3B84E-9AB6-471B-A1F0-8D67228EA376}']
-    function Get_data: string;
-    procedure Set_data(const data: string);
-    function Get_length: Integer;
-    function substringData(offset: Integer; count: Integer): string;
-    procedure appendData(const data: string);
-    procedure insertData(offset: Integer; const data: string);
-    procedure deleteData(offset: Integer; count: Integer);
-    procedure replaceData(offset: Integer; count: Integer; const data: string);
-    property data: string read Get_data write Set_data;
-    property Length: Integer read Get_length;
+    function  Get_Data: string;
+    procedure Set_Data(const data: string);
+    function  Get_Length: NativeInt;
+    function  SubstringData(Offset: Integer; Count: Integer): string;
+    procedure AppendData(const data: string);
+    procedure InsertData(Offset: Integer; const Data: string);
+    procedure DeleteData(Offset: Integer; Count: Integer);
+    procedure ReplaceData(Offset: Integer; Count: Integer; const Data: string);
+    property  Data: string read Get_Data write Set_Data;
+    property  Length: NativeInt read Get_Length;
   end;
 
   IXMLText = interface(IXMLCharacterData)
@@ -252,11 +252,11 @@ type
 
   IXMLProcessingInstruction = interface(IXMLNode)
     ['{78A63F59-B926-4249-A657-9CEF3727033D}']
-    function Get_target: string;
-    function Get_data: string;
-    procedure Set_data(const Value: string);
-    property target: string read Get_target;
-    property data: string read Get_data write Set_data;
+    function  Get_Target: string;
+    function  Get_Data: string;
+    procedure Set_Data(const Value: string);
+    property  Target: string read Get_Target;
+    property  Data: string read Get_Data write Set_Data;
   end;
 
   IXMLEntityReference = interface(IXMLNode)
@@ -276,61 +276,59 @@ type
 
   IXMLDocument = interface(IXMLNode)
     ['{ACAA6E03-6C69-45D9-A8C4-1DC1996CEB17}']
-    function getErrors: IXMLErrors;
-    property errors: IXMLErrors read getErrors;
-
-    function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean; overload;
-    function  LoadXML(const XML: string): Boolean; overload;
-    function  Load(const Data: TBytes): Boolean; overload;
+    function  GetErrors: IXMLErrors;
+    function  GetXSLTErrors: TStrings;
     function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
+    function  Load(const Data: TBytes): Boolean; overload;
     function  Load(const URL: string): Boolean; overload;
     function  Load(Stream: TStream; const Encoding: Utf8String): Boolean; overload;
-
+    function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean; overload;
+    function  LoadXML(const XML: string): Boolean; overload;
+    procedure ReconciliateNs;
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
+    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Format: Boolean): string; overload;
     function  ToString: string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
-    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
-
-    procedure ReconciliateNs;
-
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    property  Errors: IXMLErrors read GetErrors;
+    property  XSLTErrors: TStrings read GetXSLTErrors;
     { MS XML Like }
-    function Get_doctype: IXMLDocumentType;
-    function Get_documentElement: IXMLElement;
-    procedure Set_documentElement(const Element: IXMLElement);
-    function createElement(const tagName: string): IXMLElement;
-    function createDocumentFragment: IXMLDocumentFragment;
-    function createTextNode(const data: string): IXMLText;
-    function createComment(const data: string): IXMLComment;
-    function createCDATASection(const data: string): IXMLCDATASection;
-    function createProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
-    function createAttribute(const name: string): IXMLAttribute;
-    function getElementsByTagName(const tagName: string): IXMLNodeList;
-    function createNode(&type: Integer; const name: string; const namespaceURI: string): IXMLNode;
-    function nodeFromID(const idString: string): IXMLNode;
-    function Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
-    function Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
-    function Get_readyState: Integer;
-    function Get_parseError: IXMLError;
-    function Get_url: string;
-    function Get_validateOnParse: Boolean;
-    procedure Set_validateOnParse(isValidating: Boolean);
-    function Get_resolveExternals: Boolean;
-    procedure Set_resolveExternals(isResolving: Boolean);
-    function Get_preserveWhiteSpace: Boolean;
-    procedure Set_preserveWhiteSpace(isPreserving: Boolean);
-    property doctype: IXMLDocumentType read Get_doctype;
-    property documentElement: IXMLElement read Get_documentElement write Set_documentElement;
-    property readyState: Integer read Get_readyState;
-    property parseError: IXMLError read Get_parseError;
-    property url: string read Get_url;
-    property ValidateOnParse: Boolean read Get_validateOnParse write Set_validateOnParse;
-    property resolveExternals: Boolean read Get_resolveExternals write Set_resolveExternals;
-    property preserveWhiteSpace: Boolean read Get_preserveWhiteSpace write Set_preserveWhiteSpace;
-    function Validate: IXMLError;
-    function validateNode(const node: IXMLNode): IXMLError;
+    function  Get_Doctype: IXMLDocumentType;
+    function  Get_DocumentElement: IXMLElement;
+    procedure Set_DocumentElement(const Element: IXMLElement);
+    function  CreateElement(const tagName: string): IXMLElement;
+    function  CreateDocumentFragment: IXMLDocumentFragment;
+    function  CreateTextNode(const data: string): IXMLText;
+    function  CreateComment(const data: string): IXMLComment;
+    function  CreateCDATASection(const data: string): IXMLCDATASection;
+    function  CreateProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
+    function  CreateAttribute(const name: string): IXMLAttribute;
+    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  CreateNode(NodeType: Integer; const name: string; const namespaceURI: string): IXMLNode;
+    function  NodeFromID(const idString: string): IXMLNode;
+    function  Get_ReadyState: Integer;
+    function  Get_ParseError: IXMLError;
+    function  Get_Url: string;
+    function  Get_ValidateOnParse: Boolean;
+    procedure Set_ValidateOnParse(isValidating: Boolean);
+    function  Get_ResolveExternals: Boolean;
+    procedure Set_ResolveExternals(isResolving: Boolean);
+    function  Get_PreserveWhiteSpace: Boolean;
+    procedure Set_PreserveWhiteSpace(isPreserving: Boolean);
+    property  Doctype: IXMLDocumentType read Get_Doctype;
+    property  DocumentElement: IXMLElement read Get_DocumentElement write Set_DocumentElement;
+    property  ReadyState: Integer read Get_readyState;
+    property  ParseError: IXMLError read Get_parseError;
+    property  Url: string read Get_Url;
+    property  ValidateOnParse: Boolean read Get_ValidateOnParse write Set_ValidateOnParse;
+    property  ResolveExternals: Boolean read Get_ResolveExternals write Set_ResolveExternals;
+    property  PreserveWhiteSpace: Boolean read Get_PreserveWhiteSpace write Set_PreserveWhiteSpace;
+    function  Validate: IXMLError;
+    function  ValidateNode(const node: IXMLNode): IXMLError;
   end;
 
   TXMLObject = class(TInterfacedObject, IInvokable)
@@ -348,24 +346,24 @@ type
   private
     FError: TXmlParseError;
   protected
-    function Get_errorCode: Integer;
-    function Get_url: string;
-    function Get_reason: string;
-    function Get_srcText: string;
-    function Get_line: Integer;
-    function Get_linepos: Integer;
-    function Get_filepos: Integer;
-    function Get_Level: xmlErrorLevel;
+    function  Get_ErrorCode: Integer;
+    function  Get_Url: string;
+    function  Get_Reason: string;
+    function  Get_SrcText: string;
+    function  Get_Line: Integer;
+    function  Get_LinePos: Integer;
+    function  Get_FilePos: Integer;
+    function  Get_Level: xmlErrorLevel;
   public
     constructor Create; overload;
     constructor Create(const Error: TXmlParseError); overload;
-    property errorCode: Integer read Get_errorCode;
-    property url: string read Get_url;
-    property reason: string read Get_reason;
-    property srcText: string read Get_srcText;
-    property line: Integer read Get_line;
-    property linepos: Integer read Get_linepos;
-    property filepos: Integer read Get_filepos;
+    property  ErrorCode: Integer read Get_errorCode;
+    property  Url: string read Get_url;
+    property  Reason: string read Get_reason;
+    property  SrcText: string read Get_srcText;
+    property  Line: Integer read Get_line;
+    property  LinePos: Integer read Get_linepos;
+    property  FilePos: Integer read Get_filepos;
   end;
 
   TXMLErrors = class(TNoRefCountObject, IXMLErrors)
@@ -414,12 +412,12 @@ type
   public
     constructor Create(Node: xmlNodePtr);
     { MSXMLDOMNodeList }
-    function  Get_item(index: Integer): IXMLNode;
-    function  Get_length: Integer;
+    function  Get_Item(index: NativeInt): IXMLNode;
+    function  Get_Length: NativeInt;
     function  NextNode: IXMLNode;
     procedure Reset;
-    property  Item[index: Integer]: IXMLNode read Get_item; default;
-    property  Length: Integer read Get_length;
+    property  Item[index: NativeInt]: IXMLNode read Get_item; default;
+    property  Length: NativeInt read Get_length;
     { Delphi enumerable }
     function  GetEnumerator: IXMLEnumerator;
     function  ToArray: TArray<IXMLNode>;
@@ -435,7 +433,7 @@ type
     TEnumerator = class(TInterfacedObject, IXMLEnumerator)
     private
       List: TXMLNodeArrayList;
-      Index: Integer;
+      Index: NativeInt;
     public
       constructor Create(List: TXMLNodeArrayList);
       function  GetCurrent: IXMLNode; inline;
@@ -443,18 +441,18 @@ type
       procedure Reset; inline;
     end;
   private
-    FCurrent: Integer;
-    FLength: Integer;
+    FCurrent: NativeInt;
+    FLength: NativeInt;
     FNodes: TArray<xmlNodePtr>;
   public
     constructor Create(const Nodes: TArray<xmlNodePtr>);
     { MSXMLDOMNodeList }
-    function  Get_item(index: Integer): IXMLNode; inline;
-    function  Get_length: Integer; inline;
+    function  Get_item(Index: NativeInt): IXMLNode; inline;
+    function  Get_length: NativeInt; inline;
     function  NextNode: IXMLNode; inline;
     procedure Reset; inline;
-    property  Item[index: Integer]: IXMLNode read Get_item; default;
-    property  Length: Integer read Get_length;
+    property  Item[index: NativeInt]: IXMLNode read Get_item; default;
+    property  Length: NativeInt read Get_length;
     { Delphi enumerator }
     function  GetCurrent: IXMLNode; inline;
     function  MoveNext: Boolean; inline;
@@ -466,15 +464,15 @@ type
 
   TXMLNamedNodeMap = class(TXMLNodeArrayList, IXMLNamedNodeMap)
   protected
-    function  GetItemByName(const name: string): xmlNodePtr;
-    function  GetQualifiedItemByName(const baseName: string; const namespaceURI: string): xmlNodePtr;
+    function  GetItemByName(const Name: string): xmlNodePtr;
+    function  GetQualifiedItemByName(const BaseName: string; const NamespaceURI: string): xmlNodePtr;
   public
     { IXMLNamedNodeMap }
-    function  getNamedItem(const name: string): IXMLNode;
-    function  setNamedItem(const newItem: IXMLNode): IXMLNode; virtual;
-    function  removeNamedItem(const name: string): IXMLNode;
-    function  getQualifiedItem(const baseName: string; const namespaceURI: string): IXMLNode;
-    function  removeQualifiedItem(const baseName: string; const namespaceURI: string): IXMLNode;
+    function  GetNamedItem(const Name: string): IXMLNode;
+    function  SetNamedItem(const NewItem: IXMLNode): IXMLNode; virtual;
+    function  RemoveNamedItem(const Name: string): IXMLNode;
+    function  GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function  RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
   end;
 
   TXMLAttributes = class(TXMLNamedNodeMap, IXMLAttributes)
@@ -496,11 +494,11 @@ type
   public
     constructor Create(const Parent: xmlNodePtr);
     { IXMLNamedNodeMap }
-    function  setNamedItem(const newItem: IXMLNode): IXMLNode; override;
+    function  SetNamedItem(const NewItem: IXMLNode): IXMLNode; override;
     { IXMLAttributes }
     function  NextNode: IXMLAttribute;
-    function  Get_item(index: Integer): IXmlAttribute;
-    property  Item[index: Integer]: IXmlAttribute read Get_item; default;
+    function  Get_Item(index: NativeInt): IXmlAttribute;
+    property  Item[index: NativeInt]: IXmlAttribute read Get_Item; default;
     { Delphi enumerable }
     function  GetEnumerator: IXMLAttributesEnumerator;
     function  ToArray: TArray<IXmlAttribute>;
@@ -523,54 +521,54 @@ type
     procedure Link;
     procedure Unlink;
     { IXMLNode }
-    function Get_nodeName: string;
-    function Get_nodeValue: Variant;
-    procedure Set_nodeValue(const Value: Variant);
-    function Get_nodeType: DOMNodeType;
-    function Get_parentNode: IXMLNode;
-    function Get_childNodes: IXMLNodeList;
-    function Get_firstChild: IXMLNode;
-    function Get_lastChild: IXMLNode;
-    function Get_previousSibling: IXMLNode;
-    function Get_nextSibling: IXMLNode;
-    function Get_attributes: IXMLAttributes;
-    function insertBefore(const newChild: IXMLNode; refChild: IXMLNode): IXMLNode;
-    function replaceChild(const newChild: IXMLNode; const oldChild: IXMLNode): IXMLNode;
-    function removeChild(const childNode: IXMLNode): IXMLNode;
-    function appendChild(const newChild: IXMLNode): IXMLNode;
-    function hasChildNodes: Boolean;
-    function Get_ownerDocument: IXMLDocument;
-    function cloneNode(deep: WordBool): IXMLNode;
-    function Get_text: string;
-    procedure Set_text(const text: string);
-    function Get_xml: string;
-    function selectNodes(const queryString: string): IXMLNodeList;
-    function selectSingleNode(const queryString: string): IXMLNode;
-    function Get_namespaceURI: string;
-    function Get_prefix: string;
-    function Get_baseName: string;
+    function  Get_NodeName: string;
+    function  Get_NodeValue: Variant;
+    procedure Set_NodeValue(const Value: Variant);
+    function  Get_NodeType: DOMNodeType;
+    function  Get_ParentNode: IXMLNode;
+    function  Get_ChildNodes: IXMLNodeList;
+    function  Get_FirstChild: IXMLNode;
+    function  Get_LastChild: IXMLNode;
+    function  Get_PreviousSibling: IXMLNode;
+    function  Get_NextSibling: IXMLNode;
+    function  Get_Attributes: IXMLAttributes;
+    function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
+    function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
+    function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
+    function  AppendChild(const NewChild: IXMLNode): IXMLNode;
+    function  HasChildNodes: Boolean;
+    function  Get_OwnerDocument: IXMLDocument;
+    function  CloneNode(Deep: WordBool): IXMLNode;
+    function  Get_Text: string;
+    procedure Set_Text(const Text: string);
+    function  Get_Xml: string;
+    function  SelectNodes(const QueryString: string): IXMLNodeList;
+    function  SelectSingleNode(const QueryString: string): IXMLNode;
+    function  Get_NamespaceURI: string;
+    function  Get_Prefix: string;
+    function  Get_BaseName: string;
   protected
     NodePtr: xmlNodePtr;
     constructor Create(node: xmlNodePtr);
   public
     destructor Destroy; override;
     procedure ReconciliateNs; virtual;
-    property nodeName: string read Get_nodeName;
-    property nodeValue: Variant read Get_nodeValue write Set_nodeValue;
-    property nodeType: DOMNodeType read Get_nodeType;
-    property parentNode: IXMLNode read Get_parentNode;
-    property childNodes: IXMLNodeList read Get_childNodes;
-    property firstChild: IXMLNode read Get_firstChild;
-    property lastChild: IXMLNode read Get_lastChild;
-    property previousSibling: IXMLNode read Get_previousSibling;
-    property nextSibling: IXMLNode read Get_nextSibling;
-    property attributes: IXMLAttributes read Get_attributes;
-    property ownerDocument: IXMLDocument read Get_ownerDocument;
-    property text: string read Get_text write Set_text;
-    property xml: string read Get_xml;
-    property namespaceURI: string read Get_namespaceURI;
-    property prefix: string read Get_prefix;
-    property baseName: string read Get_baseName;
+    property  NodeName: string read Get_NodeName;
+    property  NodeValue: Variant read Get_NodeValue write Set_NodeValue;
+    property  NodeType: DOMNodeType read Get_NodeType;
+    property  ParentNode: IXMLNode read Get_ParentNode;
+    property  ChildNodes: IXMLNodeList read Get_ChildNodes;
+    property  FirstChild: IXMLNode read Get_FirstChild;
+    property  LastChild: IXMLNode read Get_LastChild;
+    property  PreviousSibling: IXMLNode read Get_PreviousSibling;
+    property  NextSibling: IXMLNode read Get_NextSibling;
+    property  Attributes: IXMLAttributes read Get_Attributes;
+    property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
+    property  Text: string read Get_Text write Set_Text;
+    property  Xml: string read Get_Xml;
+    property  NamespaceURI: string read Get_namespaceURI;
+    property  Prefix: string read Get_prefix;
+    property  BaseName: string read Get_baseName;
   end;
 
   TXMLAttribute = class(TXMLNode, IXMLAttribute)
@@ -581,38 +579,38 @@ type
     property  AttrPtr: xmlAttrPtr read GetAttrPtr;
   protected
     { IXMLAttribute }
-    function  Get_name: string;
-    function  Get_value: string;
-    procedure Set_value(const attrValue: string);
-    property  name: string read Get_name;
-    property  value: string read Get_value write Set_value;
+    function  Get_Name: string;
+    function  Get_Value: string;
+    procedure Set_Value(const attrValue: string);
+    property  Name: string read Get_Name;
+    property  Value: string read Get_Value write Set_value;
   public
     destructor Destroy; override;
   end;
 
   TXMLElement = class(TXMLNode, IXMLElement)
   public
-    function getAttribute(const name: string): string;
-    procedure setAttribute(const name: string; Value: string);
-    function removeAttribute(const name: string): Boolean;
-    function getAttributeNode(const name: string): IXMLAttribute;
-    function removeAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
-    function getElementsByTagName(const tagName: string): IXMLNodeList;
-    procedure normalize;
+    function  GetAttribute(const name: string): string;
+    procedure SetAttribute(const name: string; Value: string);
+    function  RemoveAttribute(const name: string): Boolean;
+    function  GetAttributeNode(const name: string): IXMLAttribute;
+    function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
+    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    procedure Normalize;
   end;
 
   TXMLCharacterData = class(TXMLNode, IXMLCharacterData)
   public
-    function Get_data: string;
+    function  Get_data: string;
     procedure Set_data(const data: string);
-    function Get_length: Integer;
-    function substringData(offset: Integer; count: Integer): string;
-    procedure appendData(const data: string);
-    procedure insertData(offset: Integer; const data: string);
-    procedure deleteData(offset: Integer; count: Integer);
-    procedure replaceData(offset: Integer; count: Integer; const data: string);
-    property data: string read Get_data write Set_data;
-    property Length: Integer read Get_length;
+    function  Get_length: NativeInt;
+    function  SubstringData(offset: Integer; count: Integer): string;
+    procedure AppendData(const data: string);
+    procedure InsertData(offset: Integer; const data: string);
+    procedure DeleteData(offset: Integer; count: Integer);
+    procedure ReplaceData(offset: Integer; count: Integer; const data: string);
+    property  Data: string read Get_data write Set_data;
+    property  Length: NativeInt read Get_length;
   end;
 
   TXMLText = class(TXMLCharacterData, IXMLText)
@@ -633,11 +631,11 @@ type
 
   TXMLProcessingInstruction = class(TXMLNode, IXMLProcessingInstruction)
   public
-    function Get_target: string;
-    function Get_data: string;
-    procedure Set_data(const Value: string);
-    property target: string read Get_target;
-    property data: string read Get_data write Set_data;
+    function  Get_Target: string;
+    function  Get_Data: string;
+    procedure Set_Data(const Value: string);
+    property  Target: string read Get_Target;
+    property  Data: string read Get_Data write Set_Data;
   end;
 
   TXMLDocumentFragment = class(TXMLNode, IXMLDocumentFragment)
@@ -681,6 +679,7 @@ type
   private
     FDocOwner: Boolean;
     FErrors: TXMLErrors;
+    FXSLTErrors: TStrings;
     FValidateOnParse: Boolean;
     FResolveExternals: Boolean;
     FPreserveWhiteSpace: Boolean;
@@ -690,47 +689,49 @@ type
     procedure SetDoc(value: xmlDocPtr); inline;
   protected
     procedure ErrorCallback(const error: xmlError); virtual;
+    procedure XSLTError(const Msg: string); virtual;
     procedure BeforeLoad;
-    property  doc: xmlDocPtr read GetDoc write SetDoc;
+    property  Doc: xmlDocPtr read GetDoc write SetDoc;
     property  DocOwner: Boolean read FDocOwner;
   protected
-    function  getErrors: IXMLErrors;
+    function  GetErrors: IXMLErrors;
+    function  GetXSLTErrors: TStrings;
     { IXMLDocument }
     function  Get_doctype: IXMLDocumentType;
     function  Get_documentElement: IXMLElement;
     procedure Set_documentElement(const Element: IXMLElement);
-    function  createElement(const tagName: string): IXMLElement;
-    function  createDocumentFragment: IXMLDocumentFragment;
-    function  createTextNode(const data: string): IXMLText;
-    function  createComment(const data: string): IXMLComment;
-    function  createCDATASection(const data: string): IXMLCDATASection;
-    function  createProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
-    function  createAttribute(const name: string): IXMLAttribute;
-    function  getElementsByTagName(const tagName: string): IXMLNodeList;
-    function  createNode(&type: Integer; const name: string; const namespaceURI: string): IXMLNode;
-    function  nodeFromID(const idString: string): IXMLNode;
-    function  Get_readyState: Integer;
-    function  Get_parseError: IXMLError;
-    function  Get_url: string;
-    procedure Save(const url: string); overload;
-    function  Get_validateOnParse: Boolean;
-    procedure Set_validateOnParse(isValidating: Boolean);
-    function  Get_resolveExternals: Boolean;
-    procedure Set_resolveExternals(isResolving: Boolean);
-    function  Get_preserveWhiteSpace: Boolean;
-    procedure Set_preserveWhiteSpace(isPreserving: Boolean);
-    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
-    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
+    function  CreateElement(const TagName: string): IXMLElement;
+    function  CreateDocumentFragment: IXMLDocumentFragment;
+    function  CreateTextNode(const data: string): IXMLText;
+    function  CreateComment(const data: string): IXMLComment;
+    function  CreateCDATASection(const data: string): IXMLCDATASection;
+    function  CreateProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
+    function  CreateAttribute(const name: string): IXMLAttribute;
+    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  CreateNode(NodeType: Integer; const name: string; const namespaceURI: string): IXMLNode;
+    function  NodeFromID(const IdString: string): IXMLNode;
+    function  Get_ReadyState: Integer;
+    function  Get_ParseError: IXMLError;
+    function  Get_Url: string;
+    procedure Save(const Url: string); overload;
+    function  Get_ValidateOnParse: Boolean;
+    procedure Set_ValidateOnParse(IsValidating: Boolean);
+    function  Get_ResolveExternals: Boolean;
+    procedure Set_ResolveExternals(IsResolving: Boolean);
+    function  Get_PreserveWhiteSpace: Boolean;
+    procedure Set_PreserveWhiteSpace(IsPreserving: Boolean);
+    function  Transform(const Stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean; overload;
     function  Validate: IXMLError;
-    function  validateNode(const node: IXMLNode): IXMLError;
-    property  doctype: IXMLDocumentType read Get_doctype;
-    property  documentElement: IXMLElement read Get_documentElement write Set_documentElement;
-    property  readyState: Integer read Get_readyState;
-    property  parseError: IXMLError read Get_parseError;
-    property  url: string read Get_url;
-    property  ValidateOnParse: Boolean read Get_validateOnParse write Set_validateOnParse;
-    property  resolveExternals: Boolean read Get_resolveExternals write Set_resolveExternals;
-    property  preserveWhiteSpace: Boolean read Get_preserveWhiteSpace write Set_preserveWhiteSpace;
+    function  ValidateNode(const node: IXMLNode): IXMLError;
+    property  Doctype: IXMLDocumentType read Get_Doctype;
+    property  DocumentElement: IXMLElement read Get_DocumentElement write Set_DocumentElement;
+    property  ReadyState: Integer read Get_ReadyState;
+    property  ParseError: IXMLError read Get_ParseError;
+    property  Url: string read Get_Url;
+    property  ValidateOnParse: Boolean read Get_ValidateOnParse write Set_ValidateOnParse;
+    property  ResolveExternals: Boolean read Get_ResolveExternals write Set_ResolveExternals;
+    property  PreserveWhiteSpace: Boolean read Get_PreserveWhiteSpace write Set_PreserveWhiteSpace;
   public
     constructor Create; overload;
     constructor Create(doc: xmlDocPtr; DocOwner: Boolean); overload;
@@ -753,54 +754,60 @@ type
 
     procedure ReconciliateNs; override;
     property  Errors: TXMLErrors read FErrors;
+    property  XSLTErrors: TStrings read FXSLTErrors;
     property  Options: TXmlParserOptions read FOptions write FOptions;
   end;
 
   XMLFactory = record
   public
-    class function Cast(const node: xmlNodePtr; Own: Boolean = True): IXMLNode; overload; static; inline;
-    class function Cast(const attr: xmlAttrPtr; Own: Boolean = True): IXMLAttribute; overload; static; inline;
-    class function Cast(const doc: xmlDocPtr; Own: Boolean): IXMLDocument; overload; static; inline;
+    class function Cast(const Node: xmlNodePtr; Own: Boolean = True): IXMLNode; overload; static; inline;
+    class function Cast(const Attr: xmlAttrPtr; Own: Boolean = True): IXMLAttribute; overload; static; inline;
+    class function Cast(const Doc: xmlDocPtr; Own: Boolean): IXMLDocument; overload; static; inline;
   end;
 
 implementation
 
 uses
-  LX2.Helpers;
+  libxslt.API, LX2.Helpers;
 
-procedure NodeFreeCallback(node: xmlNodePtr); cdecl;
+procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
 begin
-  if node._private <> nil then
+  if Node._private <> nil then
   begin
-    TXMLNode(node._private).NodePtr := nil;
-    TXMLNode(node._private).Unlink;
-    node._private := nil;
+    TXMLNode(Node._private).NodePtr := nil;
+    TXMLNode(Node._private).Unlink;
+    Node._private := nil;
   end;
 
   if Assigned(TXMLObject.OldDeregisterNodeFunc) then
-    TXMLObject.OldDeregisterNodeFunc(node);
+    TXMLObject.OldDeregisterNodeFunc(Node);
 end;
+
+ procedure XSLTErrorHandler(Context: Pointer; const Msg: string);
+ begin
+   TXMLDocument(Context).XSLTError(Msg);
+ end;
 
 { XMLFactory }
 
-class function XMLFactory.Cast(const node: xmlNodePtr; Own: Boolean): IXMLNode;
+class function XMLFactory.Cast(const Node: xmlNodePtr; Own: Boolean): IXMLNode;
 begin
-  if node = nil then
+  if Node = nil then
     Exit(nil);
 
-  if node._private <> nil then
+  if Node._private <> nil then
     Exit(TXMLNode(node._private));
 
   case Node.&type of
-    XML_ELEMENT_NODE       : Result := TXMLElement.Create(node);
-    XML_ATTRIBUTE_NODE     : Result := TXMLAttribute.Create(xmlAttrPtr(node));
-    XML_TEXT_NODE          : Result := TXMLText.Create(node);
-    XML_CDATA_SECTION_NODE : Result := TXMLCDATA.Create(node);
-    XML_ENTITY_REF_NODE    : Result := TXMLEntityRef.Create(node);
-    XML_PI_NODE            : Result := TXMLProcessingInstruction.Create(node);
-    XML_COMMENT_NODE       : Result := TXMLComment.Create(node);
-    XML_DOCUMENT_FRAG_NODE : Result := TXMLDocumentFragment.Create(node);
-    XML_DTD_NODE           : Result := TXMLDocType.Create(node);
+    XML_ELEMENT_NODE       : Result := TXMLElement.Create(Node);
+    XML_ATTRIBUTE_NODE     : Result := TXMLAttribute.Create(xmlAttrPtr(Node));
+    XML_TEXT_NODE          : Result := TXMLText.Create(Node);
+    XML_CDATA_SECTION_NODE : Result := TXMLCDATA.Create(Node);
+    XML_ENTITY_REF_NODE    : Result := TXMLEntityRef.Create(Node);
+    XML_PI_NODE            : Result := TXMLProcessingInstruction.Create(Node);
+    XML_COMMENT_NODE       : Result := TXMLComment.Create(Node);
+    XML_DOCUMENT_FRAG_NODE : Result := TXMLDocumentFragment.Create(Node);
+    XML_DTD_NODE           : Result := TXMLDocType.Create(Node);
   else
     Result := TXMLNode.Create(node);
   end;
@@ -808,28 +815,28 @@ begin
     Result.Link;
 end;
 
-class function XMLFactory.Cast(const attr: xmlAttrPtr; Own: Boolean = True): IXMLAttribute;
+class function XMLFactory.Cast(const Attr: xmlAttrPtr; Own: Boolean = True): IXMLAttribute;
 begin
-  if attr = nil then
+  if Attr = nil then
     Result := nil
-  else if attr._private = nil then
+  else if Attr._private = nil then
   begin
-    Result := TXMLAttribute.Create(attr);
+    Result := TXMLAttribute.Create(Attr);
     if Own then
       Result.Link;
   end
   else
-    Result := TXMLAttribute(attr._private)
+    Result := TXMLAttribute(Attr._private)
 end;
 
-class function XMLFactory.Cast(const doc: xmlDocPtr; Own: Boolean): IXMLDocument;
+class function XMLFactory.Cast(const Doc: xmlDocPtr; Own: Boolean): IXMLDocument;
 begin
-  if doc = nil then
+  if Doc = nil then
     Result := nil
-  else if doc._private = nil then
-    Result := TXMLDocument.Create(doc, Own)
+  else if Doc._private = nil then
+    Result := TXMLDocument.Create(Doc, Own)
   else
-    Result := TXMLDocument(doc._private)
+    Result := TXMLDocument(Doc._private)
 end;
 
 { TXMLObject }
@@ -875,7 +882,7 @@ begin
   end;
 end;
 
-function TXMLEnumerator.Predicate(node: xmlNodePtr): Boolean;
+function TXMLEnumerator.Predicate(Node: xmlNodePtr): Boolean;
 begin
   Result := True;
 end;
@@ -1013,12 +1020,12 @@ begin
   Result := TEnumerator.Create(Self);
 end;
 
-function TXMLNodeArrayList.Get_item(index: Integer): IXMLNode;
+function TXMLNodeArrayList.Get_Item(Index: NativeInt): IXMLNode;
 begin
-  Result := XMLFactory.Cast(FNodes[index]);
+  Result := XMLFactory.Cast(FNodes[Index]);
 end;
 
-function TXMLNodeArrayList.Get_length: Integer;
+function TXMLNodeArrayList.Get_Length: NativeInt;
 begin
   Result := FLength;
 end;
@@ -1069,7 +1076,7 @@ begin
   Result := FEnumerator;
 end;
 
-function TXMLNodeList.Get_item(Index: Integer): IXMLNode;
+function TXMLNodeList.Get_Item(Index: NativeInt): IXMLNode;
 begin
   var Enum := CreateEnumerator;
   for var I := 0 to Index do
@@ -1080,7 +1087,7 @@ begin
   Result := XMLFactory.Cast(Enum.Current);
 end;
 
-function TXMLNodeList.Get_length: Integer;
+function TXMLNodeList.Get_Length: NativeInt;
 begin
   Result := 0;
   var Enum := CreateEnumerator;
@@ -1124,19 +1131,19 @@ end;
 
 { TXMLNamedNodeMap }
 
-function TXMLNamedNodeMap.GetItemByName(const name: string): xmlNodePtr;
+function TXMLNamedNodeMap.GetItemByName(const Name: string): xmlNodePtr;
 var
-  prefix, base: PUTF8Char;
+  Prefix, Base: PUTF8Char;
 begin
   ResetLocalBuffers;
-  SplitXMLName(name, prefix, base);
+  SplitXMLName(Name, Prefix, Base);
 
   for var I := 0 to Length - 1 do
   begin
-    var node := FNodes[I];
-    if xmlStrSame(node.name, base) then
+    var Node := FNodes[I];
+    if xmlStrSame(Node.name, Base) then
     begin
-      if ((prefix = nil) and (node.ns = nil)) or xmlStrSame(prefix, node.ns.prefix) then
+      if ((Prefix = nil) and (node.ns = nil)) or xmlStrSame(Prefix, node.ns.prefix) then
         Exit(node);
     end;
   end;
@@ -1144,75 +1151,75 @@ begin
   Result := nil;
 end;
 
-function TXMLNamedNodeMap.GetQualifiedItemByName(const baseName: string; const namespaceURI: string): xmlNodePtr;
+function TXMLNamedNodeMap.GetQualifiedItemByName(const BaseName: string; const NamespaceURI: string): xmlNodePtr;
 var
-  base, URI: PUTF8Char;
+  Base, URI: PUTF8Char;
 begin
   ResetLocalBuffers;
-  base := LocalXmlStr(baseName);
-  URI := LocalXmlStr(namespaceURI);
+  Base := LocalXmlStr(BaseName);
+  URI := LocalXmlStr(NamespaceURI);
 
   for var I := 0 to Length - 1 do
   begin
-    var node := FNodes[I];
-    if xmlStrSame(node.name, base) then
+    var Node := FNodes[I];
+    if xmlStrSame(Node.name, Base) then
     begin
-      if ((URI = nil) and (node.ns = nil)) or xmlStrSame(URI, node.ns.href) then
-        Exit(node);
+      if ((URI = nil) and (Node.ns = nil)) or xmlStrSame(URI, Node.ns.href) then
+        Exit(Node);
     end;
   end;
 
   Result := nil;
 end;
 
-function TXMLNamedNodeMap.getNamedItem(const name: string): IXMLNode;
+function TXMLNamedNodeMap.getNamedItem(const Name: string): IXMLNode;
 begin
-  var node := GetItemByName(name);
-  if node = nil then
+  var Node := GetItemByName(Name);
+  if Node = nil then
     Exit(nil);
 
-  Result := XMLFactory.Cast(node);
+  Result := XMLFactory.Cast(Node);
 end;
 
-function TXMLNamedNodeMap.getQualifiedItem(const baseName, namespaceURI: string): IXMLNode;
+function TXMLNamedNodeMap.getQualifiedItem(const BaseName, NamespaceURI: string): IXMLNode;
 begin
-  var node := GetQualifiedItemByName(baseName, namespaceURI);
-  if node = nil then
+  var Node := GetQualifiedItemByName(BaseName, NamespaceURI);
+  if Node = nil then
     Exit(nil);
 
-  Result := XMLFactory.Cast(node);
+  Result := XMLFactory.Cast(Node);
 end;
 
-function TXMLNamedNodeMap.removeNamedItem(const name: string): IXMLNode;
+function TXMLNamedNodeMap.removeNamedItem(const Name: string): IXMLNode;
 begin
-  var node := GetItemByName(name);
-  if node = nil then
+  var Node := GetItemByName(Name);
+  if Node = nil then
     Exit(nil);
 
-  xmlUnlinkNode(node);
-  Result := XMLFactory.Cast(node);
-  if node._private <> nil then
-    TXMLNode(node._private).Unlink;
+  xmlUnlinkNode(Node);
+  Result := XMLFactory.Cast(Node);
+  if Node._private <> nil then
+    TXMLNode(Node._private).Unlink;
 end;
 
-function TXMLNamedNodeMap.removeQualifiedItem(const baseName, namespaceURI: string): IXMLNode;
+function TXMLNamedNodeMap.removeQualifiedItem(const BaseName, NamespaceURI: string): IXMLNode;
 begin
-  var node := GetQualifiedItemByName(baseName, namespaceURI);
-  if node = nil then
+  var Node := GetQualifiedItemByName(BaseName, namespaceURI);
+  if Node = nil then
     Exit(nil);
 
-  xmlUnlinkNode(node);
+  xmlUnlinkNode(Node);
 
-  Result := XMLFactory.Cast(node);
-  if node._private <> nil then
-    TXMLNode(node._private).Unlink;
+  Result := XMLFactory.Cast(Node);
+  if Node._private <> nil then
+    TXMLNode(Node._private).Unlink;
 end;
 
-function TXMLNamedNodeMap.setNamedItem(const newItem: IXMLNode): IXMLNode;
+function TXMLNamedNodeMap.setNamedItem(const NewItem: IXMLNode): IXMLNode;
 begin
   var L := System.Length(FNodes);
   SetLength(FNodes, L + 1);
-  FNodes[L] := newItem.Ptr;
+  FNodes[L] := NewItem.Ptr;
 end;
 
 { TXMLAttributes.TEnumerator }
@@ -1250,21 +1257,21 @@ begin
   FParent := Parent;
 
   var L := 0;
-  var prop := Parent.properties;
-  while prop <> nil do
+  var Prop := Parent.properties;
+  while Prop <> nil do
   begin
     Inc(L);
-    prop := prop.next;
+    Prop := Prop.next;
   end;
 
   SetLength(List, L);
   L := 0;
-  prop := Parent.properties;
-  while prop <> nil do
+  Prop := Parent.properties;
+  while Prop <> nil do
   begin
-    List[L] := xmlNodePtr(prop);
+    List[L] := xmlNodePtr(Prop);
     Inc(L);
-    prop := prop.next;
+    Prop := Prop.next;
   end;
 
   inherited Create(List);
@@ -1275,7 +1282,7 @@ begin
   Result := TEnumerator.Create(Self);
 end;
 
-function TXMLAttributes.Get_item(index: Integer): IXmlAttribute;
+function TXMLAttributes.Get_item(Index: NativeInt): IXmlAttribute;
 begin
   Result := XMLFactory.Cast(xmlAttrPtr(FNodes[Index]));
 end;
@@ -1285,9 +1292,9 @@ begin
   Result := inherited NextNode as IXMLAttribute;
 end;
 
-function TXMLAttributes.setNamedItem(const newItem: IXMLNode): IXMLNode;
+function TXMLAttributes.setNamedItem(const NewItem: IXMLNode): IXMLNode;
 begin
-  Result := XMLFactory.Cast(xmlAttrPtr(xmlAddChild(Parent, newItem.Ptr)));
+  Result := XMLFactory.Cast(xmlAttrPtr(xmlAddChild(Parent, NewItem.Ptr)));
   if Result <> nil then
     inherited;
 end;
@@ -1302,10 +1309,10 @@ end;
 
 { TXMLNode }
 
-constructor TXMLNode.Create(node: xmlNodePtr);
+constructor TXMLNode.Create(Node: xmlNodePtr);
 begin
   inherited Create;
-  NodePtr := node;
+  NodePtr := Node;
   NodePtr._private := Self;
 end;
 
@@ -1324,49 +1331,49 @@ begin
   inherited;
 end;
 
-function TXMLNode.appendChild(const newChild: IXMLNode): IXMLNode;
+function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
 begin
-  Result := TXMLNode.Create(LX2CheckNodeExists(xmlAddChild(NodePtr, newChild.Ptr)));
+  Result := TXMLNode.Create(LX2CheckNodeExists(xmlAddChild(NodePtr, NewChild.Ptr)));
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.cloneNode(deep: WordBool): IXMLNode;
+function TXMLNode.CloneNode(Deep: WordBool): IXMLNode;
 var
-  newNode: xmlNodePtr;
+  NewNode: xmlNodePtr;
 begin
-  if xmlDOMWrapCloneNode(nil, NodePtr.doc, NodePtr, newNode, NodePtr.doc, nil, Ord(deep), 0) <> 0 then
+  if xmlDOMWrapCloneNode(nil, NodePtr.doc, NodePtr, NewNode, NodePtr.doc, nil, Ord(Deep), 0) <> 0 then
     LX2InternalError;
-  Result := TXMLNode.Create(newNode);
+  Result := TXMLNode.Create(NewNode);
 end;
 
-function TXMLNode.Get_attributes: IXMLAttributes;
+function TXMLNode.Get_Attributes: IXMLAttributes;
 begin
   Result := TXMLAttributes.Create(NodePtr);
 end;
 
-function TXMLNode.Get_baseName: string;
+function TXMLNode.Get_BaseName: string;
 begin
   Result := NodePtr.BaseName;
 end;
 
-function TXMLNode.Get_childNodes: IXMLNodeList;
+function TXMLNode.Get_ChildNodes: IXMLNodeList;
 begin
-  Result := TXMLNodeList.Create(NodePtr.children);
+  Result := TXMLNodeList.Create(NodePtr.Children);
 end;
 
-function TXMLNode.Get_firstChild: IXMLNode;
+function TXMLNode.Get_FirstChild: IXMLNode;
 begin
   Result := XMLFactory.Cast(NodePtr.children);
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.Get_lastChild: IXMLNode;
+function TXMLNode.Get_LastChild: IXMLNode;
 begin
   Result := XMLFactory.Cast(NodePtr.last);
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.Get_namespaceURI: string;
+function TXMLNode.Get_NamespaceURI: string;
 begin
   if NodePtr.ns = nil then
     Result := ''
@@ -1374,23 +1381,23 @@ begin
     Result := xmlCharToStr(NodePtr.ns.href);
 end;
 
-function TXMLNode.Get_nextSibling: IXMLNode;
+function TXMLNode.Get_NextSibling: IXMLNode;
 begin
   Result := XMLFactory.Cast(NodePtr.next);
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.Get_nodeName: string;
+function TXMLNode.Get_NodeName: string;
 begin
   Result := NodePtr.NodeName;
 end;
 
-function TXMLNode.Get_nodeType: DOMNodeType;
+function TXMLNode.Get_NodeType: DOMNodeType;
 begin
   Result := DOMNodeType(NodePtr.&type);
 end;
 
-function TXMLNode.Get_nodeValue: Variant;
+function TXMLNode.Get_NodeValue: Variant;
 begin
   case NodePtr.&type of
     XML_ATTRIBUTE_NODE:     Result := NodePtr.text;
@@ -1403,51 +1410,51 @@ begin
   end;
 end;
 
-function TXMLNode.Get_ownerDocument: IXMLDocument;
+function TXMLNode.Get_OwnerDocument: IXMLDocument;
 begin
   Result := XMLFactory.Cast(NodePtr.OwnerDocument, False);
 end;
 
-function TXMLNode.Get_parentNode: IXMLNode;
+function TXMLNode.Get_ParentNode: IXMLNode;
 begin
   Result := XMLFactory.Cast(NodePtr.parent);
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.Get_prefix: string;
+function TXMLNode.Get_Prefix: string;
 begin
   Result := NodePtr.Prefix;
 end;
 
-function TXMLNode.Get_previousSibling: IXMLNode;
+function TXMLNode.Get_PreviousSibling: IXMLNode;
 begin
   Result := XMLFactory.Cast(NodePtr.prev);
   if Result <> nil then Result.Link;
 end;
 
-function TXMLNode.Get_text: string;
+function TXMLNode.Get_Text: string;
 begin
   Result := NodePtr.Text;
 end;
 
-function TXMLNode.Get_value: string;
+function TXMLNode.Get_Value: string;
 begin
   Result := NodePtr.Value;
 end;
 
-function TXMLNode.Get_xml: string;
+function TXMLNode.Get_Xml: string;
 begin
   Result := NodePtr.Xml;
 end;
 
-function TXMLNode.hasChildNodes: Boolean;
+function TXMLNode.HasChildNodes: Boolean;
 begin
   Result := NodePtr.HasChildNodes;
 end;
 
-function TXMLNode.insertBefore(const newChild: IXMLNode; refChild: IXMLNode): IXMLNode;
+function TXMLNode.InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.InsertBefore(newChild.Ptr, refChild.Ptr));
+  Result := XMLFactory.Cast(NodePtr.InsertBefore(NewChild.Ptr, RefChild.Ptr));
   if Result <> nil then Result.Link;
 end;
 
@@ -1469,29 +1476,29 @@ begin
   FLinked := True;
 end;
 
-function TXMLNode.removeChild(const childNode: IXMLNode): IXMLNode;
+function TXMLNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.RemoveChild(TXMLNode(childNode).NodePtr));
+  Result := XMLFactory.Cast(NodePtr.RemoveChild(TXMLNode(ChildNode).NodePtr));
   Result.Unlink;
 end;
 
-function TXMLNode.replaceChild(const newChild, oldChild: IXMLNode): IXMLNode;
+function TXMLNode.ReplaceChild(const NewChild, OldChild: IXMLNode): IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.ReplaceChild(TXMLNode(newChild).NodePtr, TXMLNode(oldChild).NodePtr));
+  Result := XMLFactory.Cast(NodePtr.ReplaceChild(TXMLNode(NewChild).NodePtr, TXMLNode(OldChild).NodePtr));
   oldChild.Unlink;
 end;
 
-function TXMLNode.selectNodes(const queryString: string): IXMLNodeList;
+function TXMLNode.SelectNodes(const QueryString: string): IXMLNodeList;
 begin
-  Result := TXMLNodeArrayList.Create(NodePtr.SelectNodes(queryString));
+  Result := TXMLNodeArrayList.Create(NodePtr.SelectNodes(QueryString));
 end;
 
-function TXMLNode.selectSingleNode(const queryString: string): IXMLNode;
+function TXMLNode.SelectSingleNode(const QueryString: string): IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.SelectSingleNode(queryString));
+  Result := XMLFactory.Cast(NodePtr.SelectSingleNode(QueryString));
 end;
 
-procedure TXMLNode.Set_nodeValue(const Value: Variant);
+procedure TXMLNode.Set_NodeValue(const Value: Variant);
 begin
   case NodePtr.&type of
     XML_ATTRIBUTE_NODE:     NodePtr.text := VarToStr(Value); //TODO: What a rules to convert data types?
@@ -1504,7 +1511,7 @@ begin
   end;
 end;
 
-procedure TXMLNode.Set_text(const text: string);
+procedure TXMLNode.Set_Text(const text: string);
 begin
   NodePtr.Text := text;
 end;
@@ -1532,21 +1539,21 @@ begin
   Result := xmlAttrPtr(NodePtr);
 end;
 
-function TXMLAttribute.Get_name: string;
+function TXMLAttribute.Get_Name: string;
 begin
   Result := AttrPtr.Name;
 end;
 
-function TXMLAttribute.Get_value: string;
+function TXMLAttribute.Get_Value: string;
 begin
   Result := xmlCharToStrAndFree(xmlNodeGetContent(NodePtr));
 end;
 
-procedure TXMLAttribute.Set_value(const attrValue: string);
+procedure TXMLAttribute.Set_Value(const AttrValue: string);
 begin
   var children: xmlNodePtr := nil;
 
-  if attrValue <> '' then
+  if AttrValue <> '' then
   begin
     ResetLocalBuffers;
     children := xmlNewDocText(AttrPtr.parent.doc, LocalXmlStr(attrValue));
@@ -1568,81 +1575,81 @@ begin
   if children <> nil then
   begin
     AttrPtr.children := children;
-    var tmp := children;
-    while tmp <> nil do
+    var Tmp := children;
+    while Tmp <> nil do
     begin
-      tmp.parent := NodePtr;
-      if tmp.next = nil then
-        AttrPtr.last := tmp;
-      tmp := tmp.next;
+      Tmp.parent := NodePtr;
+      if Tmp.next = nil then
+        AttrPtr.last := Tmp;
+      Tmp := Tmp.next;
     end;
   end;
 end;
 
 { TXMLElement }
 
-function TXMLElement.getAttribute(const name: string): string;
+function TXMLElement.GetAttribute(const name: string): string;
 begin
   Result := NodePtr.Attribute[name];
 end;
 
-function TXMLElement.getAttributeNode(const name: string): IXMLAttribute;
+function TXMLElement.GetAttributeNode(const name: string): IXMLAttribute;
 begin
   Result := XMLFactory.Cast(NodePtr.FindAttribute(name));
 end;
 
-function TXMLElement.getElementsByTagName(const tagName: string): IXMLNodeList;
+function TXMLElement.GetElementsByTagName(const tagName: string): IXMLNodeList;
 begin
   Result := TXMLElementList.Create(NodePtr, True, tagName);
 end;
 
-procedure TXMLElement.normalize;
+procedure TXMLElement.Normalize;
 begin
-  var node := NodePtr.children;
-  while node <> nil do
+  var Node := NodePtr.children;
+  while Node <> nil do
   begin
-    if node.&type in [XML_TEXT_NODE, XML_CDATA_SECTION_NODE] then
+    if Node.&type in [XML_TEXT_NODE, XML_CDATA_SECTION_NODE] then
     begin
-      var next := node.next;
-      while next <> nil do
+      var Next := Node.next;
+      while Next <> nil do
       begin
-        if (next.&type in [XML_TEXT_NODE, XML_CDATA_SECTION_NODE]) then
+        if (Next.&type in [XML_TEXT_NODE, XML_CDATA_SECTION_NODE]) then
         begin
-          xmlNodeAddContent(node, xmlNodeGetContent(next));
-          var tmp := next;
-          next := next.next;
-          xmlUnlinkNode(tmp);
-          xmlFreeNode(tmp);
+          xmlNodeAddContent(Node, xmlNodeGetContent(Next));
+          var Tmp := Next;
+          Next := Next.next;
+          xmlUnlinkNode(Tmp);
+          xmlFreeNode(Tmp);
         end
         else
           Break;
       end;
       Break;
     end;
-    node := node.next;
+    Node := Node.next;
   end;
 end;
 
-function TXMLElement.removeAttribute(const name: string): Boolean;
+function TXMLElement.RemoveAttribute(const Name: string): Boolean;
 var
-  prefix, localName: xmlCharPtr;
+  Prefix, LocalName: xmlCharPtr;
 begin
   ResetLocalBuffers;
 
-  SplitXMLName(name, prefix, localName);
+  SplitXMLName(Name, Prefix, LocalName);
   if Prefix = nil then
-    Result := xmlUnsetProp(NodePtr, localName) = 0
+    Result := xmlUnsetProp(NodePtr, LocalName) = 0
   else
   begin
-    var Ns := NodePtr.SearchNs(prefix);
+    var Ns := NodePtr.SearchNs(Prefix);
     if Ns <> nil then
-      Result := xmlUnsetNsProp(NodePtr, ns, localName) = 0
+      Result := xmlUnsetNsProp(NodePtr, Ns, LocalName) = 0
     else
       Result := False;
   end;
 end;
 
-function TXMLElement.removeAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
+function TXMLElement.RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
 begin
   if (Attribute <> nil) and (Attribute.Ptr.parent = NodePtr) then
   begin
@@ -1654,21 +1661,21 @@ begin
     Result := nil;
 end;
 
-procedure TXMLElement.setAttribute(const name: string; Value: string);
+procedure TXMLElement.SetAttribute(const Name: string; Value: string);
 begin
   ResetLocalBuffers;
-  xmlSetProp(NodePtr, LocalXmlStr(name), LocalXmlStr(value));
+  xmlSetProp(NodePtr, LocalXmlStr(Name), LocalXmlStr(Value));
 end;
 
 { TXMLCharacterData }
 
-procedure TXMLCharacterData.appendData(const data: string);
+procedure TXMLCharacterData.AppendData(const Data: string);
 begin
   ResetLocalBuffers;
-  xmlNodeAddContent(NodePtr, LocalXmlStr(data));
+  xmlNodeAddContent(NodePtr, LocalXmlStr(Data));
 end;
 
-procedure TXMLCharacterData.deleteData(offset, count: Integer);
+procedure TXMLCharacterData.DeleteData(offset, count: Integer);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
@@ -1678,17 +1685,17 @@ begin
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
-function TXMLCharacterData.Get_data: string;
+function TXMLCharacterData.Get_Data: string;
 begin
   Result := xmlCharToStr(NodePtr.content);
 end;
 
-function TXMLCharacterData.Get_length: Integer;
+function TXMLCharacterData.Get_Length: NativeInt;
 begin
   Result := Utf8toUtf16Count(NodePtr.content);
 end;
 
-procedure TXMLCharacterData.insertData(offset: Integer; const data: string);
+procedure TXMLCharacterData.InsertData(offset: Integer; const data: string);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
@@ -1698,7 +1705,7 @@ begin
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
-procedure TXMLCharacterData.replaceData(offset, count: Integer; const data: string);
+procedure TXMLCharacterData.ReplaceData(offset, count: Integer; const data: string);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
@@ -1709,30 +1716,30 @@ begin
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
-procedure TXMLCharacterData.Set_data(const data: string);
+procedure TXMLCharacterData.Set_Data(const data: string);
 begin
   ResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(data));
 end;
 
-function TXMLCharacterData.substringData(offset, count: Integer): string;
+function TXMLCharacterData.SubstringData(offset, count: Integer): string;
 begin
   Result := Copy(xmlCharToStr(NodePtr.content), offset, count);
 end;
 
 { TXMLProcessingInstruction }
 
-function TXMLProcessingInstruction.Get_data: string;
+function TXMLProcessingInstruction.Get_Data: string;
 begin
   Result := xmlCharToStr(NodePtr.content);
 end;
 
-function TXMLProcessingInstruction.Get_target: string;
+function TXMLProcessingInstruction.Get_Target: string;
 begin
   Result := xmlCharToStr(NodePtr.name);
 end;
 
-procedure TXMLProcessingInstruction.Set_data(const Value: string);
+procedure TXMLProcessingInstruction.Set_Data(const Value: string);
 begin
   ResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(data));
@@ -1750,12 +1757,12 @@ constructor TXMLError.Create;
 begin
 end;
 
-function TXMLError.Get_errorCode: Integer;
+function TXMLError.Get_ErrorCode: Integer;
 begin
   Result := FError.Code;
 end;
 
-function TXMLError.Get_filepos: Integer;
+function TXMLError.Get_FilePos: Integer;
 begin
   Result := 0;
 end;
@@ -1765,27 +1772,27 @@ begin
   Result := FError.Level;
 end;
 
-function TXMLError.Get_line: Integer;
+function TXMLError.Get_Line: Integer;
 begin
   Result := FError.Line;
 end;
 
-function TXMLError.Get_linepos: Integer;
+function TXMLError.Get_LinePos: Integer;
 begin
   Result := FError.Col;
 end;
 
-function TXMLError.Get_reason: string;
+function TXMLError.Get_Reason: string;
 begin
   Result := FError.Text;
 end;
 
-function TXMLError.Get_srcText: string;
+function TXMLError.Get_SrcText: string;
 begin
   Result := FError.Source;
 end;
 
-function TXMLError.Get_url: string;
+function TXMLError.Get_Url: string;
 begin
   Result := FError.Url;
 end;
@@ -1848,6 +1855,7 @@ begin
   inherited Create(xmlNodePtr(doc));
   FDocOwner := DocOwner;
   FErrors := TXMLErrors.Create;
+  FXSLTErrors := TStringList.Create;
   FSuccessError := nil;
   FValidateOnParse := True;
 end;
@@ -1857,81 +1865,82 @@ begin
   if NodePtr <> nil then
   begin
     if DocOwner then
-      xmlFreeDoc(xmlDocPtr(doc));
+      xmlFreeDoc(Doc);
     NodePtr := nil;
   end;
   inherited;
   FreeAndNil(FErrors);
+  FreeAndNil(FXSLTErrors);
 end;
 
-function TXMLDocument.createAttribute(const name: string): IXMLAttribute;
+function TXMLDocument.CreateAttribute(const Name: string): IXMLAttribute;
 begin
-  Result := XMLFactory.Cast(xmlNewDocProp(doc, LocalXmlStr(name), nil));
+  Result := XMLFactory.Cast(xmlNewDocProp(doc, LocalXmlStr(Name), nil));
 end;
 
-function TXMLDocument.createCDATASection(const data: string): IXMLCDATASection;
+function TXMLDocument.CreateCDATASection(const Data: string): IXMLCDATASection;
 var
   L: NativeUInt;
 begin
   ResetLocalBuffers;
 
-  L := Length(data);
-  var P := LocalXmlStr(Pointer(data), L);
+  L := Length(Data);
+  var P := LocalXmlStr(Pointer(Data), L);
 
-  Result := XMLFactory.Cast(xmlNewCDataBlock(doc, P, L)) as IXMLCDATASection;
+  Result := XMLFactory.Cast(xmlNewCDataBlock(Doc, P, L)) as IXMLCDATASection;
 end;
 
-function TXMLDocument.createComment(const data: string): IXMLComment;
+function TXMLDocument.CreateComment(const Data: string): IXMLComment;
 begin
   ResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocComment(doc, LocalXmlStr(data))) as IXMLComment;
+  Result := XMLFactory.Cast(xmlNewDocComment(Doc, LocalXmlStr(Data))) as IXMLComment;
 end;
 
-function TXMLDocument.createDocumentFragment: IXMLDocumentFragment;
+function TXMLDocument.CreateDocumentFragment: IXMLDocumentFragment;
 begin
   Result := XMLFactory.Cast(xmlNewDocFragment(doc)) as IXMLDocumentFragment;
 end;
 
-function TXMLDocument.createElement(const tagName: string): IXMLElement;
+function TXMLDocument.CreateElement(const TagName: string): IXMLElement;
 var
-  prefix, base: PUTF8Char;
+  Prefix, Base: PUTF8Char;
 begin
   ResetLocalBuffers;
-  SplitXMLName(tagName, prefix, base);
+  SplitXMLName(TagName, Prefix, Base);
 
-  if prefix = nil then
-    Result := XMLFactory.Cast(xmlNewDocRawNode(doc, nil, base, nil), False) as IXMLElement
+  if Prefix = nil then
+    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, Base, nil), False) as IXMLElement
   else
   begin
-    var node := doc.documentElement;
-    if node <> nil then
+    var Node := Doc.documentElement;
+    if Node <> nil then
     begin
-      var ns := node.SearchNs(prefix);
-      if ns <> nil then
-        Exit(XMLFactory.Cast(xmlNewDocRawNode(doc, ns, base, nil), False) as IXMLElement)
+      var Ns := Node.SearchNs(Prefix);
+      if Ns <> nil then
+        Exit(XMLFactory.Cast(xmlNewDocRawNode(Doc, Ns, Base, nil), False) as IXMLElement)
     end;
-    Result := XMLFactory.Cast(xmlNewDocRawNode(doc, nil, LocalXmlStr(tagName), nil), False) as IXMLElement;
+    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, LocalXmlStr(TagName), nil), False) as IXMLElement;
   end;
 end;
 
-function TXMLDocument.createNode(&type: Integer; const name, namespaceURI: string): IXMLNode;
+function TXMLDocument.CreateNode(NodeType: Integer; const Name, NamespaceURI: string): IXMLNode;
 var
-  prefix, localName, href: xmlCharPtr;
+  Prefix, LocalName, HRef: xmlCharPtr;
 begin
   ResetLocalBuffers;
-  if namespaceURI <> '' then
+  if NamespaceURI <> '' then
   begin
-    SplitXMLName(Name, prefix, localName);
-    href := LocalXmlStr(namespaceURI);
+    SplitXMLName(Name, Prefix, LocalName);
+    HRef := LocalXmlStr(NamespaceURI);
   end
   else
   begin
-    localName := LocalXmlStr(name);
-    href := nil;
-    prefix := nil;
+    LocalName := LocalXmlStr(Name);
+    HRef := nil;
+    Prefix := nil;
   end;
 
-  case &type of
+  case NodeType of
     NODE_ATTRIBUTE:
       Result := XMLFactory.Cast(xmlNewDocProp(doc, localName, nil), False);
     NODE_CDATA_SECTION:
@@ -1954,21 +1963,21 @@ begin
   else
     Result := nil;
   end;
-  xmlFree(prefix);
-  xmlFree(localName);
-  xmlFree(href);
+  xmlFree(Prefix);
+  xmlFree(LocalName);
+  xmlFree(HRef);
 end;
 
-function TXMLDocument.createProcessingInstruction(const target, data: string): IXMLProcessingInstruction;
+function TXMLDocument.CreateProcessingInstruction(const Target, Data: string): IXMLProcessingInstruction;
 begin
   ResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocPI(doc, LocalXmlStr(target), LocalXmlStr(data))) as IXMLProcessingInstruction;
+  Result := XMLFactory.Cast(xmlNewDocPI(Doc, LocalXmlStr(Target), LocalXmlStr(Data))) as IXMLProcessingInstruction;
 end;
 
-function TXMLDocument.createTextNode(const data: string): IXMLText;
+function TXMLDocument.CreateTextNode(const Data: string): IXMLText;
 begin
   ResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocText(doc, LocalXmlStr(data))) as IXMLText;
+  Result := XMLFactory.Cast(xmlNewDocText(Doc, LocalXmlStr(Data))) as IXMLText;
 end;
 
 procedure TXMLDocument.ErrorCallback(const error: xmlError);
@@ -1982,12 +1991,12 @@ begin
   Result := xmlDocPtr(NodePtr);
 end;
 
-function TXMLDocument.getElementsByTagName(const tagName: string): IXMLNodeList;
+function TXMLDocument.getElementsByTagName(const TagName: string): IXMLNodeList;
 begin
-  if doc.documentElement = nil  then
+  if Doc.documentElement = nil  then
     Exit(nil);
 
-  Result := TXMLElementList.Create(doc.documentElement, True, tagName);
+  Result := TXMLElementList.Create(Doc.documentElement, True, TagName);
 end;
 
 function TXMLDocument.getErrors: IXMLErrors;
@@ -1995,7 +2004,12 @@ begin
   Result := FErrors;
 end;
 
-function TXMLDocument.Get_doctype: IXMLDocumentType;
+function TXMLDocument.GetXSLTErrors: TStrings;
+begin
+  Result := FXSLTErrors;
+end;
+
+function TXMLDocument.Get_DocType: IXMLDocumentType;
 begin
   if (doc.children <> nil) and (doc.children.&type = XML_DTD_NODE) then
     Result := XMLFactory.Cast(doc.children) as IXMLDocumentType
@@ -2003,13 +2017,13 @@ begin
     Result := nil;
 end;
 
-function TXMLDocument.Get_documentElement: IXMLElement;
+function TXMLDocument.Get_DocumentElement: IXMLElement;
 begin
-  Result := XMLFactory.Cast(doc.documentElement) as IXMLElement;
+  Result := XMLFactory.Cast(Doc.documentElement) as IXMLElement;
   if Result <> nil then Result.Link;
 end;
 
-function TXMLDocument.Get_parseError: IXMLError;
+function TXMLDocument.Get_ParseError: IXMLError;
 begin
   if Errors.Count > 0 then
     Result := Errors.MainError
@@ -2017,12 +2031,12 @@ begin
     Result := FSuccessError;
 end;
 
-function TXMLDocument.Get_preserveWhiteSpace: Boolean;
+function TXMLDocument.Get_PreserveWhiteSpace: Boolean;
 begin
   Result := FPreserveWhiteSpace;
 end;
 
-function TXMLDocument.Get_readyState: Integer;
+function TXMLDocument.Get_ReadyState: Integer;
 begin
   if (doc.properties and Ord(XML_DOC_WELLFORMED)) = Ord(XML_DOC_WELLFORMED) then
     Result := 4   //MS DOM COMPLETED
@@ -2030,17 +2044,17 @@ begin
     Result := 2;  //MS DOM LOADED
 end;
 
-function TXMLDocument.Get_resolveExternals: Boolean;
+function TXMLDocument.Get_ResolveExternals: Boolean;
 begin
   Result := FResolveExternals;
 end;
 
-function TXMLDocument.Get_url: string;
+function TXMLDocument.Get_Url: string;
 begin
   Result := doc.URL;
 end;
 
-function TXMLDocument.Get_validateOnParse: Boolean;
+function TXMLDocument.Get_ValidateOnParse: Boolean;
 begin
   Result := FValidateOnParse;
 end;
@@ -2069,49 +2083,49 @@ end;
 function TXMLDocument.Load(const URL: string): Boolean;
 begin
   BeforeLoad;
-  doc := doc.CreateFromFile(URL, Options, ErrorCallback);
-  Result := doc <> nil;
+  Doc := Doc.CreateFromFile(URL, Options, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
 function TXMLDocument.Load(const Data: TBytes): Boolean;
 begin
   BeforeLoad;
-  doc := doc.Create(Data, Options, ErrorCallback);
-  Result := doc <> nil;
+  Doc := Doc.Create(Data, Options, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
 function TXMLDocument.Load(const Data: Pointer; Size: NativeUInt): Boolean;
 begin
   BeforeLoad;
-  doc := doc.Create(Data, Size, Options, ErrorCallback);
-  Result := doc <> nil;
+  Doc := Doc.Create(Data, Size, Options, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
 function TXMLDocument.Load(Stream: TStream; const Encoding: Utf8String): Boolean;
 begin
   BeforeLoad;
-  doc := doc.Create(Stream, Options, Encoding, ErrorCallback);
-  Result := doc <> nil;
+  Doc := Doc.Create(Stream, Options, Encoding, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
 function TXMLDocument.LoadXML(const XML: string): Boolean;
 begin
   BeforeLoad;
-  doc := xmlDoc.Create(XML, Options, ErrorCallback);
-  Result := doc <> nil;
+  Doc := xmlDoc.Create(XML, Options, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
 function TXMLDocument.LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean;
 begin
   BeforeLoad;
-  doc := xmlDoc.Create(XML, Options, ErrorCallback);
-  Result := doc <> nil;
+  Doc := xmlDoc.Create(XML, Options, ErrorCallback);
+  Result := Doc <> nil;
 end;
 
-function TXMLDocument.nodeFromID(const idString: string): IXMLNode;
+function TXMLDocument.NodeFromID(const IdString: string): IXMLNode;
 begin
   ResetLocalBuffers;
-  var Attr := xmlGetID(doc, LocalXmlStr(idString));
+  var Attr := xmlGetID(Doc, LocalXmlStr(IdString));
   if Attr = nil then
     Exit(nil);
 
@@ -2120,10 +2134,10 @@ end;
 
 procedure TXMLDocument.ReconciliateNs;
 begin
-  xmlReconciliateNs(doc, doc.documentElement);
+  xmlReconciliateNs(Doc, doc.documentElement);
 end;
 
-procedure TXMLDocument.Save(const url: string);
+procedure TXMLDocument.Save(const Url: string);
 begin
   ResetLocalBuffers;
   xmlSaveFile(LocalXmlStr(url), doc);
@@ -2131,17 +2145,17 @@ end;
 
 function TXMLDocument.Save(const FileName, Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
-  Result := doc.Save(FileName, Encoding, Options);
+  Result := Doc.Save(FileName, Encoding, Options);
 end;
 
 function TXMLDocument.Save(Stream: TStream; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
-  Result := doc.Save(Stream, Encoding, Options);
+  Result := Doc.Save(Stream, Encoding, Options);
 end;
 
-procedure TXMLDocument.SetDoc(value: xmlDocPtr);
+procedure TXMLDocument.SetDoc(Value: xmlDocPtr);
 begin
-  NodePtr := xmlNodePtr(value);
+  NodePtr := xmlNodePtr(Value);
 end;
 
 procedure TXMLDocument.Set_documentElement(const Element: IXMLElement);
@@ -2154,53 +2168,68 @@ begin
   FPreserveWhiteSpace := isPreserving;
 end;
 
-procedure TXMLDocument.Set_resolveExternals(isResolving: Boolean);
+procedure TXMLDocument.Set_resolveExternals(IsResolving: Boolean);
 begin
-  FResolveExternals := isResolving;
+  FResolveExternals := IsResolving;
 end;
 
-procedure TXMLDocument.Set_validateOnParse(isValidating: Boolean);
+procedure TXMLDocument.Set_validateOnParse(IsValidating: Boolean);
 begin
-  FValidateOnParse := isValidating;
+  FValidateOnParse := IsValidating;
 end;
 
 function TXMLDocument.ToAnsi(const Encoding: string; const Format: Boolean): RawByteString;
 begin
-  Result := doc.ToAnsi(Encoding, Format);
+  Result := Doc.ToAnsi(Encoding, Format);
 end;
 
 function TXMLDocument.ToBytes(const Encoding: string; const Format: Boolean): TBytes;
 begin
-  Result := doc.ToBytes(Encoding, Format);
+  Result := Doc.ToBytes(Encoding, Format);
 end;
 
 function TXMLDocument.ToString: string;
 begin
-  Result := doc.ToString(False);
+  Result := Doc.ToString(False);
 end;
 
 function TXMLDocument.ToString(const Format: Boolean): string;
 begin
-  Result := doc.ToString(Format);
+  Result := Doc.ToString(Format);
 end;
 
 function TXMLDocument.ToUtf8(const Format: Boolean): RawByteString;
 begin
-  Result := doc.ToUtf8(Format);
+  Result := Doc.ToUtf8(Format);
 end;
 
-function TXMLDocument.Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean;
+function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean;
 var
-  res: xmlDocPtr;
+  Res: xmlDocPtr;
 begin
-  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(stylesheet.Ptr), res);
-  if Result then
-    doc := TXMLDocument.Create(res, True);
+  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
+  try
+    FXSLTErrors.Clear;
+
+    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(stylesheet.Ptr), res);
+    if Result then
+      doc := TXMLDocument.Create(res, True);
+  finally
+    TXSLTThreadErrorContext.Stop
+  end;
 end;
 
-function TXMLDocument.Transform(const stylesheet: IXMLDocument; out S: string): Boolean;
+function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
 begin
-  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(stylesheet.Ptr), S);
+  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
+  try
+    FXSLTErrors.Clear;
+
+    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(Stylesheet.Ptr), S);
+
+  finally
+    TXSLTThreadErrorContext.Stop
+  end;
 end;
 
 function TXMLDocument.Validate: IXMLError;
@@ -2215,7 +2244,7 @@ begin
     Result := Errors.MainError;
 end;
 
-function TXMLDocument.validateNode(const node: IXMLNode): IXMLError;
+function TXMLDocument.ValidateNode(const Node: IXMLNode): IXMLError;
 begin
   Errors.FList.Clear;
 
@@ -2225,6 +2254,11 @@ begin
     Exit(FSuccessError)
   else
     Result := Errors.MainError;
+end;
+
+procedure TXMLDocument.XSLTError(const Msg: string);
+begin
+  XSLTErrors.Add(Msg);
 end;
 
 { TXMLSchemaCollection }
@@ -2269,12 +2303,12 @@ procedure TXMLSchemaCollection.Parse;
 
   procedure ExtractImports(Schema: PSchema; parent: xmlNodePtr; ns: xmlNsPtr; Index: NativeInt);
   begin
-    var node := parent.FirstElementChild;
-    while node <> nil do
+    var Node := parent.FirstElementChild;
+    while Node <> nil do
     begin
-      if xmlStrSame(node.name, Pointer(cImport)) and (node.ns = ns) then
+      if xmlStrSame(Node.name, Pointer(cImport)) and (Node.ns = ns) then
       begin
-        var location := xmlGetProp(node, 'schemaLocation');
+        var location := xmlGetProp(Node, 'schemaLocation');
         if location <> nil then
         begin
           var importIndex := IndexOf(UTF8ToWideString(location));
@@ -2287,9 +2321,9 @@ procedure TXMLSchemaCollection.Parse;
         end;
       end
       else
-        ExtractImports(Schema, node, ns, Index);
+        ExtractImports(Schema, Node, ns, Index);
 
-      node := node.NextElementSibling;
+      Node := Node.NextElementSibling;
     end;
   end;
 
@@ -2321,7 +2355,7 @@ begin
     FList[Index] := Item;
 end;
 
-function TXMLSchemaCollection.GetSchema(const namespaceURI: string): IXMLDocument;
+function TXMLSchemaCollection.GetSchema(const NamespaceURI: string): IXMLDocument;
 begin
   var Index := IndexOf(NamespaceURI);
   if Index < 0 then
