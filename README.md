@@ -1,5 +1,6 @@
 # LX2
-libxml2 and libxslt bindings to Delphi. Requeries version 2.14 or higher of libxml2 and 1.1 of libxslt. 
+Delphi bindings to [libxml2](https://gitlab.gnome.org/GNOME/libxml2) and [libxslt](https://gitlab.gnome.org/GNOME/libxslt/) libraries. 
+Requeries version 2.14 or higher of libxml2 and 1.1 of libxslt. 
 
 Contains:
 
@@ -11,7 +12,19 @@ Contains:
 >All API wrappers uses standard Delphi string type (UTF-16), but original UTF-8 encoding still accesible. 
 
 ## Initialize library
-#### Sample
+Before using the library, it must be initialized. You can specify which files will be used or use default settings.
+You may call to load specific version: 
+```delphi
+LX2Lib.Load(FileName);
+```
+ or to use defaults:
+```delphi
+LX2Lib.Initialize; 
+```
+Default names is libxml2.so.16 and libxml2.dll.
+
+Initialization is not necessary if you use SAX or DOM interfaces, LX2Lib and XSLTLib will be initialized automatically if they have not been loaded yet.
+XSLTLib initialization called only when you use methods that need it, IXMLDocument.Transform for example.
 
 ## LX2.Types
 
