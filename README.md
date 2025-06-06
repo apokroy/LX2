@@ -13,17 +13,17 @@ Contains:
 
 ## Initialize library
 Before using the library, it must be initialized. You can specify which files will be used or use default settings.
-You may call to load specific version: 
+You may load specific version: 
 ```delphi
 LX2Lib.Load(FileName);
 ```
- or to use defaults:
+ or use defaults:
 ```delphi
 LX2Lib.Initialize; 
 ```
 Default names is libxml2.so.16 and libxml2.dll.
 
-Initialization is not necessary if you use SAX or DOM interfaces, LX2Lib and XSLTLib will be initialized automatically if they have not been loaded yet.
+Initialization is not necessary for SAX or DOM interfaces, LX2Lib and XSLTLib will be initialized automatically, if they have not been loaded yet.
 XSLTLib initialization called only when you use methods that need it, IXMLDocument.Transform for example.
 
 ## LX2.Types

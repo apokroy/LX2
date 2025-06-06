@@ -2,13 +2,6 @@ MIT License
 
 Copyright (c) 2025 Alexey Pokroy
 
-Source files uses the translation of files other authors;
-see their respective license for more details:
-https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright
-Copyright (C) 1998-2012 Daniel Veillard
-Copyright (C) The Libxml2 Contributors
-
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
