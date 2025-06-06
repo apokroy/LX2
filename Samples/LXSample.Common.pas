@@ -7,7 +7,7 @@ uses
   System.Diagnostics;
 
 procedure TestStart(const Name: string);
-procedure TestEnd(Success: Boolean);
+function  TestEnd(Success: Boolean): Boolean;
 
 implementation
 
@@ -45,7 +45,7 @@ begin
   Timer := TStopwatch.StartNew;
 end;
 
-procedure TestEnd(Success: Boolean);
+function  TestEnd(Success: Boolean): Boolean;
 begin
   Timer.Stop;
 
@@ -55,6 +55,8 @@ begin
     TestOut('ERROR');
 
   WriteLn;
+
+  Result := Success;
 end;
 
 end.

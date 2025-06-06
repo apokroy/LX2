@@ -26,34 +26,25 @@ begin
     TestStart('LOAD XML');
 
     var Doc := xmlDoc.Create(TestTransformXML, DefaultParserOptions);
-    if Doc = nil then
+    if TestEnd(Doc = nil) then
     begin
-      TestEnd(False);
       Doc.Free;
       ReadLn;
       Exit;
     end;
-    TestEnd(True);
 
     TestStart('LOAD XSD');
     var Style := xmlDoc.Create(TestTransformXSD, DefaultParserOptions);
-    if Style = nil then
+    if TestEnd(Style = nil) then
     begin
-      TestEnd(False);
       Style.Free;
       ReadLn;
       Exit;
     end;
-    TestEnd(True);
 
     TestStart('TRANSFORM');
-    if Doc.Transform(Style, Result) then
-    begin
-      TestEnd(True);
+    if TestEnd(Doc.Transform(Style, Result)) then
       WriteLn(Result.ToString(True));
-    end
-    else
-      TestEnd(False);
 
     Style.Free;
     Doc.Free;

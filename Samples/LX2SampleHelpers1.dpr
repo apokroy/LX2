@@ -26,14 +26,12 @@ begin
     TestStart('LOAD FROM STRING');
 
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
-    if Doc = nil then
+    if not TestEnd(Doc = nil) then
     begin
-      TestEnd(False);
       Doc.Free;
       ReadLn;
       Exit;
     end;
-    TestEnd(True);
 
     TestStart('FORMATTED OUTPUT');
 
@@ -51,9 +49,7 @@ begin
 
     var C14NDoc := Doc.Canonicalize;
 
-    if C14NDoc = nil then
-      TestEnd(False)
-    else
+    if TestEnd(C14NDoc = nil) then
     begin
       WriteLn(C14NDoc.Xml);
       TestEnd(True);

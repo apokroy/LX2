@@ -165,11 +165,8 @@ begin
       Parser.Handler := TSAXConsoleHandler.Create;
       Parser.IgnoreWhitespaces := True;
 
-      if Parser.Parse(TestXml1) then
-        TestEnd(True)
-      else
+      if not TestEnd(Parser.Parse(TestXml1)) then
       begin
-        TestEnd(False);
         for var Error in Parser.Errors do
         begin
           Write(Error.Code);
