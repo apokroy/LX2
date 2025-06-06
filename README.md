@@ -1,5 +1,5 @@
 # LX2
-libxml2 and libxslt bindings to Delphi. Requeries version 2.14 or higher of libxml2 and 1.1 of libxslt. 
+Delphi bindings to [libxml2](http://xmlsoft.org/) and [libxslt](http://xmlsoft.org/libxslt/) libraries. Requeries version 2.14 or higher of libxml2 and 1.1 of libxslt. 
 
 Contains:
 
