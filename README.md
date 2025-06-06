@@ -30,8 +30,8 @@ XSLTLib initialization called only when you use methods that need it, IXMLDocume
 
 ## LX2.Helpers
 #### Sample
-- [Sample 1](/Samples/LX2SampleHelpers1.dproj) Load XML from string, output result, formatted output, canonicalization.
-- [Sample 2](/Samples/LX2SampleHelpers2.dproj) XSLT Transform sample.
+- [Sample 1](/Samples/LX2SampleHelpers1.dpr) Load XML from string, output result, formatted output, canonicalization.
+- [Sample 2](/Samples/LX2SampleHelpers2.dpr) XSLT Transform sample.
 ### Error handling
 ### xmlNodePtr
 ### xmlDocPtr
@@ -39,7 +39,7 @@ XSLTLib initialization called only when you use methods that need it, IXMLDocume
 
 ## LX2.SAX
 #### Sample
-- [Sample 2](/Samples/LX2SampleSAX.dproj) SAX Handler that log all calls.
+- [Sample 1](/Samples/LX2SampleSAX1.dpr) SAX Handler that log all calls.
 ### TLX2SAXParserWrapper
 ### TSAXParser
 ### ISAXContentHandler
