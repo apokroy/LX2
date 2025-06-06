@@ -163,14 +163,6 @@ begin
   try
     Timer := TStopwatch.Create;
 
-    Timer.Start;
-    WriteLn('------------------- LX2 Init (libxml2.dll or libxml2.so.16 must be in path) -------------------');
-
-    LX2Lib.Initialize;
-
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn;
-
     var Parser := TSAXParser.Create;
     try
       Parser.Handler := TSAXConsoleHandler.Create;
