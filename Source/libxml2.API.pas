@@ -1019,17 +1019,28 @@ type
   xmlStrdupFunc  = function(const str: PAnsiChar): PAnsiChar; cdecl;
 
 var
-  xmlFree:      xmlFreeFunc;
-  xmlMalloc:    xmlMallocFunc;
-  xmlRealloc:   xmlReallocFunc;
-  xmlStrdup:    xmlStrdupFunc;
-  xmlMemFree:   xmlFreeFunc;
-  xmlMemMalloc: xmlMallocFunc;
-  xmlMemoryStrdup: xmlStrdupFunc;
-  xmlMemRealloc:xmlReallocFunc;
-  xmlMemGet: function(var freeFunc: xmlFreeFunc; var mallocFunc: xmlMallocFunc; var reallocFunc: xmlReallocFunc; var strdupFunc: xmlStrdupFunc): Integer; cdecl;
-  xmlMemSetup: function(freeFunc: xmlFreeFunc; mallocFunc: xmlMallocFunc; reallocFunc: xmlReallocFunc; strdupFunc: xmlStrdupFunc): Integer; cdecl;
-  xmlMemUsed: function: size_t; cdecl;
+  ///<summary>The variable holding the libxml free() implementation. </summary>
+  xmlFree          : xmlFreeFunc;
+  ///<summary>a malloc() equivalent, with logging of the allocation info.</summary>
+  xmlMalloc        : xmlMallocFunc;
+  ///<summary>The variable holding the libxml realloc() implementation. </summary>
+  xmlRealloc       : xmlReallocFunc;
+  ///<summary>The variable holding the libxml strdup() implementation. </summary>
+  xmlStrdup        : xmlStrdupFunc;
+  ///<summary></summary>
+  xmlMemFree       : xmlFreeFunc;
+  ///<summary></summary>
+  xmlMemMalloc     : xmlMallocFunc;
+  ///<summary></summary>
+  xmlMemoryStrdup  : xmlStrdupFunc;
+  ///<summary>a realloc() equivalent, with logging of the allocation info. </summary>
+  xmlMemRealloc    : xmlReallocFunc;
+  ///<summary>Provides the memory access functions set currently in use. </summary>
+  xmlMemGet        : function(var freeFunc: xmlFreeFunc; var mallocFunc: xmlMallocFunc; var reallocFunc: xmlReallocFunc; var strdupFunc: xmlStrdupFunc): Integer; cdecl;
+  ///<summary>Override the default memory access functions with a new set This has to be called before any other libxml routines !</summary>
+  xmlMemSetup      : function(freeFunc: xmlFreeFunc; mallocFunc: xmlMallocFunc; reallocFunc: xmlReallocFunc; strdupFunc: xmlStrdupFunc): Integer; cdecl;
+  ///<summary></summary>
+  xmlMemUsed       : function: size_t; cdecl;
 
 {$endregion}
 
@@ -4247,6 +4258,9 @@ begin
   xmlBufShrink                 := GetProcAddress(Handle, 'xmlBufShrink');
   xmlBufUse                    := GetProcAddress(Handle, 'xmlBufUse');
   xmlBuildQName                := GetProcAddress(Handle, 'xmlBuildQName');
+  xmlC14NDocDumpMemory         := GetProcAddress(Handle, 'xmlC14NDocDumpMemory');
+  xmlC14NDocSave               := GetProcAddress(Handle, 'xmlC14NDocSave');
+  xmlC14NDocSaveTo             := GetProcAddress(Handle, 'xmlC14NDocSaveTo');
   xmlCatalogAdd                := GetProcAddress(Handle, 'xmlCatalogAdd');
   xmlCatalogAddLocal           := GetProcAddress(Handle, 'xmlCatalogAddLocal');
   xmlCatalogCleanup            := GetProcAddress(Handle, 'xmlCatalogCleanup');

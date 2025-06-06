@@ -285,7 +285,7 @@ threadvar
   ThreadErrorHandler: TXLSErrorHandler;
   ThreadErrorContext: Pointer;
 
-procedure XSLTErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
+procedure XSLTErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl;
 begin
   if Assigned(ThreadErrorHandler) then
     ThreadErrorHandler(ThreadErrorContext, xmlCharToStr(msg));

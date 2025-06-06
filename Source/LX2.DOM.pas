@@ -1135,7 +1135,7 @@ function TXMLNamedNodeMap.GetItemByName(const Name: string): xmlNodePtr;
 var
   Prefix, Base: PUTF8Char;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   SplitXMLName(Name, Prefix, Base);
 
   for var I := 0 to Length - 1 do
@@ -1155,7 +1155,7 @@ function TXMLNamedNodeMap.GetQualifiedItemByName(const BaseName: string; const N
 var
   Base, URI: PUTF8Char;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Base := LocalXmlStr(BaseName);
   URI := LocalXmlStr(NamespaceURI);
 
@@ -1555,7 +1555,7 @@ begin
 
   if AttrValue <> '' then
   begin
-    ResetLocalBuffers;
+    xmlResetLocalBuffers;
     children := xmlNewDocText(AttrPtr.parent.doc, LocalXmlStr(attrValue));
     if children = nil then
       LX2InternalError;
@@ -1634,7 +1634,7 @@ function TXMLElement.RemoveAttribute(const Name: string): Boolean;
 var
   Prefix, LocalName: xmlCharPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   SplitXMLName(Name, Prefix, LocalName);
   if Prefix = nil then
@@ -1663,7 +1663,7 @@ end;
 
 procedure TXMLElement.SetAttribute(const Name: string; Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlSetProp(NodePtr, LocalXmlStr(Name), LocalXmlStr(Value));
 end;
 
@@ -1671,7 +1671,7 @@ end;
 
 procedure TXMLCharacterData.AppendData(const Data: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeAddContent(NodePtr, LocalXmlStr(Data));
 end;
 
@@ -1681,7 +1681,7 @@ begin
 
   Delete(S, offset, count);
 
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
@@ -1701,7 +1701,7 @@ begin
 
   Insert(data, S, offset);
 
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
@@ -1712,13 +1712,13 @@ begin
   Delete(S, offset, count);
   Insert(data, S, offset);
 
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(S));
 end;
 
 procedure TXMLCharacterData.Set_Data(const data: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(data));
 end;
 
@@ -1741,7 +1741,7 @@ end;
 
 procedure TXMLProcessingInstruction.Set_Data(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(NodePtr, LocalXmlStr(data));
 end;
 
@@ -1882,7 +1882,7 @@ function TXMLDocument.CreateCDATASection(const Data: string): IXMLCDATASection;
 var
   L: NativeUInt;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   L := Length(Data);
   var P := LocalXmlStr(Pointer(Data), L);
@@ -1892,7 +1892,7 @@ end;
 
 function TXMLDocument.CreateComment(const Data: string): IXMLComment;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := XMLFactory.Cast(xmlNewDocComment(Doc, LocalXmlStr(Data))) as IXMLComment;
 end;
 
@@ -1905,7 +1905,7 @@ function TXMLDocument.CreateElement(const TagName: string): IXMLElement;
 var
   Prefix, Base: PUTF8Char;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   SplitXMLName(TagName, Prefix, Base);
 
   if Prefix = nil then
@@ -1927,7 +1927,7 @@ function TXMLDocument.CreateNode(NodeType: Integer; const Name, NamespaceURI: st
 var
   Prefix, LocalName, HRef: xmlCharPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   if NamespaceURI <> '' then
   begin
     SplitXMLName(Name, Prefix, LocalName);
@@ -1970,13 +1970,13 @@ end;
 
 function TXMLDocument.CreateProcessingInstruction(const Target, Data: string): IXMLProcessingInstruction;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := XMLFactory.Cast(xmlNewDocPI(Doc, LocalXmlStr(Target), LocalXmlStr(Data))) as IXMLProcessingInstruction;
 end;
 
 function TXMLDocument.CreateTextNode(const Data: string): IXMLText;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := XMLFactory.Cast(xmlNewDocText(Doc, LocalXmlStr(Data))) as IXMLText;
 end;
 
@@ -2124,7 +2124,7 @@ end;
 
 function TXMLDocument.NodeFromID(const IdString: string): IXMLNode;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   var Attr := xmlGetID(Doc, LocalXmlStr(IdString));
   if Attr = nil then
     Exit(nil);
@@ -2139,7 +2139,7 @@ end;
 
 procedure TXMLDocument.Save(const Url: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlSaveFile(LocalXmlStr(url), doc);
 end;
 

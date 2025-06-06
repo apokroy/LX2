@@ -128,6 +128,7 @@ type
   private
     FErrors: TXmlParseErrors;
     FLocator: TSAXLocator;
+    FIgnoreWhitespaces: Boolean;
     function  GetLocator: ISAXLocator; inline;
   protected
     procedure PrepareContext; override;
@@ -154,6 +155,7 @@ type
     destructor Destroy; override;
     property  Locator: ISAXLocator read GetLocator;
     property  Errors: TXmlParseErrors read FErrors;
+    property  IgnoreWhitespaces: Boolean read FIgnoreWhitespaces write FIgnoreWhitespaces;
   end;
 
   TSAXParser = class(TSAXCustomParser)
@@ -169,6 +171,18 @@ type
     procedure DoProcessingInstruction(const Target, Data: string); override;
   public
     property  Handler: ISAXContentHandler read FHandler write FHandler;
+  end;
+
+  TSAXCustomContentHandler = class(TInterfacedObject, ISAXContentHandler)
+  public
+    procedure PutDocumentLocator(const Locator: ISAXLocator); virtual;
+    procedure StartDocument; virtual;
+    procedure EndDocument; virtual;
+    procedure StartElement(const LocalName, Prefix, URI: string; const Namespaces: TSAXNamespaces; const Attributes: TSAXAttributes); virtual;
+    procedure EndElement(const LocalName, Prefix, URI: string); virtual;
+    procedure Characters(const Chars: string); virtual;
+    procedure IgnorableWhitespace(const Chars: string); virtual;
+    procedure ProcessingInstruction(const Target, Data: string); virtual;
   end;
 
 implementation
@@ -606,7 +620,7 @@ var
   AttrList: TSAXAttributes;
   NsList: TSAXNamespaces;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   if attributes <> nil then
   begin
@@ -647,7 +661,20 @@ end;
 
 procedure TSAXCustomParser.Characters(const ch: xmlCharPtr; len: Integer);
 begin
-  DoCharacters(xmlCharToStr(ch, len));
+  if IgnoreWhitespaces then
+  begin
+    while len > 0 do
+      if ch[len - 1] = #32 then
+        Dec(Len)
+      else
+        Break;
+
+    if (len > 0) and (ch[len - 1] = #10) then
+      Dec(len);
+  end;
+
+  if len > 0 then
+    DoCharacters(xmlCharToStr(ch, len));
 end;
 
 procedure TSAXCustomParser.IgnorableWhitespace(const ch: xmlCharPtr; len: Integer);
@@ -727,6 +754,48 @@ end;
 function TSAXLocator.GetSystemId: string;
 begin
   Result := xmlCharToStr(loc.getSystemId(Parser.Ctxt));
+end;
+
+{ TSAXCustomContentHandler }
+
+procedure TSAXCustomContentHandler.Characters(const Chars: string);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.EndDocument;
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.EndElement(const LocalName, Prefix, URI: string);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.IgnorableWhitespace(const Chars: string);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.ProcessingInstruction(const Target, Data: string);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.PutDocumentLocator(const Locator: ISAXLocator);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.StartDocument;
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.StartElement(const LocalName, Prefix, URI: string; const Namespaces: TSAXNamespaces; const Attributes: TSAXAttributes);
+begin
+
 end;
 
 end.

@@ -101,7 +101,6 @@ type
     property  Path: string read GetPath;
     property  Value: string read GetValue;
   public
-    { MS DOM Compatible }
     function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
     function  CloneNode(Deep: Boolean): xmlNodePtr; inline;
     function  GetRootNode: xmlNodePtr;
@@ -112,7 +111,6 @@ type
     function  SelectNodes(const queryString: string; const namespaces: xmlNamespaces = nil): xmlNodeArray;
     function  SelectSingleNode(const queryString: string): xmlNodePtr;
     function  GetElementsByTagName(const name: string): xmlNodeArray;
-
     function  GetAttribute(const name: string): string; inline;
     procedure SetAttribute(const name: string; const value: string); inline;
     procedure RemoveAttribute(const name: string); inline;
@@ -191,28 +189,31 @@ type
     class function Create(const Data: Pointer; Size: NativeUInt; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static;
     class function CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
     class function Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static;
+    procedure Free;
+    function  Canonicalize(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    function  Canonicalize(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): xmlDocPtr; overload;
+    function  CreateAttribute(const name: string; const value: string = ''): xmlAttrPtr; overload;
+    function  CreateCDATASection(const data: string): xmlNodePtr;
+    function  CreateComment(const data: string): xmlNodePtr;
+    function  CreateDocumentFragment: xmlNodePtr;
+    function  CreateElement(const Name: string): xmlNodePtr;
+    function  CreateEntityReference(const name: string): xmlNodePtr;
+    function  CreateProcessingInstruction(const target: string; const data: string): xmlNodePtr;
+    function  CreateTextNode(const data: string): xmlNodePtr;
+    function  DocType: xmlNodePtr;
+    function  GetElementsByTagName(const name: string): xmlNodeArray;
+    procedure ReconciliateNs;
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
+    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
-    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
-
-    function  CreateElement(const Name: string): xmlNodePtr;
-    function  CreateDocumentFragment: xmlNodePtr;
-    function  CreateTextNode(const data: string): xmlNodePtr;
-    function  CreateComment(const data: string): xmlNodePtr;
-    function  CreateCDATASection(const data: string): xmlNodePtr;
-    function  CreateProcessingInstruction(const target: string; const data: string): xmlNodePtr;
-    function  CreateAttribute(const name: string; const value: string = ''): xmlAttrPtr; overload;
-    function  CreateEntityReference(const name: string): xmlNodePtr;
-    function  GetElementsByTagName(const name: string): xmlNodeArray;
-    function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
-    procedure ReconciliateNs;
-    function  doctype: xmlNodePtr;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
     property  URL: string read GetURL;
     property  Xml: string read GetXml;
@@ -231,6 +232,20 @@ begin
     Result := nil
   else
     Result := Pointer(S);
+end;
+
+function IOReadStream(context: Pointer; buffer: PUTF8Char; len: Integer): Integer; cdecl;
+begin
+  Result := TStream(context).Read(buffer^, len);
+end;
+
+function IOWriteStream(context: Pointer; Buffer: PAnsiChar; Len: Integer): Integer; cdecl;
+begin
+  Result := TStream(context).Write(Buffer^, Len);
+end;
+
+procedure IOCloseStream(context: Pointer); cdecl;
+begin
 end;
 
 { xmlNamespacesHelper }
@@ -282,7 +297,7 @@ function xmlNodeHelper.FindAttribute(const name: string): xmlAttrPtr;
 var
   prefix, localName: xmlCharPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   SplitXMLName(Name, prefix, localName);
 
   var prop := properties;
@@ -302,7 +317,7 @@ end;
 
 function xmlNodeHelper.FindAttribute(const name, namespaceURI: string): xmlAttrPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   var localName := LocalXmlStr(name);
   var href := LocalXmlStr(namespaceURI);
 
@@ -323,7 +338,7 @@ end;
 
 function xmlNodeHelper.SearchNs(const prefix: string): xmlNsPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlSearchNs(doc, @Self, LocalXmlStr(prefix));
 end;
 
@@ -334,7 +349,7 @@ end;
 
 function xmlNodeHelper.SearchNsByRef(const href: string): xmlNsPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlSearchNsByHref(doc, @Self, LocalXmlStr(href));
 end;
 
@@ -350,19 +365,19 @@ end;
 
 function xmlNodeHelper.GetAttribute(const name: string): string;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlCharToStrAndFree(xmlGetProp(@Self, LocalXmlStr(name)));
 end;
 
 function xmlNodeHelper.GetNsAttribute(const name, namespaceURI: string): string;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlCharToStrAndFree(xmlGetNsProp(@Self, LocalXmlStr(name), LocalXmlStr(namespaceURI)));
 end;
 
 function xmlNodeHelper.SetNsAttribute(const name, namespaceURI, value: string): xmlAttrPtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   var ns := xmlSearchNsByHref(doc, @Self, LocalXmlStr(namespaceURI));
   Result := xmlSetNsProp(@Self, ns, LocalXmlStr(name), LocalXmlStr(value));
 end;
@@ -616,7 +631,7 @@ end;
 
 function xmlNodeHelper.HasAttribute(const Name: string): Boolean;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlHasProp(@Self, LocalXmlStr(Name)) <> nil;
 end;
 
@@ -679,7 +694,7 @@ end;
 
 procedure xmlNodeHelper.RemoveAttribute(const name: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   var prop := xmlHasProp(@Self, LocalXmlStr(name));
   if prop <> nil then
@@ -714,7 +729,7 @@ begin
     begin
       for var I := Low(namespaces) to High(namespaces) do
       begin
-        ResetLocalBuffers;
+        xmlResetLocalBuffers;
         xmlXPathRegisterNs(ctx, LocalXmlStr(namespaces[I].Prefix), LocalXmlStr(namespaces[I].URI));
       end;
     end
@@ -728,7 +743,7 @@ begin
       end;
     end;
 
-    ResetLocalBuffers;
+    xmlResetLocalBuffers;
     var xpathObj := xmlXPathEvalExpression(LocalXmlStr(queryString), ctx);
     if (xpathObj = nil) or (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
       Exit(nil);
@@ -750,7 +765,7 @@ begin
   try
     xmlXPathSetContextNode(@Self, ctx);
 
-    ResetLocalBuffers;
+    xmlResetLocalBuffers;
 
     var xpathObj := xmlXPathEvalExpression(LocalXmlStr(queryString), ctx);
     if (xpathObj = nil) or (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
@@ -765,19 +780,19 @@ end;
 
 procedure xmlNodeHelper.SetAttribute(const name, value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlSetProp(@Self, LocalXmlStr(name), LocalXmlStr(value));
 end;
 
 procedure xmlNodeHelper.SetBaseURI(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetBase(@Self, LocalXmlStr(Value));
 end;
 
 procedure xmlNodeHelper.SetNodeName(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetName(@Self, LocalXmlStr(Value));
 end;
 
@@ -794,7 +809,7 @@ end;
 
 procedure xmlNodeHelper.SetText(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetContent(@Self, LocalXmlStr(Value));
 end;
 
@@ -870,19 +885,19 @@ end;
 
 procedure xmlAttrHelper.SetBaseURI(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetBase(@Self, LocalXmlStr(Value));
 end;
 
 procedure xmlAttrHelper.SetName(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   xmlNodeSetName(@Self, LocalXmlStr(Value));
 end;
 
 procedure xmlAttrHelper.SetValue(const Value: string);
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   if atype = XML_ATTRIBUTE_ID then
   begin
@@ -971,7 +986,7 @@ var
   input: xmlParserInputPtr;
   ecb: TXmlCallback;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   var ctx := xmlNewParserCtxt();
   if ctx = nil then
@@ -991,11 +1006,6 @@ begin
     Result := nil;
 
   xmlFreeParserCtxt(ctx);
-end;
-
-function IOReadStream(context: Pointer; buffer: PUTF8Char; len: Integer): Integer; cdecl;
-begin
-  Result := TStream(context).Read(buffer^, len);
 end;
 
 class function xmlDocHelper.Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
@@ -1018,54 +1028,88 @@ if Assigned(ErrorHandler) then
   xmlFreeParserCtxt(ctx);
 end;
 
-function xmlDocHelper.createAttribute(const name, value: string): xmlAttrPtr;
+function xmlDocHelper.Canonicalize(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+var
+  Buffer: xmlOutputBufferPtr;
 begin
-  ResetLocalBuffers;
+  Buffer := xmlOutputBufferCreateIO(@IOWriteStream, @IOCloseStream, Pointer(Stream), nil);
+  if Buffer = nil then
+    Exit(False);
+
+  try
+    Result := xmlC14NDocSaveTo(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), Buffer) = 0;
+  finally
+   xmlOutputBufferClose(Buffer);
+  end;
+end;
+
+function xmlDocHelper.Canonicalize(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+begin
+  xmlResetLocalBuffers;
+  Result := xmlC14NDocSave(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), LocalXmlStr(FileName), 0) = 0;
+end;
+
+function xmlDocHelper.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): xmlDocPtr;
+var
+  Data: Pointer;
+begin
+  var Size := xmlC14NDocDumpMemory(Doc, nil, xmlC14NMode(Mode), nil, Ord(Comments), xmlCharPtr(Data));
+  if Size < 0 then
+    LX2InternalError;
+
+  Result := xmlDoc.Create(Data, Size, DefaultParserOptions, nil);
+
+  xmlFree(Data);
+end;
+
+function xmlDocHelper.CreateAttribute(const name, value: string): xmlAttrPtr;
+begin
+  xmlResetLocalBuffers;
   Result := xmlNewDocProp(@Self, LocalXmlStr(name), LocalXmlStr(value));
 end;
 
-function xmlDocHelper.createCDATASection(const data: string): xmlNodePtr;
+function xmlDocHelper.CreateCDATASection(const data: string): xmlNodePtr;
 begin
   var S := Utf8Encode(data);
   Result := xmlNewCDataBlock(@Self, xmlCharPtr(S), Length(S));
 end;
 
-function xmlDocHelper.createComment(const data: string): xmlNodePtr;
+function xmlDocHelper.CreateComment(const data: string): xmlNodePtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlNewDocComment(@Self, LocalXmlStr(data));
 end;
 
-function xmlDocHelper.createDocumentFragment: xmlNodePtr;
+function xmlDocHelper.CreateDocumentFragment: xmlNodePtr;
 begin
   Result := xmlNewDocFragment(@Self);
 end;
 
-function xmlDocHelper.createElement(const Name: string): xmlNodePtr;
+function xmlDocHelper.CreateElement(const Name: string): xmlNodePtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlNewDocRawNode(@Self, nil, LocalXmlStr(Name), nil);
 end;
 
-function xmlDocHelper.createEntityReference(const name: string): xmlNodePtr;
+function xmlDocHelper.CreateEntityReference(const name: string): xmlNodePtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlNewReference(@Self, LocalXmlStr(Name));
 end;
 
-function xmlDocHelper.createProcessingInstruction(const target, data: string): xmlNodePtr;
+function xmlDocHelper.CreateProcessingInstruction(const target, data: string): xmlNodePtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlNewDocPI(@Self, LocalXmlStr(target), LocalXmlStr(data));
 end;
 
-function xmlDocHelper.createTextNode(const data: string): xmlNodePtr;
+function xmlDocHelper.CreateTextNode(const data: string): xmlNodePtr;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
   Result := xmlNewDocText(@Self, LocalXmlStr(data));
 end;
 
-function xmlDocHelper.doctype: xmlNodePtr;
+function xmlDocHelper.DocType: xmlNodePtr;
 begin
   if (children <> nil) and (children.&type = XML_DTD_NODE) then
     Result := children
@@ -1073,12 +1117,17 @@ begin
     Result := nil;
 end;
 
+procedure xmlDocHelper.Free;
+begin
+  xmlFreeDoc(@Self);
+end;
+
 function xmlDocHelper.GetDocumentElement: xmlNodePtr;
 begin
   Result := xmlDocGetRootElement(@Self)
 end;
 
-function xmlDocHelper.getElementsByTagName(const name: string): xmlNodeArray;
+function xmlDocHelper.GetElementsByTagName(const name: string): xmlNodeArray;
 begin
   if children = nil then
     Exit(nil);
@@ -1111,11 +1160,6 @@ begin
     xmlReconciliateNs(@Self, documentElement);
 end;
 
-function IOWriteStream(context: Pointer; buffer: PUTF8Char; len: Integer): Integer; cdecl;
-begin
-  Result := TStream(context).Write(buffer^, len);
-end;
-
 function xmlDocHelper.Save(Stream: TStream; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
   var ctx := xmlSaveToIO(IOWriteStream, nil, Stream, xmlStrPtr(Utf8Encode(Encoding)), XmlSaveOptions(Options));
@@ -1133,7 +1177,7 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   xmlDocDumpFormatMemoryEnc(doc, Data, Size, LocalXmlStr(Encoding), Ord(Format));
 
@@ -1224,7 +1268,7 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   xmlDocDumpFormatMemoryEnc(doc, Data, Size, LocalXmlStr(Encoding), Ord(Format));
 
@@ -1238,7 +1282,7 @@ end;
 
 function xmlDocHelper.Save(const FileName: string; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
-  ResetLocalBuffers;
+  xmlResetLocalBuffers;
 
   var ctx := xmlSaveToFilename(LocalXmlStr(FileName), LocalXmlStr(Encoding), XmlSaveOptions(Options));
   xmlSaveDoc(ctx, @Self);

@@ -73,7 +73,7 @@ type
 
   TXmlParserOptions = set of TXmlParserOption;
 
-  TxmlSaveOption = (
+  TXmlSaveOption = (
    xmlSaveFormat,
    xmlSaveNoDecl,
    xmlSaveNoEmpty,
@@ -85,6 +85,15 @@ type
    xmlSaveEmpty,
    xmlSaveNoIndent,
    xmlSaveIndent
+  );
+
+  TXmlC14NMode = (
+    ///<summary>Original C14N 1.0 spec.</summary>
+    xmlC14N,
+    ///<summary>Exclusive C14N 1.0 spec.</summary>
+    xmlC14NExclusive,
+    ///<summary>C14N 1.1 spec.</summary>
+    xmlC14N11
   );
 
   TxmlSaveOptions = set of TxmlSaveOption;
@@ -164,12 +173,12 @@ function Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 /// <summary>
 /// Call before functions that uses LocalXmlStr, marks all buffers as unsed
 /// </summary>
-procedure ResetLocalBuffers;
+procedure xmlResetLocalBuffers;
 
 /// <summary>
 /// Call before the end of the thread to clear all TLS memory buffers. It can also be called to free up unused memory.
 /// </summary>
-procedure ClearLocalBuffers;
+procedure xmlFreeLocalBuffers;
 
 function  XmlParserOptions(Options: TXmlParserOptions): Integer;
 function  XmlSaveOptions(Options: TxmlSaveOptions): Integer;
@@ -204,7 +213,7 @@ threadvar
 var
   TLSBuffers: TList<PTLSData>;  // List of buffers to clean up on program exit
 
-function GetLocalBuffer(const Size: NativeUInt): Pointer;
+function xmlGetLocalBuffer(const Size: NativeUInt): Pointer;
 var
   TLS: PTLSData;
 begin
@@ -238,11 +247,11 @@ begin
   Result := nil;
 end;
 
-procedure ResetLocalBuffers;
+procedure xmlResetLocalBuffers;
 var
   TLS: PTLSData;
 begin
-  TLS := TLSData; // Access to thread local storage too slow, use local pointer
+  TLS := TLSData; // Access to thread local storage too slow, use local pointer and data in heap
   if TLS = nil then
   begin
     GetMem(TLS, SizeOf(TTLSData));
@@ -250,20 +259,24 @@ begin
 
     TLSData := TLS;
 
+    TMonitor.Enter(TLSBuffers);
     TLSBuffers.Add(TLS);
+    TMonitor.Exit(TLSBuffers);
   end
-  else if TLS.IsUsed[TLSBufferCount shr 1] then
+  else if TLS.IsUsed[TLSBufferCount shr 1] then // Reset only if more than half buffers used, that allow small recursions or forgives a small number of forgotten calls
     FillChar(TLS.IsUsed, SizeOf(TLS.IsUsed), 0);
 end;
 
-procedure ClearLocalBuffers;
+procedure xmlFreeLocalBuffers;
 var
   TLS: PTLSData;
 begin
   TLS := TLSData;
   if TLS <> nil then
   begin
+    TMonitor.Enter(TLSBuffers);
     TLSBuffers.Remove(TLS);
+    TMonitor.Exit(TLSBuffers);
 
     for var I := Low(TLS.Buffers) to High(TLS.Buffers) do
     begin
@@ -272,9 +285,7 @@ begin
     end;
     FreeMem(TLS);
     TLSData := nil;
-  end
-  else
-    FillChar(TLS.IsUsed, SizeOf(TLS.IsUsed), 0);
+  end;
 end;
 
 {$endregion}
@@ -288,7 +299,7 @@ begin
 
   var DstLen := Len * 3 + 1;
 
-  Buffer := GetLocalBuffer(DstLen);
+  Buffer := xmlGetLocalBuffer(DstLen);
   if Buffer = nil then
     LX2LocalAllocError;
 
@@ -312,7 +323,7 @@ begin
 
   var DstLen := SrcLen * 3 + 1;
 
-  Buffer := GetLocalBuffer(DstLen);
+  Buffer := xmlGetLocalBuffer(DstLen);
   if Buffer = nil then
     LX2LocalAllocError;
 
@@ -347,9 +358,11 @@ const
 {   D }   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
 {   E }   3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 {   F }   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4);
+var
+  I: NativeUInt;
 begin
   Result := 0;
-  var I := 0;
+  I := 0;
   while I < Size  do
   begin
     Inc(I, Utf8L[Input[I]]);
@@ -638,18 +651,11 @@ end;
 
 initialization
   TLSBuffers := TList<PTLSData>.Create;
+  xmlResetLocalBuffers;
 
 finalization
-  for var I := 0 to TLSBuffers.Count - 1 do
-  begin
-    var TLS := TLSBuffers[I];
-    for var J := Low(TLS.Buffers) to High(TLS.Buffers) do
-    begin
-      FreeMem(TLS.Buffers[J].Data);
-      TLS.Buffers[J].Size := 0;
-    end;
-    FreeMem(TLS);
-  end;
+  xmlFreeLocalBuffers;
+
   FreeAndNil(TLSBuffers);
 
 end.
