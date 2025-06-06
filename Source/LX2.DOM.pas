@@ -96,6 +96,22 @@ type
     property  Items[Index: NativeUInt]: IXMLError read Get_Item; default;
   end;
 
+  IXSLTError = interface(IInvokable)
+    ['{BB3BD464-4913-4453-8145-9FD6F4E9E025}']
+    function Get_reason: string;
+    property Reason: string read Get_reason;
+  end;
+
+  IXSLTErrors = interface
+    ['{265D0313-3550-40F7-B00A-AE15E5DC10DD}']
+    function  Get_Count: NativeUInt;
+    function  Get_Item(Index: NativeUInt): IXSLTError;
+    function  GetEnumerator: TEnumerator<IXSLTError>;
+    procedure Clear;
+    property  Count: NativeUInt read Get_Count;
+    property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
+  end;
+
   IXMLAttributesEnumerator = interface
     ['{B4463181-232A-43FA-B405-016DCB87CBF0}']
     function  GetCurrent: IXMLAttribute;
@@ -276,8 +292,9 @@ type
 
   IXMLDocument = interface(IXMLNode)
     ['{ACAA6E03-6C69-45D9-A8C4-1DC1996CEB17}']
+    function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  GetErrors: IXMLErrors;
-    function  GetXSLTErrors: TStrings;
+    function  GetXSLTErrors: IXSLTErrors;
     function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
     function  Load(const Data: TBytes): Boolean; overload;
     function  Load(const URL: string): Boolean; overload;
@@ -294,8 +311,9 @@ type
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
     function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     property  Errors: IXMLErrors read GetErrors;
-    property  XSLTErrors: TStrings read GetXSLTErrors;
+    property  XSLTErrors: IXSLTErrors read GetXSLTErrors;
     { MS XML Like }
     function  Get_Doctype: IXMLDocumentType;
     function  Get_DocumentElement: IXMLElement;
@@ -380,6 +398,31 @@ type
     function  GetEnumerator: TEnumerator<IXMLError>;
     property  Count: NativeUInt read Get_Count;
     property  Items[Index: NativeUInt]: IXMLError read Get_Item; default;
+  end;
+
+  TXSLTError = class(TInterfacedObject, IXSLTError)
+  private
+    FReason: string;
+  protected
+    function  Get_Reason: string;
+  public
+    constructor Create(const Reason: string);
+    property  Reason: string read FReason;
+  end;
+
+  TXSLTErrors = class(TNoRefCountObject, IXSLTErrors)
+  private
+    FList: TList<IXSLTError>;
+  protected
+    function  Get_Count: NativeUInt; inline;
+    function  Get_Item(Index: NativeUInt): IXSLTError; inline;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Clear;
+    function  GetEnumerator: TEnumerator<IXSLTError>;
+    property  Count: NativeUInt read Get_Count;
+    property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
   end;
 
   TXMLEnumerator = class(TInterfacedObject, IXMLEnumerator)
@@ -679,7 +722,7 @@ type
   private
     FDocOwner: Boolean;
     FErrors: TXMLErrors;
-    FXSLTErrors: TStrings;
+    FXSLTErrors: TXSLTErrors;
     FValidateOnParse: Boolean;
     FResolveExternals: Boolean;
     FPreserveWhiteSpace: Boolean;
@@ -695,11 +738,12 @@ type
     property  DocOwner: Boolean read FDocOwner;
   protected
     function  GetErrors: IXMLErrors;
-    function  GetXSLTErrors: TStrings;
+    function  GetXSLTErrors: IXSLTErrors;
     { IXMLDocument }
     function  Get_doctype: IXMLDocumentType;
     function  Get_documentElement: IXMLElement;
     procedure Set_documentElement(const Element: IXMLElement);
+    function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateElement(const TagName: string): IXMLElement;
     function  CreateDocumentFragment: IXMLDocumentFragment;
     function  CreateTextNode(const data: string): IXMLText;
@@ -721,6 +765,7 @@ type
     function  Get_PreserveWhiteSpace: Boolean;
     procedure Set_PreserveWhiteSpace(IsPreserving: Boolean);
     function  Transform(const Stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     function  Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean; overload;
     function  Validate: IXMLError;
     function  ValidateNode(const node: IXMLNode): IXMLError;
@@ -754,7 +799,7 @@ type
 
     procedure ReconciliateNs; override;
     property  Errors: TXMLErrors read FErrors;
-    property  XSLTErrors: TStrings read FXSLTErrors;
+    property  XSLTErrors: IXSLTErrors read GetXSLTErrors;
     property  Options: TXmlParserOptions read FOptions write FOptions;
   end;
 
@@ -1842,6 +1887,53 @@ begin
       Result := FList.List[I];
 end;
 
+{ TXSLTError }
+
+constructor TXSLTError.Create(const Reason: string);
+begin
+  inherited Create;
+  FReason := Reason;
+end;
+
+function TXSLTError.Get_Reason: string;
+begin
+  Result := FReason;
+end;
+
+{ TXSLTErrors }
+
+constructor TXSLTErrors.Create;
+begin
+  inherited Create;
+  FList := TList<IXSLTError>.Create;
+end;
+
+destructor TXSLTErrors.Destroy;
+begin
+  FreeAndNil(FList);
+  inherited;
+end;
+
+procedure TXSLTErrors.Clear;
+begin
+  FList.Clear;
+end;
+
+function TXSLTErrors.GetEnumerator: TEnumerator<IXSLTError>;
+begin
+  Result := FList.GetEnumerator;
+end;
+
+function TXSLTErrors.Get_Count: NativeUInt;
+begin
+  Result := FList.Count;
+end;
+
+function TXSLTErrors.Get_Item(Index: NativeUInt): IXSLTError;
+begin
+  Result := FList[Index];
+end;
+
 { TXMLDocument }
 
 constructor TXMLDocument.Create;
@@ -1855,7 +1947,7 @@ begin
   inherited Create(xmlNodePtr(doc));
   FDocOwner := DocOwner;
   FErrors := TXMLErrors.Create;
-  FXSLTErrors := TStringList.Create;
+  FXSLTErrors := TXSLTErrors.Create;
   FSuccessError := nil;
   FValidateOnParse := True;
 end;
@@ -1871,6 +1963,11 @@ begin
   inherited;
   FreeAndNil(FErrors);
   FreeAndNil(FXSLTErrors);
+end;
+
+function TXMLDocument.Clone(Recursive: Boolean): IXMLDocument;
+begin
+  Result := TXMLDocument.Create(Doc.Clone(Recursive), True);
 end;
 
 function TXMLDocument.CreateAttribute(const Name: string): IXMLAttribute;
@@ -2004,7 +2101,7 @@ begin
   Result := FErrors;
 end;
 
-function TXMLDocument.GetXSLTErrors: TStrings;
+function TXMLDocument.GetXSLTErrors: IXSLTErrors;
 begin
   Result := FXSLTErrors;
 end;
@@ -2219,6 +2316,19 @@ begin
   end;
 end;
 
+function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean;
+begin
+  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
+  try
+    FXSLTErrors.Clear;
+
+    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(Stylesheet.Ptr), S);
+
+  finally
+    TXSLTThreadErrorContext.Stop
+  end;
+end;
+
 function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
 begin
   TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
@@ -2258,7 +2368,7 @@ end;
 
 procedure TXMLDocument.XSLTError(const Msg: string);
 begin
-  XSLTErrors.Add(Msg);
+  FXSLTErrors.FList.Add(TXSLTError.Create(Msg));
 end;
 
 { TXMLSchemaCollection }

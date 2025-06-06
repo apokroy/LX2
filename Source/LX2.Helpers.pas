@@ -193,6 +193,7 @@ type
     function  Canonicalize(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  Canonicalize(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): xmlDocPtr; overload;
+    function  Clone(Recursive: Boolean = True): xmlDocPtr;
     function  CreateAttribute(const name: string; const value: string = ''): xmlAttrPtr; overload;
     function  CreateCDATASection(const data: string): xmlNodePtr;
     function  CreateComment(const data: string): xmlNodePtr;
@@ -212,6 +213,7 @@ type
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
@@ -246,6 +248,21 @@ end;
 
 procedure IOCloseStream(context: Pointer); cdecl;
 begin
+end;
+
+function ParseStylesheet(const stylesheet: xmlDocPtr): xsltStylesheetPtr;
+begin
+  XSLTLib.Initialize;
+
+  // Workaround xsltFreeStylesheet frees stylesheet document
+  var clone := xmlCopyDoc(stylesheet, 1);
+  if clone = nil then
+    Exit(nil);
+
+  Result := xsltParseStylesheetDoc(clone);
+
+  if Result = nil then
+    xmlFreeDoc(clone);
 end;
 
 { xmlNamespacesHelper }
@@ -1062,6 +1079,11 @@ begin
   xmlFree(Data);
 end;
 
+function xmlDocHelper.Clone(Recursive: Boolean): xmlDocPtr;
+begin
+  Result := xmlCopyDoc(@Self, Ord(Recursive));
+end;
+
 function xmlDocHelper.CreateAttribute(const name, value: string): xmlAttrPtr;
 begin
   xmlResetLocalBuffers;
@@ -1223,9 +1245,7 @@ function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr)
 begin
   Result := False;
 
-  XSLTLib.Initialize;
-
-  var style := xsltParseStylesheetDoc(stylesheet);
+  var style := ParseStylesheet(stylesheet);
   if style = nil then
     Exit;
 
@@ -1243,9 +1263,7 @@ var
 begin
   Result := False;
 
-  XSLTLib.Initialize;
-
-  var style := xsltParseStylesheetDoc(stylesheet);
+  var style := ParseStylesheet(stylesheet);
   if style = nil then
     Exit;
 
@@ -1258,8 +1276,35 @@ begin
       Result := True;
       xmlFree(text);
     end;
+    xmlFreeDoc(doc);
   end;
 
+  xsltFreeStylesheet(style);
+end;
+
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString): Boolean;
+var
+  doc: xmlDocPtr;
+  text: xmlCharPtr;
+  len: Integer;
+begin
+  Result := False;
+
+  var style := ParseStylesheet(stylesheet);
+  if style = nil then
+    Exit;
+
+  doc := xsltApplyStylesheet(style, @Self, nil);
+  if doc <> nil then
+  begin
+    if xsltSaveResultToString(text, len, doc, style) = 0 then
+    begin
+      SetString(S, text, len);
+      Result := True;
+      xmlFree(text);
+    end;
+    xmlFreeDoc(doc);
+  end;
   xsltFreeStylesheet(style);
 end;
 

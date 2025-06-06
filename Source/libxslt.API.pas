@@ -243,12 +243,14 @@ type
 
 var
   xsltInit                 : procedure; cdecl;
+  xsltInitGlobals          : procedure; cdecl;
   xsltCleanupGlobals       : procedure; cdecl;
   xsltNewStylesheet        : function: xsltStylesheetPtr; cdecl;
   xsltParseStylesheetFile  : function (const filename: xmlCharPtr): xsltStylesheetPtr; cdecl;
   xsltParseStylesheetDoc   : function (doc: xmlDocPtr): xsltStylesheetPtr; cdecl;
+  xsltParseStylesheetUser  : function (style: xsltStylesheetPtr; doc: xmlDocPtr): Integer; cdecl;
   xsltFreeStylesheet       : procedure(style: xsltStylesheetPtr); cdecl;
-  xsltApplyStylesheet      : function(style: xsltStylesheetPtr; doc: xmlDocPtr; params: xmlCharPtrArrayPtr): xmlDocPtr; cdecl;
+  xsltApplyStylesheet      : function (style: xsltStylesheetPtr; doc: xmlDocPtr; params: xmlCharPtrArrayPtr): xmlDocPtr; cdecl;
   xsltSetGenericErrorFunc  : procedure(ctx: Pointer; handler: xmlGenericErrorFunc); cdecl;
   xsltSaveResultTo         : function (buf: xmlOutputBufferPtr; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl;
   xsltSaveResultToFilename : function (URI: PUTF8Char; result: xmlDocPtr; style: xsltStylesheetPtr; compression: Integer): Integer; cdecl;
@@ -337,10 +339,12 @@ begin
 
 {$region 'load procs'}
   xsltInit                 := GetProcAddress(Handle, 'xsltInit');
+  xsltInitGlobals          := GetProcAddress(Handle, 'xsltInitGlobals');
   xsltCleanupGlobals       := GetProcAddress(Handle, 'xsltCleanupGlobals');
   xsltNewStylesheet        := GetProcAddress(Handle, 'xsltNewStylesheet');
   xsltParseStylesheetFile  := GetProcAddress(Handle, 'xsltParseStylesheetFile');
   xsltParseStylesheetDoc   := GetProcAddress(Handle, 'xsltParseStylesheetDoc');
+  xsltParseStylesheetUser  := GetProcAddress(Handle, 'xsltParseStylesheetUser');
   xsltFreeStylesheet       := GetProcAddress(Handle, 'xsltFreeStylesheet');
   xsltApplyStylesheet      := GetProcAddress(Handle, 'xsltApplyStylesheet');
   xsltSetGenericErrorFunc  := GetProcAddress(Handle, 'xsltSetGenericErrorFunc');
@@ -354,6 +358,7 @@ begin
 {$endregion}
 
   xsltInit;
+  xsltInitGlobals;
 end;
 
 

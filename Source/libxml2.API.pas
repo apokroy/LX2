@@ -38,6 +38,7 @@ THE SOFTWARE.
 /// </para>
 /// <para>
 /// Precomplied binaries: libxml2.dll (statically linked with ICONV, ZLib, XZ), and libxml2.so.16 present in project repository
+///
 /// </para>
 ///</summary>
 unit libxml2.API;
@@ -1846,7 +1847,7 @@ var
   /// <param name="doc">the document </param>
   /// <param name="recursive">if not zero do a recursive copy.</param>
   /// <returns>the copied document or NULL if a memory allocation failed. </returns>
-  xmlCopyDoc                : function(doc: xmlDtdPtr; recursive: Integer): xmlDocPtr; cdecl;
+  xmlCopyDoc                : function(doc: xmlDocPtr; recursive: Integer): xmlDocPtr; cdecl;
 
   /// <summary>
   /// <para>
