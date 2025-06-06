@@ -21,6 +21,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 *)
 
+
+///This file contains translation of libxml2 header files, libxml2 license:
+/// <see cref="https://github.com/apokroy/LX2/blob/main/LIBXML2-LICENSE"/>
+
 /// <summary>
 /// <para>
 /// This Unit provides full access to the libxml2 API (based on libxml2 version 2.15), except for some functions and headers marked as deprecated or candidates for removal in future versions. For example, Schematron are not imported.

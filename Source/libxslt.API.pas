@@ -21,6 +21,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 *)
 
+///This file contains translation of libxslt header files, libxslt license:
+/// <see cref="https://gitlab.gnome.org/GNOME/libxslt/-/blob/master/Copyright?ref_type=heads"/>
+
 unit libxslt.API;
 
 interface
