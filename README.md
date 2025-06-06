@@ -13,8 +13,11 @@ Contains:
 ## Initialize library
 #### Sample
 
+## LX2.Types
+
 ## LX2.Helpers
 #### Sample
+- [Sample 1](/Samples/LX2SampleHelpers1.dproj) Load XML from string, output result, formatted output, canonicalization.
 ### Error handling
 ### xmlNodePtr
 ### xmlDocPtr
@@ -22,6 +25,7 @@ Contains:
 
 ## LX2.SAX
 #### Sample
+- [Sample 2](/Samples/LX2SampleSAX.dproj) SAX Handler that log all calls.
 ### TLX2SAXParserWrapper
 ### TSAXParser
 ### ISAXContentHandler
