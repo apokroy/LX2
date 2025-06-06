@@ -26,7 +26,7 @@ begin
     TestStart('LOAD XML');
 
     var Doc := xmlDoc.Create(TestTransformXML, DefaultParserOptions);
-    if TestEnd(Doc = nil) then
+    if not TestEnd(Doc <> nil) then
     begin
       Doc.Free;
       ReadLn;
@@ -35,7 +35,7 @@ begin
 
     TestStart('LOAD XSD');
     var Style := xmlDoc.Create(TestTransformXSD, DefaultParserOptions);
-    if TestEnd(Style = nil) then
+    if not TestEnd(Style <> nil) then
     begin
       Style.Free;
       ReadLn;

@@ -26,7 +26,7 @@ begin
     TestStart('LOAD FROM STRING');
 
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
-    if not TestEnd(Doc = nil) then
+    if not TestEnd(Doc <> nil) then
     begin
       Doc.Free;
       ReadLn;
@@ -49,7 +49,7 @@ begin
 
     var C14NDoc := Doc.Canonicalize;
 
-    if TestEnd(C14NDoc = nil) then
+    if TestEnd(C14NDoc <> nil) then
     begin
       WriteLn(C14NDoc.Xml);
       TestEnd(True);
