@@ -1,6 +1,4 @@
-program LX2SampleHelpers1;
-
-/// Parse XML & Canonicalize string using helpers
+program LX2SampleHelpers2;
 
 {$APPTYPE CONSOLE}
 
@@ -17,6 +15,7 @@ uses
 
 var
   Timer: TStopwatch;
+  Result: xmlDocPtr;
 begin
   try
     Timer := TStopwatch.Create;
@@ -29,10 +28,9 @@ begin
     WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
     WriteLn('');
 
-    WriteLn('------------------- LOAD FROM STRING -------------------');
-
+    WriteLn('------------------- LOAD XML -------------------');
     Timer.Reset;
-    var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
+    var Doc := xmlDoc.Create(TestTransformXML, DefaultParserOptions);
     if Doc = nil then
     begin
       WriteLn('------------------- ERROR -------------------');
@@ -43,39 +41,37 @@ begin
     WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
     WriteLn('');
 
-    WriteLn('------------------- FORMATTED OUTPUT -------------------');
+    WriteLn('------------------- LOAD XSD -------------------');
     Timer.Reset;
-
-    WriteLn(Doc.ToString(True));
-
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
-
-    WriteLn('------------------- NON FORMATTED -------------------');
-    Timer.Reset;
-
-    WriteLn(Doc.ToString(False));
-
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
-
-    WriteLn('------------------- C14N -------------------');
-
-    Timer.Reset;
-
-    var C14NDoc := Doc.Canonicalize;
-
-    if C14NDoc = nil then
-      WriteLn('------------------- ERROR -------------------')
-    else
+    var Style := xmlDoc.Create(TestTransformXSD, DefaultParserOptions);
+    if Style = nil then
     begin
-      WriteLn(C14NDoc.Xml);
+      WriteLn('------------------- ERROR -------------------');
+      Style.Free;
+      ReadLn;
+      Exit;
+    end;
+    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
+    WriteLn('');
+
+    WriteLn('------------------- TRANSFORM -------------------');
+    Timer.Reset;
+    if Doc.Transform(Style, Result) then
+    begin
       WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
       WriteLn('');
-      C14NDoc.Free;
+
+      WriteLn(Result.Xml);
+    end
+    else
+    begin
+      WriteLn('------------------- ERROR (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
+      WriteLn('');
     end;
 
+    Style.Free;
     Doc.Free;
+    Result.Free;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
