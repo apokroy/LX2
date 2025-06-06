@@ -6,12 +6,12 @@ program LX2SampleSAX1;
 
 uses
   System.SysUtils,
-  System.Diagnostics,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.SAX in '..\Source\LX2.SAX.pas',
   LX2.Types in '..\Source\LX2.Types.pas',
-  LX2SampleXML in 'LX2SampleXML.pas';
+  LX2SampleXML in 'LX2SampleXML.pas',
+  LXSample.Common in 'LXSample.Common.pas';
 
 type
   TSAXConsoleHandler = class(TSAXCustomContentHandler)
@@ -156,24 +156,20 @@ begin
   Write(string.Create(#32, Indent * 2));
 end;
 
-var
-  Timer: TStopwatch;
-
 begin
   try
-    Timer := TStopwatch.Create;
+    TestStart('SAX Parser');
 
     var Parser := TSAXParser.Create;
     try
       Parser.Handler := TSAXConsoleHandler.Create;
       Parser.IgnoreWhitespaces := True;
 
-      Timer.Reset;
       if Parser.Parse(TestXml1) then
-        WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------')
+        TestEnd(True)
       else
       begin
-        WriteLn('------------------- ERROR -------------------');
+        TestEnd(False);
         for var Error in Parser.Errors do
         begin
           Write(Error.Code);
@@ -196,5 +192,7 @@ begin
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
   end;
+
+  WriteLn('Press Enter to exit');
   ReadLn;
 end.

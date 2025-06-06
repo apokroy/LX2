@@ -8,70 +8,55 @@ program LX2SampleHelpers1;
 
 uses
   System.SysUtils,
-  System.Diagnostics,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
   LX2.Types in '..\Source\LX2.Types.pas',
-  LX2SampleXML in 'LX2SampleXML.pas';
+  LX2SampleXML in 'LX2SampleXML.pas',
+  LXSample.Common in 'LXSample.Common.pas';
 
-var
-  Timer: TStopwatch;
 begin
   try
-    Timer := TStopwatch.Create;
-
-    Timer.Start;
-    WriteLn('------------------- LX2 Init (libxml2.dll or libxml2.so.16 must be in path) -------------------');
+    TestStart('LX2 Init');
 
     LX2Lib.Initialize;
 
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- LOAD FROM STRING -------------------');
+    TestStart('LOAD FROM STRING');
 
-    Timer.Reset;
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
     if Doc = nil then
     begin
-      WriteLn('------------------- ERROR -------------------');
+      TestEnd(False);
       Doc.Free;
       ReadLn;
       Exit;
     end;
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- FORMATTED OUTPUT -------------------');
-    Timer.Reset;
+    TestStart('FORMATTED OUTPUT');
 
     WriteLn(Doc.ToString(True));
 
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- NON FORMATTED -------------------');
-    Timer.Reset;
+    TestStart('NON FORMATTED');
 
     WriteLn(Doc.ToString(False));
 
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- C14N -------------------');
-
-    Timer.Reset;
+    TestStart('C14N');
 
     var C14NDoc := Doc.Canonicalize;
 
     if C14NDoc = nil then
-      WriteLn('------------------- ERROR -------------------')
+      TestEnd(False)
     else
     begin
       WriteLn(C14NDoc.Xml);
-      WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-      WriteLn('');
+      TestEnd(True);
       C14NDoc.Free;
     end;
 
@@ -80,5 +65,7 @@ begin
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
   end;
+
+  WriteLn('Press Enter to exit');
   ReadLn;
 end.

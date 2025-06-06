@@ -6,68 +6,54 @@ program LX2SampleHelpers2;
 
 uses
   System.SysUtils,
-  System.Diagnostics,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
   LX2.Types in '..\Source\LX2.Types.pas',
-  LX2SampleXML in 'LX2SampleXML.pas';
+  LX2SampleXML in 'LX2SampleXML.pas',
+  LXSample.Common in 'LXSample.Common.pas';
 
 var
-  Timer: TStopwatch;
   Result: xmlDocPtr;
 begin
   try
-    Timer := TStopwatch.Create;
-
-    Timer.Start;
-    WriteLn('------------------- LX2 Init (libxml2.dll or libxml2.so.16 must be in path) -------------------');
+    TestStart('LX2 Init');
 
     LX2Lib.Initialize;
 
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- LOAD XML -------------------');
-    Timer.Reset;
+    TestStart('LOAD XML');
+
     var Doc := xmlDoc.Create(TestTransformXML, DefaultParserOptions);
     if Doc = nil then
     begin
-      WriteLn('------------------- ERROR -------------------');
+      TestEnd(False);
       Doc.Free;
       ReadLn;
       Exit;
     end;
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- LOAD XSD -------------------');
-    Timer.Reset;
+    TestStart('LOAD XSD');
     var Style := xmlDoc.Create(TestTransformXSD, DefaultParserOptions);
     if Style = nil then
     begin
-      WriteLn('------------------- ERROR -------------------');
+      TestEnd(False);
       Style.Free;
       ReadLn;
       Exit;
     end;
-    WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-    WriteLn('');
+    TestEnd(True);
 
-    WriteLn('------------------- TRANSFORM -------------------');
-    Timer.Reset;
+    TestStart('TRANSFORM');
     if Doc.Transform(Style, Result) then
     begin
-      WriteLn('------------------- SUCCESS (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-      WriteLn('');
-
-      WriteLn(Result.Xml);
+      TestEnd(True);
+      WriteLn(Result.ToString(True));
     end
     else
-    begin
-      WriteLn('------------------- ERROR (' + Timer.ElapsedMilliseconds.ToString + 'ms) -------------------');
-      WriteLn('');
-    end;
+      TestEnd(False);
 
     Style.Free;
     Doc.Free;
@@ -76,5 +62,7 @@ begin
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
   end;
+
+  WriteLn('Press Enter to exit');
   ReadLn;
 end.

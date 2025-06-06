@@ -127,6 +127,7 @@
         <DCCReference Include="..\Source\LX2.Helpers.pas"/>
         <DCCReference Include="..\Source\LX2.Types.pas"/>
         <DCCReference Include="LX2SampleXML.pas"/>
+        <DCCReference Include="LXSample.Common.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
