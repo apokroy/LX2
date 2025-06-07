@@ -6,19 +6,19 @@ const
   TestXml1: Utf8String =
   '''
   <?xml version="1.0"?>
-  <Tests>
-    <Test     TestType="CMD" TestId="0001">
+  <Tests xmlns:tst="http://test/sample">
+    <Test     TestType="CMD" tst:TestId="0001">
       <Name>Convert number to string</Name>
       <CommandLine>Examp1.EXE</CommandLine>
       <Input>1</Input>
       <Output>One</Output>
     </Test>
-    <Test TestId="0002" TestType="CMD">
+    <tst:Test TestId="0002" TestType="CMD">
       <Name>Find succeeding characters</Name>
       <CommandLine>Examp2.EXE</CommandLine>
       <Input>abc</Input>
       <Output>def</Output>
-    </Test>
+    </tst:Test>
     <Test TestId="0003" TestType="GUI">
       <Name>Convert multiple numbers to strings</Name>
       <CommandLine>Examp2.EXE /Verbose</CommandLine>

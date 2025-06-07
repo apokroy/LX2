@@ -18,9 +18,7 @@ var
 begin
   try
     TestStart('LX2 Init');
-
     LX2Lib.Initialize;
-
     TestEnd(True);
 
     TestStart('LOAD XML');

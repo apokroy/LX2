@@ -70,15 +70,16 @@ type
     function  GetParentNode: xmlNodePtr; inline;
     function  GetPrefix: string;
     function  GetPreviousSibling: xmlNodePtr; inline;
+    function  GetTagName: string;
     function  GetText: string;
     function  GetXml: string;
     procedure SetNodeValue(const Value: string);
     procedure SetText(const Value: string);
     function  GetPath: string;
-    procedure SetNodeName(const Value: string);
     function  GetBaseURI: string; inline;
     procedure SetBaseURI(const Value: string); inline;
     function  GetValue: string;
+    procedure SetNodeName(const Value: string);
   public
     function  GetNext(Node: xmlNodePtr): xmlNodePtr;
     function  ChildElementCount: LongWord;
@@ -115,34 +116,33 @@ type
     procedure SetAttribute(const name: string; const value: string); inline;
     procedure RemoveAttribute(const name: string); inline;
     procedure RemoveAttributeNode(const Attr: xmlAttrPtr);
+    function  Contains(const Node: xmlNodePtr): Boolean;
+    function  HasAttributes: Boolean;
+    function  IsDefaultNamespace(const namespaceURI: string): Boolean;
+    //TODO: procedure Normalize;
 
     property  Attribute[const name: string]: string read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
     property  BaseName: string read GetLocalName;
+    property  BaseURI: string read GetBaseURI write SetBaseURI;
     property  ChildNodes: xmlNodeArray read GetChildNodes;
     property  FirstChild: xmlNodePtr read GetFirstChild;
     property  LastChild: xmlNodePtr read GetLastChild;
+    property  LocalName: string read GetLocalName;
     property  NamespaceURI: string read GetNamespaceURI;
     property  NextSibling: xmlNodePtr read GetNextSibling;
     property  NodeName: string read GetNodeName write SetNodeName;
     property  NodeType: XmlElementType read GetNodeType;
     property  NodeValue: string read GetNodeValue write SetNodeValue;
     property  OwnerDocument: xmlDocPtr read GetOwnerDocument;
+    property  ParentElement: xmlNodePtr read GetParentElement;
     property  ParentNode: xmlNodePtr read GetParentNode;
     property  Prefix: string read GetPrefix;
     property  PreviousSibling: xmlNodePtr read GetPreviousSibling;
+    property  TagName: string read GetTagName;
     property  Text: string read GetText write SetText;
-    property  Xml: string read GetXml;
-  public
-    { DOM & Browsers compatible additions }
-    function  Contains(const Node: xmlNodePtr): Boolean;
-    function  HasAttributes: Boolean;
-    function  IsDefaultNamespace(const namespaceURI: string): Boolean;
-    //TODO: procedure Normalize;
-    property  BaseURI: string read GetBaseURI write SetBaseURI;
-    property  LocalName: string read GetLocalName;
-    property  ParentElement: xmlNodePtr read GetParentElement;
     property  TextContent: string read GetText write SetText;
+    property  Xml: string read GetXml;
   end;
 
   xmlAttrHelper = record helper for xmlAttr
@@ -158,14 +158,17 @@ type
     function  GetPrefix: string; inline;
     function  GetPreviousSibling: xmlAttrPtr; inline;
     procedure SetValue(const Value: string); inline;
-    procedure SetName(const Value: string); inline;
     function  GetBaseURI: string; inline;
     procedure SetBaseURI(const Value: string); inline;
+    function  GetLocalName: string;
+    procedure SetLocalName(const Value: string);
   public
     function  IsDefaultNamespace(const namespaceURI: string): Boolean; inline;
+    property  LocalName: string read GetLocalName write SetLocalName;
     property  NamespaceURI: string read GetNamespaceURI;
     property  NextSibling: xmlAttrPtr read GetNextSibling;
-    property  Name: string read GetName write SetName;
+    property  Name: string read GetName;
+    property  NodeName: string read GetName;
     property  Value: string read GetValue write SetValue;
     property  OwnerDocument: xmlDocPtr read GetOwnerDocument;
     property  Prefix: string read GetPrefix;
@@ -544,7 +547,10 @@ end;
 
 function xmlNodeHelper.GetLocalName: string;
 begin
-  Result := xmlCharToStr(name);
+  if &type in [XML_ELEMENT_NODE, XML_ATTRIBUTE_NODE] then
+    Result := xmlCharToStr(name)
+  else
+    Result := string.Empty;
 end;
 
 function xmlNodeHelper.GetNamespaceURI: string;
@@ -562,10 +568,17 @@ end;
 
 function xmlNodeHelper.GetNodeName: string;
 begin
-  if (ns = nil) or (ns.prefix = nil) then
-    Result := xmlCharToStr(TSelf(Self).name)
+  case &type of
+    XML_ELEMENT_NODE       : Result := GetTagName;
+    XML_ATTRIBUTE_NODE     : Result := xmlAttrPtr(@Self).GetName;
+    XML_TEXT_NODE          : Result := '#text';
+    XML_CDATA_SECTION_NODE : Result := '#cdata-section';
+    XML_COMMENT_NODE       : Result := '#comment';
+    XML_DOCUMENT_NODE      : Result := '#document';
+    XML_DOCUMENT_FRAG_NODE : Result := '#document-fragment';
   else
-    Result := Utf8ToString(ns.prefix) + ':' + Utf8ToString(TSelf(Self).name);
+    Result := xmlCharToStr(name);
+  end;
 end;
 
 function xmlNodeHelper.GetNodeType: xmlElementType;
@@ -579,9 +592,9 @@ begin
     XML_ATTRIBUTE_NODE,
     XML_TEXT_NODE,
     XML_CDATA_SECTION_NODE,
-    XML_COMMENT_NODE: Result := xmlCharToStrAndFree(xmlNodeGetContent(@Self));
+    XML_COMMENT_NODE:   Result := xmlCharToStrAndFree(xmlNodeGetContent(@Self));
     XML_ATTRIBUTE_DECL: Result := xmlCharToStrAndFree(xmlAttributePtr(@Self).defaultValue);
-    XML_PI_NODE:
+    XML_PI_NODE:        Result := xmlCharToStrAndFree(xmlNodeGetContent(@Self));
   else
     Result := '';
   end;
@@ -626,6 +639,14 @@ end;
 function xmlNodeHelper.GetPreviousSibling: xmlNodePtr;
 begin
   Result := prev;
+end;
+
+function xmlNodeHelper.GetTagName: string;
+begin
+  if ns = nil then
+    Result := xmlCharToStr(name)
+  else
+    Result := xmlCharToStr(ns.prefix) + ':' + xmlCharToStr(name);
 end;
 
 function xmlNodeHelper.GetRootNode: xmlNodePtr;
@@ -838,9 +859,17 @@ begin
   Result := xmlCharToStrAndFree(S);
 end;
 
-function xmlAttrHelper.GetName: string;
+function xmlAttrHelper.GetLocalName: string;
 begin
   Result := xmlCharToStr(TSelf(Self).name);
+end;
+
+function xmlAttrHelper.GetName: string;
+begin
+  if TSelf(Self).ns = nil then
+    Result := xmlCharToStr(TSelf(Self).name)
+  else
+    Result := xmlCharToStr(ns.prefix) + ':' +  xmlCharToStr(TSelf(Self).name)
 end;
 
 function xmlAttrHelper.GetNamespaceURI: string;
@@ -906,7 +935,7 @@ begin
   xmlNodeSetBase(@Self, LocalXmlStr(Value));
 end;
 
-procedure xmlAttrHelper.SetName(const Value: string);
+procedure xmlAttrHelper.SetLocalName(const Value: string);
 begin
   xmlResetLocalBuffers;
   xmlNodeSetName(@Self, LocalXmlStr(Value));
