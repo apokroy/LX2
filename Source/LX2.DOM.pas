@@ -165,12 +165,10 @@ type
     function  Ptr: xmlNodePtr;
     procedure Link;
     procedure Unlink;
-    function  Get_Value: string;
-    property  Value: string read Get_value;
     { MS XML DOM }
     function  Get_NodeName: string;
-    function  Get_NodeValue: Variant;
-    procedure Set_NodeValue(const Value: Variant);
+    function  Get_NodeValue: string;
+    procedure Set_NodeValue(const Value: string);
     function  Get_NodeType: DOMNodeType;
     function  Get_ParentNode: IXMLNode;
     function  Get_ChildNodes: IXMLNodeList;
@@ -195,7 +193,7 @@ type
     function  Get_Prefix: string;
     function  Get_BaseName: string;
     property  NodeName: string read Get_NodeName;
-    property  NodeValue: Variant read Get_NodeValue write Set_NodeValue;
+    property  NodeValue: string read Get_NodeValue write Set_NodeValue;
     property  NodeType: DOMNodeType read Get_NodeType;
     property  ParentNode: IXMLNode read Get_ParentNode;
     property  ChildNodes: IXMLNodeList read Get_ChildNodes;
@@ -223,13 +221,19 @@ type
 
   IXMLElement = interface(IXMLNode)
     ['{3D45E8A9-911B-4144-B171-F72AA9C6C0F4}']
-    function  GetAttribute(const name: string): string;
-    procedure SetAttribute(const name: string; Value: string);
-    function  RemoveAttribute(const name: string): Boolean;
-    function  GetAttributeNode(const name: string): IXMLAttribute;
+    function  GetAttribute(const Name: string): string;
+    procedure SetAttribute(const Name: string; Value: string);
+    function  GetAttributeNs(const NamespaceURI, Name: string): string;
+    function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
+    function  GetAttributeNode(const Name: string): IXMLAttribute; overload;
+    function  GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute; overload;
+    function  Get_TagName: string;
+    function  RemoveAttribute(const Name: string): Boolean;
+    function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
-    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  GetElementsByTagName(const TagName: string): IXMLNodeList;
     procedure Normalize;
+    property  TagName: string read Get_TagName;
   end;
 
   IXMLDocumentFragment = interface(IXMLNode)
@@ -560,13 +564,12 @@ type
     FLinked: Boolean;
   protected
     function  Ptr: xmlNodePtr;
-    function  Get_value: string;
     procedure Link;
     procedure Unlink;
     { IXMLNode }
     function  Get_NodeName: string;
-    function  Get_NodeValue: Variant;
-    procedure Set_NodeValue(const Value: Variant);
+    function  Get_NodeValue: string;
+    procedure Set_NodeValue(const Value: string);
     function  Get_NodeType: DOMNodeType;
     function  Get_ParentNode: IXMLNode;
     function  Get_ChildNodes: IXMLNodeList;
@@ -597,7 +600,7 @@ type
     destructor Destroy; override;
     procedure ReconciliateNs; virtual;
     property  NodeName: string read Get_NodeName;
-    property  NodeValue: Variant read Get_NodeValue write Set_NodeValue;
+    property  NodeValue: string read Get_NodeValue write Set_NodeValue;
     property  NodeType: DOMNodeType read Get_NodeType;
     property  ParentNode: IXMLNode read Get_ParentNode;
     property  ChildNodes: IXMLNodeList read Get_ChildNodes;
@@ -633,13 +636,19 @@ type
 
   TXMLElement = class(TXMLNode, IXMLElement)
   public
-    function  GetAttribute(const name: string): string;
-    procedure SetAttribute(const name: string; Value: string);
-    function  RemoveAttribute(const name: string): Boolean;
-    function  GetAttributeNode(const name: string): IXMLAttribute;
+    function  GetAttribute(const Name: string): string;
+    procedure SetAttribute(const Name: string; Value: string);
+    function  GetAttributeNs(const NamespaceURI, Name: string): string;
+    function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
+    function  GetAttributeNode(const Name: string): IXMLAttribute;
+    function  GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute;
+    function  RemoveAttribute(const Name: string): Boolean;
+    function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
-    function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  GetElementsByTagName(const TagName: string): IXMLNodeList;
+    function  Get_TagName: string;
     procedure Normalize;
+    property  TagName: string read Get_TagName;
   end;
 
   TXMLCharacterData = class(TXMLNode, IXMLCharacterData)
@@ -949,7 +958,7 @@ begin
   else
   begin
     S := UTF8Encode(Mask);
-    Filter := Pointer(S);
+    Filter := xmlCharPtr(S);
   end;
 
   if Parent = nil then
@@ -1178,17 +1187,16 @@ end;
 
 function TXMLNamedNodeMap.GetItemByName(const Name: string): xmlNodePtr;
 var
-  Prefix, Base: PUTF8Char;
+  Prefix, Base: RawByteString;
 begin
-  xmlResetLocalBuffers;
-  SplitXMLName(Name, Prefix, Base);
+  SplitXMLName(Utf8Encode(Name), Prefix, Base);
 
   for var I := 0 to Length - 1 do
   begin
     var Node := FNodes[I];
-    if xmlStrSame(Node.name, Base) then
+    if xmlStrSame(Node.name, xmlCharPtr(Base)) then
     begin
-      if ((Prefix = nil) and (node.ns = nil)) or xmlStrSame(Prefix, node.ns.prefix) then
+      if ((Prefix = '') and (node.ns = nil)) or xmlStrSame(xmlCharPtr(Prefix), node.ns.prefix) then
         Exit(node);
     end;
   end;
@@ -1198,18 +1206,17 @@ end;
 
 function TXMLNamedNodeMap.GetQualifiedItemByName(const BaseName: string; const NamespaceURI: string): xmlNodePtr;
 var
-  Base, URI: PUTF8Char;
+  Base, URI: RawByteString;
 begin
-  xmlResetLocalBuffers;
-  Base := LocalXmlStr(BaseName);
-  URI := LocalXmlStr(NamespaceURI);
+  Base := Utf8Encode(BaseName);
+  URI := Utf8Encode(NamespaceURI);
 
   for var I := 0 to Length - 1 do
   begin
     var Node := FNodes[I];
-    if xmlStrSame(Node.name, Base) then
+    if xmlStrSame(Node.name, xmlCharPtr(Base)) then
     begin
-      if ((URI = nil) and (Node.ns = nil)) or xmlStrSame(URI, Node.ns.href) then
+      if ((URI = '') and (Node.ns = nil)) or xmlStrSame(xmlCharPtr(URI), Node.ns.href) then
         Exit(Node);
     end;
   end;
@@ -1398,7 +1405,7 @@ end;
 
 function TXMLNode.Get_BaseName: string;
 begin
-  Result := NodePtr.BaseName;
+  Result := xmlCharToStr(NodePtr.name);
 end;
 
 function TXMLNode.Get_ChildNodes: IXMLNodeList;
@@ -1434,7 +1441,17 @@ end;
 
 function TXMLNode.Get_NodeName: string;
 begin
-  Result := NodePtr.NodeName;
+  case NodePtr.&type of
+    XML_ELEMENT_NODE       : Result := TXMLElement(Self).TagName;
+    XML_ATTRIBUTE_NODE     : Result := TXMLAttribute(Self).Name;
+    XML_TEXT_NODE          : Result := '#text';
+    XML_CDATA_SECTION_NODE : Result := '#cdata-section';
+    XML_COMMENT_NODE       : Result := '#comment';
+    XML_DOCUMENT_NODE      : Result := '#document';
+    XML_DOCUMENT_FRAG_NODE : Result := '#document-fragment';
+  else
+    Result := xmlCharToStr(NodePtr.name);
+  end;
 end;
 
 function TXMLNode.Get_NodeType: DOMNodeType;
@@ -1442,14 +1459,15 @@ begin
   Result := DOMNodeType(NodePtr.&type);
 end;
 
-function TXMLNode.Get_NodeValue: Variant;
+function TXMLNode.Get_NodeValue: string;
 begin
   case NodePtr.&type of
-    XML_ATTRIBUTE_NODE:     Result := NodePtr.text;
+    XML_ATTRIBUTE_NODE:     Result := xmlCharToStrAndFree(xmlNodeGetContent(NodePtr));
     XML_CDATA_SECTION_NODE,
     XML_COMMENT_NODE,
     XML_TEXT_NODE,
-    XML_PI_NODE:            Result := NodePtr.text;
+    XML_PI_NODE:            Result := xmlCharToStrAndFree(xmlNodeGetContent(NodePtr));
+    XML_ATTRIBUTE_DECL:     Result := xmlCharToStr(xmlAttributePtr(NodePtr).defaultValue);
   else
     Result := null;
   end;
@@ -1468,7 +1486,10 @@ end;
 
 function TXMLNode.Get_Prefix: string;
 begin
-  Result := NodePtr.Prefix;
+  if NodePtr.ns = nil then
+    Result := ''
+  else
+    Result := xmlCharToStr(NodePtr.ns.prefix);
 end;
 
 function TXMLNode.Get_PreviousSibling: IXMLNode;
@@ -1479,17 +1500,15 @@ end;
 
 function TXMLNode.Get_Text: string;
 begin
-  Result := NodePtr.Text;
-end;
-
-function TXMLNode.Get_Value: string;
-begin
-  Result := NodePtr.Value;
+  Result := xmlCharToStrAndFree(xmlNodeGetContent(NodePtr));
 end;
 
 function TXMLNode.Get_Xml: string;
 begin
-  Result := NodePtr.Xml;
+  var Buf := xmlAllocOutputBuffer(nil);
+  xmlNodeDumpOutput(Buf, NodePtr.doc, NodePtr, 0, 0, nil);
+  Result := xmlCharToStr(xmlOutputBufferGetContent(Buf), xmlOutputBufferGetSize(Buf));
+  xmlOutputBufferClose(Buf);
 end;
 
 function TXMLNode.HasChildNodes: Boolean;
@@ -1535,22 +1554,22 @@ end;
 
 function TXMLNode.SelectNodes(const QueryString: string): IXMLNodeList;
 begin
-  Result := TXMLNodeArrayList.Create(NodePtr.SelectNodes(QueryString));
+  Result := TXMLNodeArrayList.Create(NodePtr.SelectNodes(Utf8Encode(QueryString)));
 end;
 
 function TXMLNode.SelectSingleNode(const QueryString: string): IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.SelectSingleNode(QueryString));
+  Result := XMLFactory.Cast(NodePtr.SelectSingleNode(Utf8Encode(QueryString)));
 end;
 
-procedure TXMLNode.Set_NodeValue(const Value: Variant);
+procedure TXMLNode.Set_NodeValue(const Value: string);
 begin
   case NodePtr.&type of
-    XML_ATTRIBUTE_NODE:     NodePtr.text := VarToStr(Value); //TODO: What a rules to convert data types?
+    XML_ATTRIBUTE_NODE:     NodePtr.text := Utf8Encode(Value);
     XML_CDATA_SECTION_NODE,
     XML_COMMENT_NODE,
     XML_TEXT_NODE,
-    XML_PI_NODE:            NodePtr.text := VarToStr(Value);
+    XML_PI_NODE:            NodePtr.text := Utf8Encode(Value);
   else
     LX2NodeTypeError(NodePtr.&type);
   end;
@@ -1558,7 +1577,7 @@ end;
 
 procedure TXMLNode.Set_Text(const text: string);
 begin
-  NodePtr.Text := text;
+  NodePtr.Text := Utf8Encode(text);
 end;
 
 procedure TXMLNode.Unlink;
@@ -1586,7 +1605,7 @@ end;
 
 function TXMLAttribute.Get_Name: string;
 begin
-  Result := AttrPtr.Name;
+  Result := UTF8ToUnicodeString(AttrPtr.Name);
 end;
 
 function TXMLAttribute.Get_Value: string;
@@ -1600,8 +1619,7 @@ begin
 
   if AttrValue <> '' then
   begin
-    xmlResetLocalBuffers;
-    children := xmlNewDocText(AttrPtr.parent.doc, LocalXmlStr(attrValue));
+    children := xmlNewDocText(AttrPtr.parent.doc, xmlCharPtr(Utf8Encode(attrValue)));
     if children = nil then
       LX2InternalError;
   end;
@@ -1633,19 +1651,39 @@ end;
 
 { TXMLElement }
 
-function TXMLElement.GetAttribute(const name: string): string;
+function TXMLElement.GetAttribute(const Name: string): string;
 begin
-  Result := NodePtr.Attribute[name];
+  Result := xmlCharToStrAndFree(xmlGetProp(NodePtr, xmlStrPtr(Utf8Encode(name))));
 end;
 
-function TXMLElement.GetAttributeNode(const name: string): IXMLAttribute;
+function TXMLElement.GetAttributeNode(const Name: string): IXMLAttribute;
 begin
-  Result := XMLFactory.Cast(NodePtr.FindAttribute(name));
+  Result := XMLFactory.Cast(NodePtr.GetAttributeNode(Utf8Encode(Name)));
+end;
+
+function TXMLElement.GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute;
+begin
+  Result := XMLFactory.Cast(NodePtr.GetAttributeNodeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name))));
+end;
+
+function TXMLElement.GetAttributeNs(const NamespaceURI, Name: string): string;
+begin
+  Result := xmlCharToStrAndFree(xmlGetNsProp(NodePtr, xmlStrPtr(Utf8Encode(NamespaceURI)), xmlStrPtr(Utf8Encode(Name))));
+end;
+
+function TXMLElement.SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
+begin
+  Result := XMLFactory.Cast(NodePtr.SetAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Value))));
 end;
 
 function TXMLElement.GetElementsByTagName(const tagName: string): IXMLNodeList;
 begin
   Result := TXMLElementList.Create(NodePtr, True, tagName);
+end;
+
+function TXMLElement.Get_TagName: string;
+begin
+  Result := UTF8ToUnicodeString(NodePtr.TagName);
 end;
 
 procedure TXMLElement.Normalize;
@@ -1677,21 +1715,27 @@ end;
 
 function TXMLElement.RemoveAttribute(const Name: string): Boolean;
 var
-  Prefix, LocalName: xmlCharPtr;
+  Prefix, LocalName: RawByteString;
 begin
-  xmlResetLocalBuffers;
-
-  SplitXMLName(Name, Prefix, LocalName);
-  if Prefix = nil then
-    Result := xmlUnsetProp(NodePtr, LocalName) = 0
+  SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
+  if Prefix = '' then
+    Result := xmlUnsetProp(NodePtr, xmlCharPtr(LocalName)) = 0
   else
   begin
     var Ns := NodePtr.SearchNs(Prefix);
     if Ns <> nil then
-      Result := xmlUnsetNsProp(NodePtr, Ns, LocalName) = 0
+      Result := xmlUnsetNsProp(NodePtr, Ns, xmlCharPtr(LocalName)) = 0
     else
       Result := False;
   end;
+end;
+
+function TXMLElement.RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
+begin
+  var Ns := NodePtr.SearchNsByRef(Utf8Encode(NamespaceURI));
+  if Ns = nil then
+    Exit(False);
+  Result := xmlUnsetNsProp(NodePtr, Ns, xmlCharPtr(Utf8Encode(Name))) = 0
 end;
 
 function TXMLElement.RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
@@ -1708,26 +1752,23 @@ end;
 
 procedure TXMLElement.SetAttribute(const Name: string; Value: string);
 begin
-  xmlResetLocalBuffers;
-  xmlSetProp(NodePtr, LocalXmlStr(Name), LocalXmlStr(Value));
+  xmlSetProp(NodePtr, xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Value)));
 end;
 
 { TXMLCharacterData }
 
 procedure TXMLCharacterData.AppendData(const Data: string);
 begin
-  xmlResetLocalBuffers;
-  xmlNodeAddContent(NodePtr, LocalXmlStr(Data));
+  xmlNodeAddContent(NodePtr, xmlCharPtr(Utf8Encode(Data)));
 end;
 
-procedure TXMLCharacterData.DeleteData(offset, count: Integer);
+procedure TXMLCharacterData.DeleteData(Offset, Count: Integer);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
   Delete(S, offset, count);
 
-  xmlResetLocalBuffers;
-  xmlNodeSetContent(NodePtr, LocalXmlStr(S));
+  xmlNodeSetContent(NodePtr, xmlCharPtr(Utf8Encode(S)));
 end;
 
 function TXMLCharacterData.Get_Data: string;
@@ -1740,36 +1781,33 @@ begin
   Result := Utf8toUtf16Count(NodePtr.content);
 end;
 
-procedure TXMLCharacterData.InsertData(offset: Integer; const data: string);
+procedure TXMLCharacterData.InsertData(Offset: Integer; const Data: string);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
-  Insert(data, S, offset);
+  Insert(data, S, Offset);
 
-  xmlResetLocalBuffers;
-  xmlNodeSetContent(NodePtr, LocalXmlStr(S));
+  xmlNodeSetContent(NodePtr, xmlCharPtr(Utf8Encode(S)));
 end;
 
-procedure TXMLCharacterData.ReplaceData(offset, count: Integer; const data: string);
+procedure TXMLCharacterData.ReplaceData(Offset, Count: Integer; const Data: string);
 begin
   var S := xmlCharToStr(NodePtr.content);
 
-  Delete(S, offset, count);
-  Insert(data, S, offset);
+  Delete(S, Offset, Count);
+  Insert(data, S, Offset);
 
-  xmlResetLocalBuffers;
-  xmlNodeSetContent(NodePtr, LocalXmlStr(S));
+  xmlNodeSetContent(NodePtr, xmlCharPtr(Utf8Encode(S)));
 end;
 
-procedure TXMLCharacterData.Set_Data(const data: string);
+procedure TXMLCharacterData.Set_Data(const Data: string);
 begin
-  xmlResetLocalBuffers;
-  xmlNodeSetContent(NodePtr, LocalXmlStr(data));
+  xmlNodeSetContent(NodePtr, xmlCharPtr(Utf8Encode(Data)));
 end;
 
-function TXMLCharacterData.SubstringData(offset, count: Integer): string;
+function TXMLCharacterData.SubstringData(Offset, Count: Integer): string;
 begin
-  Result := Copy(xmlCharToStr(NodePtr.content), offset, count);
+  Result := Copy(xmlCharToStr(NodePtr.content), Offset, Count);
 end;
 
 { TXMLProcessingInstruction }
@@ -1786,8 +1824,7 @@ end;
 
 procedure TXMLProcessingInstruction.Set_Data(const Value: string);
 begin
-  xmlResetLocalBuffers;
-  xmlNodeSetContent(NodePtr, LocalXmlStr(data));
+  xmlNodeSetContent(NodePtr, xmlCharPtr(Utf8Encode(data)));
 end;
 
 { TXMLError }
@@ -1972,25 +2009,21 @@ end;
 
 function TXMLDocument.CreateAttribute(const Name: string): IXMLAttribute;
 begin
-  Result := XMLFactory.Cast(xmlNewDocProp(doc, LocalXmlStr(Name), nil));
+  Result := XMLFactory.Cast(xmlNewDocProp(doc, xmlCharPtr(Utf8Encode(Name)), nil));
 end;
 
 function TXMLDocument.CreateCDATASection(const Data: string): IXMLCDATASection;
-var
-  L: NativeUInt;
 begin
-  xmlResetLocalBuffers;
+  var S := Utf8Encode(Data);
+  var L := Length(Data);
 
-  L := Length(Data);
-  var P := LocalXmlStr(Pointer(Data), L);
-
-  Result := XMLFactory.Cast(xmlNewCDataBlock(Doc, P, L)) as IXMLCDATASection;
+  Result := XMLFactory.Cast(xmlNewCDataBlock(Doc, xmlCharPtr(S), L)) as IXMLCDATASection;
 end;
 
 function TXMLDocument.CreateComment(const Data: string): IXMLComment;
 begin
-  xmlResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocComment(Doc, LocalXmlStr(Data))) as IXMLComment;
+  var S := Utf8Encode(Data);
+  Result := XMLFactory.Cast(xmlNewDocComment(Doc, xmlCharPtr(Utf8Encode(Data)))) as IXMLComment;
 end;
 
 function TXMLDocument.CreateDocumentFragment: IXMLDocumentFragment;
@@ -2000,13 +2033,12 @@ end;
 
 function TXMLDocument.CreateElement(const TagName: string): IXMLElement;
 var
-  Prefix, Base: PUTF8Char;
+  Prefix, LocalName: RawByteString;
 begin
-  xmlResetLocalBuffers;
-  SplitXMLName(TagName, Prefix, Base);
+  SplitXMLName(Utf8Encode(TagName), Prefix, LocalName);
 
-  if Prefix = nil then
-    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, Base, nil), False) as IXMLElement
+  if Prefix = '' then
+    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, xmlCharPtr(LocalName), nil), False) as IXMLElement
   else
   begin
     var Node := Doc.documentElement;
@@ -2014,32 +2046,31 @@ begin
     begin
       var Ns := Node.SearchNs(Prefix);
       if Ns <> nil then
-        Exit(XMLFactory.Cast(xmlNewDocRawNode(Doc, Ns, Base, nil), False) as IXMLElement)
+        Exit(XMLFactory.Cast(xmlNewDocRawNode(Doc, Ns, xmlCharPtr(LocalName), nil), False) as IXMLElement)
     end;
-    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, LocalXmlStr(TagName), nil), False) as IXMLElement;
+    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, xmlCharPtr(LocalName), nil), False) as IXMLElement;
   end;
 end;
 
 function TXMLDocument.CreateNode(NodeType: Integer; const Name, NamespaceURI: string): IXMLNode;
 var
-  Prefix, LocalName, HRef: xmlCharPtr;
+  Prefix, LocalName, HRef: RawByteString;
 begin
-  xmlResetLocalBuffers;
   if NamespaceURI <> '' then
   begin
-    SplitXMLName(Name, Prefix, LocalName);
-    HRef := LocalXmlStr(NamespaceURI);
+    SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
+    HRef := Utf8Encode(NamespaceURI);
   end
   else
   begin
-    LocalName := LocalXmlStr(Name);
-    HRef := nil;
-    Prefix := nil;
+    LocalName := Utf8Encode(Name);
+    HRef := '';
+    Prefix := '';
   end;
 
   case NodeType of
     NODE_ATTRIBUTE:
-      Result := XMLFactory.Cast(xmlNewDocProp(doc, localName, nil), False);
+      Result := XMLFactory.Cast(xmlNewDocProp(doc, xmlCharPtr(LocalName), nil), False);
     NODE_CDATA_SECTION:
       Result := XMLFactory.Cast(xmlNewCDataBlock(doc, nil, 0), False);
     NODE_COMMENT:
@@ -2051,30 +2082,25 @@ begin
     NODE_TEXT:
       Result := XMLFactory.Cast(xmlNewDocText(doc, nil), False);
     NODE_ELEMENT:
-      if href = nil then
-        Result := XMLFactory.Cast(xmlNewDocNode(doc, nil, localName, nil), False)
+      if href = '' then
+        Result := XMLFactory.Cast(xmlNewDocNode(doc, nil, xmlCharPtr(LocalName), nil), False)
       else
-        Result := XMLFactory.Cast(xmlNewDocNode(doc, xmlNewNs(nil, href, prefix), localName, nil), False);
+        Result := XMLFactory.Cast(xmlNewDocNode(doc, xmlNewNs(nil, xmlCharPtr(HRef), xmlCharPtr(Prefix)), xmlCharPtr(LocalName), nil), False);
     NODE_PROCESSING_INSTRUCTION:
-      Result := XMLFactory.Cast(xmlNewDocPI(doc, localName, nil), False);
+      Result := XMLFactory.Cast(xmlNewDocPI(doc, xmlCharPtr(LocalName), nil), False);
   else
     Result := nil;
   end;
-  xmlFree(Prefix);
-  xmlFree(LocalName);
-  xmlFree(HRef);
 end;
 
 function TXMLDocument.CreateProcessingInstruction(const Target, Data: string): IXMLProcessingInstruction;
 begin
-  xmlResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocPI(Doc, LocalXmlStr(Target), LocalXmlStr(Data))) as IXMLProcessingInstruction;
+  Result := XMLFactory.Cast(xmlNewDocPI(Doc, xmlCharPtr(Utf8Encode(Target)), xmlCharPtr(Utf8Encode(Data)))) as IXMLProcessingInstruction;
 end;
 
 function TXMLDocument.CreateTextNode(const Data: string): IXMLText;
 begin
-  xmlResetLocalBuffers;
-  Result := XMLFactory.Cast(xmlNewDocText(Doc, LocalXmlStr(Data))) as IXMLText;
+  Result := XMLFactory.Cast(xmlNewDocText(Doc, xmlCharPtr(Utf8Encode(Data)))) as IXMLText;
 end;
 
 procedure TXMLDocument.ErrorCallback(const error: xmlError);
@@ -2148,7 +2174,7 @@ end;
 
 function TXMLDocument.Get_Url: string;
 begin
-  Result := doc.URL;
+  Result := Utf8ToUnicodeString(doc.URL);
 end;
 
 function TXMLDocument.Get_ValidateOnParse: Boolean;
@@ -2221,8 +2247,7 @@ end;
 
 function TXMLDocument.NodeFromID(const IdString: string): IXMLNode;
 begin
-  xmlResetLocalBuffers;
-  var Attr := xmlGetID(Doc, LocalXmlStr(IdString));
+  var Attr := xmlGetID(Doc, xmlCharPtr(Utf8Encode(IdString)));
   if Attr = nil then
     Exit(nil);
 
@@ -2236,8 +2261,7 @@ end;
 
 procedure TXMLDocument.Save(const Url: string);
 begin
-  xmlResetLocalBuffers;
-  xmlSaveFile(LocalXmlStr(url), doc);
+  xmlSaveFile(xmlCharPtr(Utf8Encode(url)), doc);
 end;
 
 function TXMLDocument.Save(const FileName, Encoding: string; const Options: TxmlSaveOptions): Boolean;
@@ -2380,7 +2404,7 @@ begin
   if Index >= 0 then
   begin
     var Data := Col.FList[Index].Doc.ToBytes;
-    output := xmlNewInputFromMemory(nil, Pointer(Data), Length(Data), XML_INPUT_BUF_STATIC);
+    output := xmlNewInputFromMemory(nil, xmlCharPtr(Data), Length(Data), XML_INPUT_BUF_STATIC);
     Result := 0;
   end
   else

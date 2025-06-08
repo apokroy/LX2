@@ -163,7 +163,7 @@ begin
     var Parser := TSAXParser.Create;
     try
       Parser.Handler := TSAXConsoleHandler.Create;
-      Parser.IgnoreWhitespaces := True;
+      Parser.PreserveWhitespaces := False;
 
       if not TestEnd(Parser.Parse(TestXml1)) then
       begin

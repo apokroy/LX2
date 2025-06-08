@@ -154,31 +154,20 @@ type
   end;
 
 function  xmlStrSame(P1, P2: xmlCharPtr): Boolean;
+function  xmlStrPtr(const S: RawByteString): xmlCharPtr; inline;
 
 function  xmlCharToStr(const S: xmlCharPtr): string; overload; inline;
+function  xmlCharToStrAndFree(const S: xmlCharPtr): string; overload;inline;
 function  xmlCharToStr(const S: xmlCharPtr; Len: NativeUInt): string; overload;
-function  xmlCharToStrAndFree(const S: xmlCharPtr): string; inline;
+function  xmlCharToRaw(const S: xmlCharPtr): RawByteString; overload; inline;
+function  xmlCharToRaw(const S: xmlCharPtr; Len: NativeUInt): RawByteString; overload;
+function  xmlCharToRawAndFree(const S: xmlCharPtr): RawByteString; inline;
+function  xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
 function  SplitXMLName(const Name: string; out Prefix, LocalName: string): Boolean; overload;
-function  SplitXMLName(const Name: string; out Prefix, LocalName: xmlCharPtr): Boolean; overload;
+function  SplitXMLName(const Name: RawByteString; out Prefix, LocalName: RawByteString): Boolean; overload;
 
-/// <summary>
-/// Reuses the TLS buffer. Be carefully, only for use in functions that copy the values of their arguments.
-/// </summary>
-function  LocalXmlStr(const S: string): xmlCharPtr; overload;
-function  LocalXmlStr(const P: PChar; var Len: NativeUInt): xmlCharPtr; overload;
-
-function Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt; overload;
-function Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
-
-/// <summary>
-/// Call before functions that uses LocalXmlStr, marks all buffers as unsed
-/// </summary>
-procedure xmlResetLocalBuffers;
-
-/// <summary>
-/// Call before the end of the thread to clear all TLS memory buffers. It can also be called to free up unused memory.
-/// </summary>
-procedure xmlFreeLocalBuffers;
+function  Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt; overload;
+function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 
 function  XmlParserOptions(Options: TXmlParserOptions): Integer;
 function  XmlSaveOptions(Options: TxmlSaveOptions): Integer;
@@ -191,150 +180,27 @@ procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);
 
 implementation
 
-{$region 'Using thread local storage for temporary buffers'}
-const
-  TLSBufferCount = 128;
-
 type
-  TTLSBuffer = record
-    Data: Pointer;
-    Size: NativeUInt;
+  PStrRec = ^StrRec;
+  StrRec = packed record
+  {$IF defined(CPU64BITS)}
+    _Padding: Integer; // Make 16 byte align for payload..
+  {$ENDIF}
+    codePage: Word;
+    elemSize: Word;
+    refCnt: Integer;
+    length: Integer;
   end;
 
-  PTLSData = ^TTLSData;
-  TTLSData = record
-    Buffers: array[0..TLSBufferCount - 1] of TTLSBuffer;
-    IsUsed: array[0..TLSBufferCount - 1] of Boolean;
-    LastSlot: NativeUInt;
-  end;
+const
+  CP_UTF16 = 1200;
 
-threadvar
-  TLSData: PTLSData;            // One & only TLS var, that stores data on the heap, because TLS  is slow and limited
-var
-  TLSBuffers: TList<PTLSData>;  // List of buffers to clean up on program exit
-
-function xmlGetLocalBuffer(const Size: NativeUInt): Pointer;
-var
-  TLS: PTLSData;
+function xmlStrPtr(const S: RawByteString): xmlCharPtr;
 begin
-  TLS := TLSData; // Access to thread local storage too slow, use local pointer
-
-  for var I := TLS.LastSlot + 1 to TLSBufferCount - 1 do
-  begin
-    if not TLS.IsUsed[I] then
-    begin
-      if TLS.Buffers[I].Size < Size then
-        ReallocMem(TLS.Buffers[I].Data, Size);
-      TLS.Buffers[I].Size := Size;
-      TLS.IsUsed[I] := True;
-      TLS.LastSlot := I;
-      Exit(TLS.Buffers[I].Data);
-    end;
-  end;
-
-  for var I := 0 to TLS.LastSlot do
-  begin
-    if not TLS.IsUsed[I] then
-    begin
-      if TLS.Buffers[I].Size < Size then
-        ReallocMem(TLS.Buffers[I].Data, Size);
-      TLS.Buffers[I].Size := Size;
-      TLS.IsUsed[I] := True;
-      TLS.LastSlot := I;
-      Exit(TLS.Buffers[I].Data);
-    end;
-  end;
-  Result := nil;
-end;
-
-procedure xmlResetLocalBuffers;
-var
-  TLS: PTLSData;
-begin
-  TLS := TLSData; // Access to thread local storage too slow, use local pointer and data in heap
-  if TLS = nil then
-  begin
-    GetMem(TLS, SizeOf(TTLSData));
-    FillChar(TLS^, SizeOf(TTLSData), 0);
-
-    TLSData := TLS;
-
-    TMonitor.Enter(TLSBuffers);
-    TLSBuffers.Add(TLS);
-    TMonitor.Exit(TLSBuffers);
-  end
-  else if TLS.IsUsed[TLSBufferCount shr 1] then // Reset only if more than half buffers used, that allow small recursions or forgives a small number of forgotten calls
-    FillChar(TLS.IsUsed, SizeOf(TLS.IsUsed), 0);
-end;
-
-procedure xmlFreeLocalBuffers;
-var
-  TLS: PTLSData;
-begin
-  TLS := TLSData;
-  if TLS <> nil then
-  begin
-    TMonitor.Enter(TLSBuffers);
-    TLSBuffers.Remove(TLS);
-    TMonitor.Exit(TLSBuffers);
-
-    for var I := Low(TLS.Buffers) to High(TLS.Buffers) do
-    begin
-      FreeMem(TLS.Buffers[I].Data);
-      TLS.Buffers[I].Size := 0;
-    end;
-    FreeMem(TLS);
-    TLSData := nil;
-  end;
-end;
-
-{$endregion}
-
-function LocalXmlStr(const P: PChar; var Len: NativeUInt): xmlCharPtr; overload;
-var
-  Buffer: Pointer;
-begin
-  if Len = 0 then
-    Exit(nil);
-
-  var DstLen := Len * 3 + 1;
-
-  Buffer := xmlGetLocalBuffer(DstLen);
-  if Buffer = nil then
-    LX2LocalAllocError;
-
-  Len := LocaleCharsFromUnicode(CP_UTF8, 0, P, Len, Buffer, DstLen, nil, nil);
-  if Len > 0 then
-  begin
-    PAnsiChar(Buffer)[Len] := #0;
-    Result := Buffer;
-  end
+  if Length(S) = 0 then
+    Result := nil
   else
-    Result := nil;
-end;
-
-function LocalXmlStr(const S: string): xmlCharPtr;
-var
-  Buffer: Pointer;
-begin
-  var SrcLen := PInteger(UIntPtr(S) - 4)^; //Length(S);
-  if SrcLen = 0 then
-    Exit(nil);
-
-  var DstLen := SrcLen * 3 + 1;
-
-  Buffer := xmlGetLocalBuffer(DstLen);
-  if Buffer = nil then
-    LX2LocalAllocError;
-
-  var L := LocaleCharsFromUnicode(CP_UTF8, 0, Pointer(S), SrcLen, Buffer, DstLen, nil, nil);
-  if L > 0 then
-  begin
-    PAnsiChar(Buffer)[L] := #0;
-    Result := Buffer;
-  end
-  else
-    Result := nil;
+    Result := Pointer(S);
 end;
 
 function Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
@@ -401,24 +267,15 @@ begin
   end;
 end;
 
-function xmlCharToStr(const S: xmlCharPtr; Len: NativeUInt): string;
-type
-  PStrRec = ^StrRec;
-  StrRec = packed record
-  {$IF defined(CPU64BITS)}
-    _Padding: Integer; // Make 16 byte align for payload..
-  {$ENDIF}
-    codePage: Word;
-    elemSize: Word;
-    refCnt: Integer;
-    length: Integer;
-  end;
-
-const
-  CP_UTF16 = 1200;
-
+function xmlCharToStr(const S: xmlCharPtr): string;
 begin
-  if (S = nil) or (S = '') or (Len = 0) then Exit('');
+  Result := xmlCharToStr(S, Length(S));
+end;
+
+function xmlCharToStr(const S: xmlCharPtr; Len: NativeUInt): string;
+begin
+  if Len = 0 then
+    Exit('');
 
   var L := Utf8toUtf16Count(S, Len);
   var Size := SizeOf(StrRec) + (L + 1) shl 1;
@@ -433,16 +290,65 @@ begin
   UnicodeFromLocaleChars(CP_UTF8, 0, S, Len, Pointer(Result), L);
 end;
 
-function xmlCharToStr(const S: xmlCharPtr): string;
+function xmlCharToRaw(const S: xmlCharPtr; Len: NativeUInt): RawByteString;
+var
+  P: PStrRec;
 begin
-  if (S = nil) or (S = '') then Exit('');
-  Result := xmlCharToStr(S, Length(S));
+  if Len = 0 then
+    Exit('');
+
+  var L := NativeUInt(Len) + SizeOf(StrRec) + 1 + ((NativeUInt(Len) + 1) and 1);
+  GetMem(P, L);
+  Pointer(Result) := Pointer(PByte(P) + SizeOf(StrRec));
+  P.length := Len;
+  P.refcnt := 1;
+  P.codePage := CP_UTF8;
+  P.elemSize := 1;
+  PWideChar(Pointer(Result))[Len shr 1] := #0;
+  Move(S^, Pointer(Result)^, Len);
+end;
+
+function xmlCharToRaw(const S: xmlCharPtr): RawByteString;
+begin
+  Result := xmlCharToRaw(S, Length(S));
+end;
+
+function xmlCharToRawAndFree(const S: xmlCharPtr): RawByteString;
+begin
+  if S = nil then
+    Exit('');
+  Result := xmlCharToRaw(S);
+  xmlFree(S);
 end;
 
 function xmlCharToStrAndFree(const S: xmlCharPtr): string;
 begin
+  if S = nil then
+    Exit('');
   Result := xmlCharToStr(S);
   xmlFree(S);
+end;
+
+function xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
+begin
+  if prefix = nil then
+    Exit(xmlCharToRaw(Name));
+
+  var L1 := 0;
+  while Prefix[L1] <> #0 do
+    Inc(L1);
+
+  if L1 = 0 then
+    Exit(xmlCharToRaw(Name));
+
+  var L2 := 0;
+  while Name[L2] <> #0 do
+    Inc(L2);
+
+  SetString(Result, nil, L1 + L2 + 1);
+  Move(Prefix^, Pointer(Result)^, L1);
+  Result[L1 + 1] := ':';
+  Move(Name^, (PByte(Result) + L1 + 1)^, L2);
 end;
 
 function SplitXMLName(const Name: string; out Prefix, LocalName: string): Boolean;
@@ -460,24 +366,18 @@ begin
   Result := False;
 end;
 
-function SplitXMLName(const Name: string; out Prefix, LocalName: xmlCharPtr): Boolean;
-var
-  Len: NativeUInt;
+function SplitXMLName(const Name: RawByteString; out Prefix, LocalName: RawByteString): Boolean;
 begin
-  var P := PChar(Pointer(Name));
+  var P := PAnsiChar(Pointer(Name));
   var L := Length(Name);
   for var I := 0 to L - 1 do
     if P[I] = ':' then
     begin
-      Len := I;
-      Prefix := LocalXmlStr(P, Len);
-      Len := L - I - 1;
-      LocalName := LocalXmlStr(PChar(@P[I + 1]), Len);
+      SetString(Prefix, P, I);
+      SetString(LocalName, PAnsiChar(@P[I + 1]), L - I - 1);
       Exit(True);
     end;
-  Prefix := nil;
-  Len := L;
-  LocalName := LocalXmlStr(P, Len);
+  LocalName := Name;
   Result := False;
 end;
 
@@ -648,14 +548,5 @@ begin
   FLine   := err.line;
   FCol    := err.int2;
 end;
-
-initialization
-  TLSBuffers := TList<PTLSData>.Create;
-  xmlResetLocalBuffers;
-
-finalization
-  xmlFreeLocalBuffers;
-
-  FreeAndNil(TLSBuffers);
 
 end.

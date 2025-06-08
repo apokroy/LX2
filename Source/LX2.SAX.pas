@@ -128,7 +128,7 @@ type
   private
     FErrors: TXmlParseErrors;
     FLocator: TSAXLocator;
-    FIgnoreWhitespaces: Boolean;
+    FPreserveWhitespaces: Boolean;
     function  GetLocator: ISAXLocator; inline;
   protected
     procedure PrepareContext; override;
@@ -155,7 +155,7 @@ type
     destructor Destroy; override;
     property  Locator: ISAXLocator read GetLocator;
     property  Errors: TXmlParseErrors read FErrors;
-    property  IgnoreWhitespaces: Boolean read FIgnoreWhitespaces write FIgnoreWhitespaces;
+    property  PreserveWhitespaces: Boolean read FPreserveWhitespaces write FPreserveWhitespaces;
   end;
 
   TSAXParser = class(TSAXCustomParser)
@@ -620,8 +620,6 @@ var
   AttrList: TSAXAttributes;
   NsList: TSAXNamespaces;
 begin
-  xmlResetLocalBuffers;
-
   if attributes <> nil then
   begin
     SetLength(AttrList, nb_attributes);
@@ -633,7 +631,7 @@ begin
       AttrList[I].Prefix := xmlCharToStr(Attr.prefix);
       AttrList[I].URI := xmlCharToStr(Attr.URI);
       AttrList[I].Defaulted := I >= (nb_attributes - nb_defaulted);
-      SetString(AttrList[I].Value, Attr.value, Attr.valueEnd - Attr.value);
+      AttrList[I].Value := xmlCharToStr(Attr.value, NativeUInt(Attr.valueEnd - Attr.value));
       Inc(Attr);
     end;
   end;
@@ -661,7 +659,7 @@ end;
 
 procedure TSAXCustomParser.Characters(const ch: xmlCharPtr; len: Integer);
 begin
-  if IgnoreWhitespaces then
+  if not PreserveWhitespaces then
   begin
     while len > 0 do
       if ch[len - 1] = #32 then
