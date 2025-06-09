@@ -228,6 +228,10 @@ type
     function  GetAttributeNode(const Name: string): IXMLAttribute; overload;
     function  GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute; overload;
     function  Get_TagName: string;
+    function  HasAttribute(const Name: string): Boolean;
+    function  HasAttributeNs(const NamespaceURI, Name: string): Boolean;
+    function  AddChild(const Name: string; const Content: string = ''): IXMLElement;
+    function  AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
     function  RemoveAttribute(const Name: string): Boolean;
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
@@ -297,6 +301,8 @@ type
   IXMLDocument = interface(IXMLNode)
     ['{ACAA6E03-6C69-45D9-A8C4-1DC1996CEB17}']
     function  Clone(Recursive: Boolean = True): IXMLDocument;
+    function  CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
+    function  CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
     function  GetErrors: IXMLErrors;
     function  GetXSLTErrors: IXSLTErrors;
     function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
@@ -323,6 +329,7 @@ type
     function  Get_DocumentElement: IXMLElement;
     procedure Set_DocumentElement(const Element: IXMLElement);
     function  CreateElement(const tagName: string): IXMLElement;
+    function  CreateElementNs(const NamespaceURI, Name: string): IXMLElement;
     function  CreateDocumentFragment: IXMLDocumentFragment;
     function  CreateTextNode(const data: string): IXMLText;
     function  CreateComment(const data: string): IXMLComment;
@@ -357,7 +364,7 @@ type
   private
     class var FOldDeregisterNodeFunc: xmlDeregisterNodeFunc;
   protected
-    class constructor Create;
+    constructor Create;
     class property OldDeregisterNodeFunc: xmlDeregisterNodeFunc read FOldDeregisterNodeFunc;
   end;
 
@@ -642,6 +649,10 @@ type
     function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
     function  GetAttributeNode(const Name: string): IXMLAttribute;
     function  GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute;
+    function  HasAttribute(const Name: string): Boolean;
+    function  HasAttributeNs(const NamespaceURI, Name: string): Boolean;
+    function  AddChild(const Name: string; const Content: string = ''): IXMLElement;
+    function  AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
     function  RemoveAttribute(const Name: string): Boolean;
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
@@ -754,6 +765,7 @@ type
     procedure Set_documentElement(const Element: IXMLElement);
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateElement(const TagName: string): IXMLElement;
+    function  CreateElementNs(const NamespaceURI, Name: string): IXMLElement;
     function  CreateDocumentFragment: IXMLDocumentFragment;
     function  CreateTextNode(const data: string): IXMLText;
     function  CreateComment(const data: string): IXMLComment;
@@ -761,6 +773,8 @@ type
     function  CreateProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
     function  CreateAttribute(const name: string): IXMLAttribute;
     function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
+    function  CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
     function  CreateNode(NodeType: Integer; const name: string; const namespaceURI: string): IXMLNode;
     function  NodeFromID(const IdString: string): IXMLNode;
     function  Get_ReadyState: Integer;
@@ -831,6 +845,20 @@ begin
     TXMLNode(Node._private).NodePtr := nil;
     TXMLNode(Node._private).Unlink;
     Node._private := nil;
+
+    // if doc not owned, and parent elements too, we must free all document
+    if (Node.doc <> nil) and (Node.doc._private = nil) then
+    begin
+      var Parent := Node.parent;
+      while Parent <> nil do
+      begin
+        if Parent._private <> nil then
+          Break;
+        Parent := Parent.Parent;
+      end;
+      if Parent = nil then
+        xmlFreeDoc(Node.doc);
+    end;
   end;
 
   if Assigned(TXMLObject.OldDeregisterNodeFunc) then
@@ -895,11 +923,12 @@ end;
 
 { TXMLObject }
 
-class constructor TXMLObject.Create;
+constructor TXMLObject.Create;
 begin
   LX2Lib.Initialize;
 
-  FOldDeregisterNodeFunc := xmlDeregisterNodeDefault(NodeFreeCallback);
+  if Assigned(FOldDeregisterNodeFunc) then
+    FOldDeregisterNodeFunc := xmlDeregisterNodeDefault(NodeFreeCallback);
 end;
 
 { TXMLEnumerator }
@@ -1476,12 +1505,12 @@ end;
 function TXMLNode.Get_OwnerDocument: IXMLDocument;
 begin
   Result := XMLFactory.Cast(NodePtr.OwnerDocument, False);
+  Link;
 end;
 
 function TXMLNode.Get_ParentNode: IXMLNode;
 begin
-  Result := XMLFactory.Cast(NodePtr.parent);
-  if Result <> nil then Result.Link;
+  Result := XMLFactory.Cast(NodePtr.parent, True);
 end;
 
 function TXMLNode.Get_Prefix: string;
@@ -1674,6 +1703,26 @@ end;
 function TXMLElement.SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
 begin
   Result := XMLFactory.Cast(NodePtr.SetAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Value))));
+end;
+
+function TXMLElement.HasAttribute(const Name: string): Boolean;
+begin
+  Result := NodePtr.HasAttribute(xmlCharPtr(Utf8Encode(Name)));
+end;
+
+function TXMLElement.HasAttributeNs(const NamespaceURI, Name: string): Boolean;
+begin
+  Result := NodePtr.HasAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)));
+end;
+
+function TXMLElement.AddChild(const Name: string; const Content: string = ''): IXMLElement;
+begin
+  Result := XMLFactory.Cast(NodePtr.AddChild(xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Content)))) as IXMLElement;
+end;
+
+function TXMLElement.AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
+begin
+  Result := XMLFactory.Cast(NodePtr.AddChildNs(xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Content)))) as IXMLElement;
 end;
 
 function TXMLElement.GetElementsByTagName(const tagName: string): IXMLNodeList;
@@ -2032,24 +2081,23 @@ begin
 end;
 
 function TXMLDocument.CreateElement(const TagName: string): IXMLElement;
-var
-  Prefix, LocalName: RawByteString;
 begin
-  SplitXMLName(Utf8Encode(TagName), Prefix, LocalName);
+  Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, xmlCharPtr(Utf8Encode(TagName)), nil), False) as IXMLElement;
+end;
 
-  if Prefix = '' then
-    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, xmlCharPtr(LocalName), nil), False) as IXMLElement
-  else
-  begin
-    var Node := Doc.documentElement;
-    if Node <> nil then
-    begin
-      var Ns := Node.SearchNs(Prefix);
-      if Ns <> nil then
-        Exit(XMLFactory.Cast(xmlNewDocRawNode(Doc, Ns, xmlCharPtr(LocalName), nil), False) as IXMLElement)
-    end;
-    Result := XMLFactory.Cast(xmlNewDocRawNode(Doc, nil, xmlCharPtr(LocalName), nil), False) as IXMLElement;
-  end;
+function TXMLDocument.CreateElementNs(const NamespaceURI, Name: string): IXMLElement;
+begin
+  Result := XMLFactory.Cast(Doc.CreateElementNs(Utf8Encode(NamespaceURI), Utf8Encode(Name)), False) as IXMLElement;
+end;
+
+function TXMLDocument.CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
+begin
+  Result := XMLFactory.Cast(Doc.CreateRoot(Utf8Encode(RootName), Utf8Encode(NamespaceURI), Utf8Encode(Content))) as IXMLElement;
+end;
+
+function TXMLDocument.CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
+begin
+  Result := XMLFactory.Cast(Doc.CreateChild(Parent.Ptr, Utf8Encode(Name), Utf8Encode(NamespaceURI), ResolveNamespace, Utf8Encode(Content))) as IXMLElement;
 end;
 
 function TXMLDocument.CreateNode(NodeType: Integer; const Name, NamespaceURI: string): IXMLNode;
@@ -2282,6 +2330,7 @@ end;
 procedure TXMLDocument.Set_documentElement(const Element: IXMLElement);
 begin
   doc.documentElement := Element.Ptr;
+  Element.Link;
 end;
 
 procedure TXMLDocument.Set_preserveWhiteSpace(isPreserving: Boolean);
