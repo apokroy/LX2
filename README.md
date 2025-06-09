@@ -32,6 +32,8 @@ XSLTLib initialization called only when you use methods that need it, IXMLDocume
 #### Sample
 - [Sample 1](/Samples/LX2SampleHelpers1.dpr) Load XML from string, output result, formatted output, canonicalization.
 - [Sample 2](/Samples/LX2SampleHelpers2.dpr) XSLT Transform sample.
+- [Sample 3](/Samples/LX2SampleHelpers3.dpr) Traverse nodes.
+- [Sample 4](/Samples/LX2SampleHelpers4.dpr) Create tree from code.
 ### Error handling
 ### xmlNodePtr
 ### xmlDocPtr
