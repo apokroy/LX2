@@ -30,6 +30,8 @@ begin
   Doc.DocumentElement.AppendChild(Child);
   TestEnd(Child.AddChild('ChildChild', 'привет') <> nil);
 
+  Child.SetAttribute('Hello', 'World');
+
   TestStart('Remove child');
   TestEnd(Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild) <> nil);
 
