@@ -158,6 +158,8 @@ end;
 
 begin
   try
+    StartTests;
+
     TestStart('SAX Parser');
 
     var Parser := TSAXParser.Create;
@@ -185,6 +187,8 @@ begin
     finally
       Parser.Free;
     end;
+
+    EndTests;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

@@ -6,9 +6,6 @@ program LX2SampleHelpers4;
 
 uses
   System.SysUtils,
-  msxmlIntf,
-  Winapi.msxml,
-  Comobj,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
@@ -23,9 +20,7 @@ var
   node: xmlNodePtr;
 begin
    try
-    TestStart('LX2 Init');
-    LX2Lib.Initialize;
-    TestEnd(True);
+    StartTests;
 
     TestStart('Create doc');
     var doc := xmlDoc.Create;
@@ -79,6 +74,9 @@ begin
     doc.documentElement := root;
     WriteLn(doc.Xml);
 
+    doc.Free;
+
+    EndTests;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

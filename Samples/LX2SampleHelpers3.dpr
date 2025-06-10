@@ -56,9 +56,7 @@ begin
   WriteLn(d.documentElement.firstChild.baseName);}
 
   try
-    TestStart('LX2 Init');
-    LX2Lib.Initialize;
-    TestEnd(True);
+    StartTests;;
 
     TestStart('LOAD FROM STRING');
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
@@ -74,6 +72,10 @@ begin
     Traverse(xmlNodePtr(Doc));
 
     TestEnd(True);
+
+    Doc.Free;
+
+    EndTests;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

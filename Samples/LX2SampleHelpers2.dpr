@@ -17,9 +17,7 @@ var
   Result: xmlDocPtr;
 begin
   try
-    TestStart('LX2 Init');
-    LX2Lib.Initialize;
-    TestEnd(True);
+    StartTests;
 
     TestStart('LOAD XML');
 
@@ -45,8 +43,10 @@ begin
       WriteLn(Result.ToString(True));
 
     Style.Free;
-    Doc.Free;
     Result.Free;
+    Doc.Free;
+
+    EndTests;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

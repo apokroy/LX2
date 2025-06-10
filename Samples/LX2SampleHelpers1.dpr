@@ -17,11 +17,7 @@ uses
 
 begin
   try
-    TestStart('LX2 Init');
-
-    LX2Lib.Initialize;
-
-    TestEnd(True);
+    StartTests;
 
     TestStart('LOAD FROM STRING');
 
@@ -57,6 +53,8 @@ begin
     end;
 
     Doc.Free;
+
+    EndTests;
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);
