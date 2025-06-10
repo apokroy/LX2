@@ -122,7 +122,6 @@ type
     function  Contains(const Node: xmlNodePtr): Boolean; inline;
     function  HasAttributes: Boolean; inline;
     function  IsDefaultNamespace(const namespaceURI: RawByteString): Boolean; inline;
-    //TODO: procedure Normalize;
 
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
@@ -229,7 +228,13 @@ type
     property  Xml: RawByteString read GetXml;
   end;
 
+  PXmlErrorCallback = ^TXmlErrorCallback;
+  TXmlErrorCallback = record
+    Handler: xmlDocErrorHandler;
+  end;
+
 procedure xmlDocErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
+
 
 implementation
 
@@ -248,21 +253,6 @@ end;
 
 procedure IOCloseStream(context: Pointer); cdecl;
 begin
-end;
-
-function ParseStylesheet(const stylesheet: xmlDocPtr): xsltStylesheetPtr;
-begin
-  XSLTLib.Initialize;
-
-  // Workaround xsltFreeStylesheet frees stylesheet document
-  var clone := xmlCopyDoc(stylesheet, 1);
-  if clone = nil then
-    Exit(nil);
-
-  Result := xsltParseStylesheetDoc(clone);
-
-  if Result = nil then
-    xmlFreeDoc(clone);
 end;
 
 { xmlNamespacesHelper }
@@ -728,12 +718,16 @@ procedure xmlNodeHelper.RemoveAttribute(const name: RawByteString);
 begin
   var prop := xmlHasProp(@Self, xmlStrPtr(name));
   if prop <> nil then
+  begin
     xmlRemoveProp(prop);
+    xmlReconciliateNs(doc, @Self);
+  end;
 end;
 
 procedure xmlNodeHelper.RemoveAttributeNode(const Attr: xmlAttrPtr);
 begin
   xmlRemoveProp(Attr);
+  xmlReconciliateNs(doc, @Self);
 end;
 
 function xmlNodeHelper.RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr;
@@ -971,17 +965,11 @@ end;
 
 { xmlDocHelper }
 
-type
-  PXmlCallback = ^TXmlCallback;
-  TXmlCallback = record
-    Handler: xmlDocErrorHandler;
-  end;
-
 procedure xmlDocErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 begin
   if userData <> nil then
-    if Assigned(PXmlCallback(userData).Handler) then
-      PXmlCallback(userData).Handler(error^);
+    if Assigned(PXmlErrorCallback(userData).Handler) then
+      PXmlErrorCallback(userData).Handler(error^);
 end;
 
 class function xmlDocHelper.Create(const Version: RawByteString): xmlDocPtr;
@@ -1006,7 +994,7 @@ end;
 
 class function xmlDocHelper.Create(const Data: Pointer; Size: NativeUInt; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
 var
-  ecb: TXmlCallback;
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlNewParserCtxt();
   if ctx = nil then
@@ -1031,7 +1019,7 @@ end;
 class function xmlDocHelper.CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
 var
   input: xmlParserInputPtr;
-  ecb: TXmlCallback;
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlNewParserCtxt();
   if ctx = nil then
@@ -1055,7 +1043,7 @@ end;
 
 class function xmlDocHelper.Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
 var
-  ecb: TXmlCallback;
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlNewParserCtxt();
   if ctx = nil then
@@ -1308,6 +1296,21 @@ begin
   XmlFree(Data);
 end;
 
+function ParseStylesheet(const stylesheet: xmlDocPtr): xsltStylesheetPtr;
+begin
+  XSLTLib.Initialize;
+
+  // Workaround xsltFreeStylesheet frees stylesheet document
+  var clone := xmlCopyDoc(stylesheet, 1);
+  if clone = nil then
+    Exit(nil);
+
+  Result := xsltParseStylesheetDoc(clone);
+
+  if Result = nil then
+    xmlFreeDoc(clone);
+end;
+
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean;
 begin
   Result := False;
@@ -1397,9 +1400,9 @@ begin
   Result := xmlSaveFinish(ctx) = XML_ERR_OK;
 end;
 
-function xmlDocHelper.validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
+function xmlDocHelper.Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
 var
-  ecb: TXmlCallback;
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlNewParserCtxt;
   if Assigned(ErrorHandler) then
@@ -1413,7 +1416,7 @@ end;
 
 function xmlDocHelper.ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler): Boolean;
 var
-  ecb: TXmlCallback;
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlNewParserCtxt;
   if Assigned(ErrorHandler) then

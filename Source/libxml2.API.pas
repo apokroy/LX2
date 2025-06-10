@@ -3235,6 +3235,7 @@ type
   xmlResourceLoader         = function(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;
 
 var
+  xmlCleanupParser          : procedure; cdecl;
   xmlClearNodeInfoSeq       : procedure(seq: xmlParserNodeInfoSeqPtr); cdecl;
   xmlCreateDocParserCtxt    : function (const cur: XmlCharPtr): xmlParserCtxtPtr; cdecl;
   xmlCreateEntityParserCtxt : function (URL, ID, base: xmlCharPtr): xmlParserCtxtPtr; cdecl;
@@ -4205,6 +4206,7 @@ class procedure LX2Lib.Unload;
 begin
   if Handle <> 0 then
   begin
+    xmlCleanupParser;
     FreeLibrary(Handle);
     Handle := 0;
   end;
@@ -4288,23 +4290,24 @@ begin
   xmlCharEncOutFunc            := GetProcAddress(Handle, 'xmlCharEncOutFunc');
   xmlChildElementCount         := GetProcAddress(Handle, 'xmlChildElementCount');
   xmlCleanupEncodingAliases    := GetProcAddress(Handle, 'xmlCleanupEncodingAliases');
-  xmlCleanupInputCallbacks  := GetProcAddress(Handle, 'xmlCleanupInputCallbacks');
-  xmlCleanupOutputCallbacks := GetProcAddress(Handle, 'xmlCleanupOutputCallbacks');
-  xmlClearNodeInfoSeq       := GetProcAddress(Handle, 'xmlClearNodeInfoSeq');
+  xmlCleanupInputCallbacks     := GetProcAddress(Handle, 'xmlCleanupInputCallbacks');
+  xmlCleanupOutputCallbacks    := GetProcAddress(Handle, 'xmlCleanupOutputCallbacks');
+  xmlCleanupParser             := GetProcAddress(Handle, 'xmlCleanupParser');
+  xmlClearNodeInfoSeq          := GetProcAddress(Handle, 'xmlClearNodeInfoSeq');
   xmlConvertSGMLCatalog        := GetProcAddress(Handle, 'xmlConvertSGMLCatalog');
   xmlCopyDoc                   := GetProcAddress(Handle, 'xmlCopyDoc');
   xmlCopyDtd                   := GetProcAddress(Handle, 'xmlCopyDtd');
   xmlCopyEntitiesTable         := GetProcAddress(Handle, 'xmlCopyEntitiesTable');
-  xmlCopyError              := GetProcAddress(Handle, 'xmlCopyError');
+  xmlCopyError                 := GetProcAddress(Handle, 'xmlCopyError');
   xmlCopyNamespace             := GetProcAddress(Handle, 'xmlCopyNamespace');
   xmlCopyNamespaceList         := GetProcAddress(Handle, 'xmlCopyNamespaceList');
   xmlCopyProp                  := GetProcAddress(Handle, 'xmlCopyProp');
   xmlCopyPropList              := GetProcAddress(Handle, 'xmlCopyPropList');
   xmlCreateCharEncodingHandler := GetProcAddress(Handle, 'xmlCreateCharEncodingHandler');
-  xmlCreateDocParserCtxt    := GetProcAddress(Handle, 'xmlCreateDocParserCtxt');
+  xmlCreateDocParserCtxt       := GetProcAddress(Handle, 'xmlCreateDocParserCtxt');
   xmlCreateEntitiesTable       := GetProcAddress(Handle, 'xmlCreateEntitiesTable');
-  xmlCreateEntityParserCtxt := GetProcAddress(Handle, 'xmlCreateEntityParserCtxt');
-  xmlCreateFileParserCtxt   := GetProcAddress(Handle, 'xmlCreateFileParserCtxt');
+  xmlCreateEntityParserCtxt    := GetProcAddress(Handle, 'xmlCreateEntityParserCtxt');
+  xmlCreateFileParserCtxt      := GetProcAddress(Handle, 'xmlCreateFileParserCtxt');
   xmlCreateIntSubset           := GetProcAddress(Handle, 'xmlCreateIntSubset');
   xmlCreateIOParserCtxt     := GetProcAddress(Handle, 'xmlCreateIOParserCtxt');
   xmlCreateMemoryParserCtxt := GetProcAddress(Handle, 'xmlCreateMemoryParserCtxt');
@@ -4929,6 +4932,8 @@ begin
   xmlTextReaderSetResourceLoader:= GetProcAddress(Handle, 'xmlTextReaderSetResourceLoader');
 
 {$endregion}
+
+  xmlMemSetup(xmlMemFree, xmlMemMalloc, xmlMemRealloc, xmlMemoryStrdup);
 
   xmlMemGet(xmlFree, xmlMalloc, xmlRealloc, xmlStrdup);
 
