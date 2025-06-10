@@ -33,9 +33,10 @@ requires
 contains
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
-  LX2.DOM in '..\Source\LX2.DOM.pas',
+  LX2.Types in '..\Source\LX2.Types.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
   LX2.SAX in '..\Source\LX2.SAX.pas',
-  LX2.Types in '..\Source\LX2.Types.pas';
+  LX2.DOM in '..\Source\LX2.DOM.pas',
+  LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas';
 
 end.
