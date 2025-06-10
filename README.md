@@ -49,6 +49,7 @@ XSLTLib initialization called only when you use methods that need it, IXMLDocume
 
 ## LX2.DOM
 #### Sample
+- [Sample 1](/Samples/LX2SampleDOM1.dpr) Load XML from string, modify tree, formatted output.
 ### Interface list
 #### IXMLEnumerator
 #### IXMLError
