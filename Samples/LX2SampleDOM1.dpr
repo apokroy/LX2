@@ -1,4 +1,4 @@
-program LX2SampleDOM1;
+ï»¿program LX2SampleDOM1;
 
 {$APPTYPE CONSOLE}
 
@@ -28,7 +28,7 @@ begin
   TestStart('Append child');
   var Child := Doc.CreateElement('test2');
   Doc.DocumentElement.AppendChild(Child);
-  TestEnd(Child.AddChild('ChildChild', 'ïðèâåò') <> nil);
+  TestEnd(Child.AddChild('ChildChild', 'Ð¿Ñ€Ð¸Ð²ÐµÑ‚') <> nil);
 
   TestStart('Remove child');
   TestEnd(Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild) <> nil);
