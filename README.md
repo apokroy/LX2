@@ -37,7 +37,7 @@ Unit contains record helpers for libxml2 structures, that provides more "object 
 
 Sample code:
 ```Delphi
-var Doc := xmlDoc.CreateFromFile('C:\Test.xml');
+var Doc := xmlDoc.CreateFromFile('C:\Test.xml', DefaultParserOptions);
 
 WriteLn(Doc.ToString(True));
 
@@ -49,7 +49,7 @@ Doc.Free;
 ```
 For example xmlDoc.CreateFromFile wraps this code:
 ```Delphi
-class function xmlDocHelper.CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
+class function xmlDocHelper.CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr;
 var
   input: xmlParserInputPtr;
   ecb: TXmlErrorCallback;
