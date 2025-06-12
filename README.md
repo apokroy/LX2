@@ -10,7 +10,6 @@ Contains:
 - DOM interfaces that are close to the W3C standards and the MSXML library (LX2.DOM).
 - If you need it, binaries to Win64 & Linux in repository.
 
-
 ## Initialize library
 Before using the library, it must be initialized. You can specify which files will be used or use default settings.
 You may load specific version: 
@@ -27,8 +26,53 @@ Initialization is not necessary for SAX or DOM interfaces, LX2Lib and XSLTLib wi
 XSLTLib initialization called only when you use methods that need it, IXMLDocument.Transform for example.
 
 ## LX2.Types
+Contains types common to all library units (except API wrapper units):
+- Exception classes
+- Delphi style enums
+- Delphi style error classes
+- Utility functions
 
 ## LX2.Helpers
+Unit contains record helpers for libxml2 structures, that provides more "object oriented" style:
+```Delphi
+var Doc := xmlDoc.CreateFromFile('C:\Test.xml');
+
+WriteLn(Doc.ToString(True));
+
+var C14NDoc := Doc.Canonicalize;
+WriteLn(C14NDoc.Xml);
+
+C14NDoc.Free;
+Doc.Free;
+```
+For example xmlDoc.CreateFromFile wraps this code:
+```Delphi
+class function xmlDocHelper.CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
+var
+  input: xmlParserInputPtr;
+  ecb: TXmlErrorCallback;
+begin
+  var ctx := xmlNewParserCtxt();
+  if ctx = nil then
+    Exit(nil);
+
+  if Assigned(ErrorHandler) then
+  begin
+    ecb.Handler := ErrorHandler;
+    xmlCtxtSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);
+  end;
+
+  xmlCtxtUseOptions(ctx, XmlParserOptions(Options));
+
+  if xmlNewInputFromUrl(xmlCharPtr(Utf8Encode(filename)), XML_INPUT_BUF_STATIC, input) = XML_ERR_OK then
+    Result := xmlCtxtParseDocument(ctx, input)
+  else
+    Result := nil;
+
+  xmlFreeParserCtxt(ctx);
+end;
+```
+
 #### Sample
 - [Sample 1](/Samples/LX2SampleHelpers1.dpr) Load XML from string, output result, formatted output, canonicalization.
 - [Sample 2](/Samples/LX2SampleHelpers2.dpr) XSLT Transform sample.
