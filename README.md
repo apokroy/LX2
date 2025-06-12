@@ -37,15 +37,17 @@ Unit contains record helpers for libxml2 structures, that provides more "object 
 
 Sample code:
 ```Delphi
-var Doc := xmlDoc.CreateFromFile('C:\Test.xml', DefaultParserOptions);
+var Doc := xmlDoc.CreateFromFile('C:\Test.xml', DefaultParserOptions); //Loads file to xmlDoc tree
 
-WriteLn(Doc.ToString(True));
+WriteLn(Doc.ToString(True));     // Get formatted (True) XML as Delphi string (UTF16)
 
-var C14NDoc := Doc.Canonicalize;
-WriteLn(C14NDoc.Xml);
+var C14NDoc := Doc.Canonicalize; // Create new canonicalized document from source document, with defaults to TXmlC14NMode.xmlC14N (1.0 spec)
+WriteLn(C14NDoc.Xml);            // Output XML as non formatted UTF8 string
 
-C14NDoc.Free;
-Doc.Free;
+C14NDoc.Save(MyStream, 'UTF-8'); // Saves XML to provided TStream object 
+
+C14NDoc.Free;                    // xmlFreeDoc(C14NDoc);
+Doc.Free;                        // xmlFreeDoc(Doc);
 ```
 For example xmlDoc.CreateFromFile wraps this code:
 ```Delphi
