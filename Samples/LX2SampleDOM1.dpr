@@ -8,6 +8,7 @@ uses
   System.SysUtils,
   libxml2.API,
   libxslt.API,
+  LX2.Types,
   LX2.DOM,
   LX2.DOM.Classes,
   LX2SampleXML in 'LX2SampleXML.pas',
@@ -32,6 +33,8 @@ begin
 
   Child.SetAttribute('Hello', 'World');
 
+  Child.Attributes.SetNamedItem
+
   TestStart('Remove child');
   TestEnd(Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild) <> nil);
 
@@ -52,7 +55,7 @@ begin
     EndTests;
 
     Write('Unreleased objects: ');
-    WriteLn(NodeObjectCount);
+    WriteLn(DebugObjectCount);
   except
     on E: Exception do
       Writeln(E.ClassName, ': ', E.Message);

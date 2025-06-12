@@ -6,9 +6,9 @@ program LX2SampleHelpers3;
 
 uses
   System.SysUtils,
-  msxmlIntf,
+{  msxmlIntf,
   Winapi.msxml,
-  Comobj,
+  Comobj,}
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',

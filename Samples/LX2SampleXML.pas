@@ -6,7 +6,7 @@ const
   TestXml1: Utf8String =
   '''
   <?xml version="1.0"?>
-  <Tests xmlns:tst="http://test/sample">
+  <Tests xmlns:tst="http://test/sample" tst:name="sample">
     <Test     TestType="CMD" tst:TestId="0001">
       <Name>Convert number to string</Name>
       <CommandLine>Examp1.EXE</CommandLine>
