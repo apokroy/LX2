@@ -81,7 +81,6 @@ type
     function  GetValue: RawByteString;
     procedure SetNodeName(const Value: RawByteString); inline;
   public
-    function  GetNext(Node: xmlNodePtr): xmlNodePtr;
     function  ChildElementCount: NativeInt; inline;
     function  NextElementSibling: xmlNodePtr; inline;
     function  FirstElementChild: xmlNodePtr; inline;
@@ -100,9 +99,9 @@ type
     function  GetAttributeNode(const name: RawByteString): xmlAttrPtr; overload;
     function  GetAttributeNodeNs(const namespaceURI, name: RawByteString): xmlAttrPtr; overload;
     procedure ReconciliateNs; inline;
+    function  XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
     property  Path: RawByteString read GetPath;
     property  Value: RawByteString read GetValue;
-  public
     function  AddChild(const Name: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
     function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
     function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
@@ -122,7 +121,7 @@ type
     function  Contains(const Node: xmlNodePtr): Boolean; inline;
     function  HasAttributes: Boolean; inline;
     function  IsDefaultNamespace(const namespaceURI: RawByteString): Boolean; inline;
-
+    function  GetNext(Root: xmlNodePtr): xmlNodePtr;
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
@@ -167,7 +166,6 @@ type
     property  LocalName: RawByteString read GetLocalName write SetLocalName;
     property  NamespaceURI: RawByteString read GetNamespaceURI;
     property  NextSibling: xmlAttrPtr read GetNextSibling;
-    property  Name: RawByteString read GetName;
     property  NodeName: RawByteString read GetName;
     property  Value: RawByteString read GetValue write SetValue;
     property  OwnerDocument: xmlDocPtr read GetOwnerDocument;
@@ -459,31 +457,24 @@ begin
   Result := xmlCharToRaw(content);
 end;
 
-function xmlNodeHelper.GetNext(Node: xmlNodePtr): xmlNodePtr;
+function xmlNodeHelper.GetNext(Root: xmlNodePtr): xmlNodePtr;
 begin
-  Result := Node;
-  if Assigned(Result) then
+  if children <> nil then
+    Exit(children)
+  else if next <> nil then
+    Exit(next)
+  else
   begin
-    if Result.children <> nil then
-      Exit(Result.children);
-
-    repeat
-      if Result.next <> nil then
-      begin
-        Result := Result.next;
-        Break;
-      end
+    Result := parent;
+    while True do
+    begin
+      if result = root then
+        Exit(nil)
+      else if Result.next <> nil then
+        Exit(Result.next)
       else
-      begin
-        if Result.parent <> @Self then
-          Result := Result.parent
-        else
-        begin
-          Result := nil;
-          Break;
-        end;
-      end;
-    until False;
+        Result := Result.parent;
+    end;
   end;
 end;
 
@@ -743,11 +734,19 @@ begin
   xmlReconciliateNs(doc, @Self);
 end;
 
-function xmlNodeHelper.SelectNodes(const queryString: RawByteString; const namespaces: xmlNamespaces): xmlNodeArray;
+function xmlNodeHelper.XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
+var
+  ecb: TXmlErrorCallback;
 begin
   var ctx := xmlXPathNewContext(doc);
   try
     xmlXPathSetContextNode(@Self, ctx);
+
+    if Assigned(ErrorHandler) then
+    begin
+      ecb.Handler := ErrorHandler;
+      xmlXPathSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);
+    end;
 
     if Length(namespaces) > 0 then
     begin
@@ -766,19 +765,29 @@ begin
       end;
     end;
 
-    var xpathObj := xmlXPathEvalExpression(xmlStrPtr(queryString), ctx);
-    if (xpathObj = nil) or (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
-      Exit(nil);
+    Result := xmlXPathEvalExpression(xmlStrPtr(queryString), ctx);
+  finally
+    xmlXPathFreeContext(ctx);
+  end;
+end;
 
+function xmlNodeHelper.SelectNodes(const QueryString: RawByteString; const Namespaces: xmlNamespaces): xmlNodeArray;
+begin
+  var xpathObj := XPathEval(queryString, Namespaces, nil);
+  if xpathObj = nil then
+    Exit(nil);
+
+  if (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
+  begin
     var nodes := xpathObj.nodesetval;
     SetLength(Result, nodes.nodeNr);
     for var I := 0 to nodes.nodeNr - 1 do
       Result[I] := nodes.nodeTab[I];
+  end
+  else
+    Result := nil;
 
-    xmlXPathFreeObject(xpathObj);
-  finally
-    xmlXPathFreeContext(ctx);
-  end;
+  xmlXPathFreeObject(xpathObj);
 end;
 
 function xmlNodeHelper.SelectSingleNode(const queryString: RawByteString): xmlNodePtr;
@@ -799,26 +808,9 @@ begin
 end;
 
 procedure xmlNodeHelper.SetAttribute(const Name, Value: RawByteString);
-var
-  Prefix, LocalName: RawByteString;
 begin
-  if SplitXMLName(Name, Prefix, LocalName) then
-  begin
-    if Prefix = 'xmlns' then
-    begin
-      var Ns := xmlSearchNs(doc, @Self, xmlCharPtr(LocalName));
-      if Ns = nil then
-        xmlSetNs(@Self, xmlNewNs(@Self, xmlCharPtr(Value), xmlCharPtr(LocalName)))
-      else
-        xmlSetNs(@Self, Ns);
-    end
-    else
-      xmlSetProp(@Self, xmlStrPtr(Name), xmlStrPtr(Value));
-  end
-  else if Name = 'xmlns' then
-  begin
-    xmlSetNs(@Self, xmlNewNs(@Self, xmlCharPtr(Value), nil));
-  end
+  if Name = 'xmlns' then
+    xmlSetNs(@Self, xmlNewNs(@Self, xmlCharPtr(Value), nil))
   else
     xmlSetProp(@Self, xmlStrPtr(Name), xmlStrPtr(Value));
 end;
@@ -840,13 +832,18 @@ begin
     XML_ATTRIBUTE_NODE,
     XML_TEXT_NODE,
     XML_CDATA_SECTION_NODE,
-    XML_COMMENT_NODE: xmlNodeSetContent(@Self, XmlCharPtr(UTF8Encode(Value)));
+    XML_COMMENT_NODE:
+    begin
+      xmlNodeSetContent(@Self, nil);
+      xmlNodeAddContent(@Self, XmlCharPtr(UTF8Encode(Value)));
+    end;
   end;
 end;
 
 procedure xmlNodeHelper.SetText(const Value: RawByteString);
 begin
-  xmlNodeSetContent(@Self, xmlStrPtr(Value));
+  xmlNodeSetContent(@Self, nil);
+  xmlNodeAddContent(@Self, XmlCharPtr(UTF8Encode(Value)));
 end;
 
 { xmlAttrHelper }

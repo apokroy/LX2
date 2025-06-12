@@ -55,6 +55,9 @@ type
   IXMLAttribute = interface;
   IXMLDocument = interface;
 
+  /// <summary>
+  /// Base interface for all xml enumerators
+  /// </summary>
   IXMLEnumerator = interface
     ['{D54A75D2-9D6F-4219-A895-469BFD549404}']
     function  GetCurrent: IXMLNode;
@@ -63,7 +66,13 @@ type
     property  Current: IXMLNode read GetCurrent;
   end;
 
-  IXMLError = interface
+  /// <summary>
+  /// Returns information about XML Errors
+  /// </summary>
+  /// <remarks>
+  /// MS IXMLDOMParseError compatible
+  /// </remarks>
+  IXMLParseError = interface
     ['{AE5CF111-97C1-4FD3-BFB0-559894DA43B4}']
     function Get_errorCode: Integer;
     function Get_url: string;
@@ -83,29 +92,49 @@ type
     property Level: xmlErrorLevel read Get_Level;
   end;
 
+  /// <summary>
+  /// Enumerator for IXMLParseError collections
+  /// </summary>
   IXMLErrorEnumerator = interface
     ['{B0B4327A-A186-4697-A830-68B62B3A525E}']
-    function GetCurrent: IXMLError;
+    function GetCurrent: IXMLParseError;
     function MoveNext: Boolean;
-    property Current: IXMLError read GetCurrent;
+    property Current: IXMLParseError read GetCurrent;
   end;
 
+  /// <summary>
+  /// Collection of IXMLParseError
+  /// </summary>
+  /// <remarks>
+  /// MS IXMLDOMParseErrorCollection compatible, except IXMLParseError is like IXMLDOMParseError, not IXMLDOMParseError2
+  /// </remarks>
   IXMLErrors = interface
     ['{C48BAB36-1029-48B6-BC85-79E0FB9C23BC}']
     function  Get_Count: NativeUInt;
-    function  Get_Item(Index: NativeUInt): IXMLError;
+    function  Get_Item(Index: NativeUInt): IXMLParseError;
     function  GetEnumerator: IXMLErrorEnumerator;
+    function  Get__newEnum: IXMLErrorEnumerator;
+    function  Get_next: IXMLParseError;
     procedure Clear;
+    procedure Reset;
+    property  _newEnum: IXMLErrorEnumerator read Get__newEnum;
+    property  Next: IXMLParseError read Get_next;
     property  Count: NativeUInt read Get_Count;
-    property  Items[Index: NativeUInt]: IXMLError read Get_Item; default;
+    property  Items[Index: NativeUInt]: IXMLParseError read Get_Item; default;
   end;
 
+  /// <summary>
+  /// Informaion about XSLT transformation error
+  /// </summary>
   IXSLTError = interface
     ['{4B2EADC0-4C82-4101-A1E4-BC66F975ABB5}']
     function Get_reason: string;
     property Reason: string read Get_reason;
   end;
 
+  /// <summary>
+  /// Enumerator for IXSLTError collections
+  /// </summary>
   IXSLTErrorEnumerator = interface
     ['{F23A8251-D36B-41C8-BD01-57578FE1674C}']
     function GetCurrent: IXSLTError;
@@ -113,6 +142,9 @@ type
     function MoveNext: Boolean;
   end;
 
+  /// <summary>
+  /// Collection of IXSLTError
+  /// </summary>
   IXSLTErrors = interface
     ['{CD2275A7-3989-4CDE-BF17-5158193EA18C}']
     function  Get_Count: NativeUInt;
@@ -123,6 +155,9 @@ type
     property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
   end;
 
+  /// <summary>
+  /// Enumerator for IXMLAttribute collections
+  /// </summary>
   IXMLAttributesEnumerator = interface
     ['{099A865F-3210-4D18-A318-A6D259E9CE55}']
     function  GetCurrent: IXMLAttribute;
@@ -131,6 +166,12 @@ type
     property  Current: IXMLAttribute read GetCurrent;
   end;
 
+  ///<summary>
+  /// List of xml nodes
+  ///</summary>
+  /// <remarks>
+  /// MS IXMLDOMNodeList compatible & Delphi enumerable interface
+  /// </remarks>
   IXMLNodeList = interface
     { MSXMLDOMNodeList }
     function  Get_Item(index: NativeInt): IXMLNode;
@@ -144,33 +185,79 @@ type
     function  ToArray: TArray<IXMLNode>;
   end;
 
+  ///<summary>
+  /// Collection of nodes allow access nodes by name and qualified name
+  /// Collection is live, thus any changes (add, remove nodes) is changes doument tree and vise versa.
+  ///</summary>
+  /// <remarks>
+  /// MS IXMLDOMNodeList compatible
+  /// Partially W3C DOM compatible
+  /// </remarks>
   IXMLNamedNodeMap = interface(IXMLNodeList)
     ['{1D8272DD-58C6-4E1D-8327-7E678F30F8D5}']
+    ///<summary>
+    /// Collection of nodes
+    ///</summary>
     function GetNamedItem(const Name: string): IXMLNode;
     function SetNamedItem(const NewItem: IXMLNode): IXMLNode;
-    function removeNamedItem(const Name: string): IXMLNode;
+    function RemoveNamedItem(const Name: string): IXMLNode;
     function GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
     function RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
   end;
 
+  ///<summary>
+  /// NamedNodeMap collection of attributes
+  /// Collection is live, thus any changes (add, remove attributes) is changes node attributes and vise versa.
+  ///</summary>
+  /// <remarks>
+  /// LX2 extension to NamedNodeMap
+  /// </remarks>
   IXMLAttributes = interface(IXMLNamedNodeMap)
     ['{86C5ACFD-9460-4B71-91BA-E374A0852073}']
     { MSXMLDOMNodeList }
-    function  Get_Item(Index: NativeInt): IXMLAttribute;
+    function  Get_Attr(Index: NativeInt): IXMLAttribute;
     function  Get_Length: NativeInt;
     function  NextNode: IXMLAttribute;
     procedure Reset;
-    property  Item[Index: NativeInt]: IXMLAttribute read Get_Item; default;
+    property  Item[Index: NativeInt]: IXMLAttribute read Get_Attr; default;
     property  Length: NativeInt read Get_Length;
     { Delphi enumerable }
     function  GetEnumerator: IXMLAttributesEnumerator;
     function  ToArray: TArray<IXMLAttribute>;
   end;
 
+  ///<summary>
+  /// Base interface for all node types.
+  ///</summary>
+  /// <remarks>
+  /// Near to be MS IXMLDOMNode compatible
+  /// Near to be W3C DOM compatible
+  /// </remarks>
   IXMLNode = interface
     ['{D5029FB0-0282-4476-A439-99677C23434A}']
-    function  AppendChild(const newChild: IXMLNode): IXMLNode;
-    function  CloneNode(deep: WordBool): IXMLNode;
+    /// <summary>
+    /// Appends NewChild as the end of child nodes ist.
+    /// </summary>
+    /// <param name="NewChild">
+    /// A Node that appended at the end of child nodes list or attributes list if NewNode is attribute
+    /// <param>
+    /// <returns>
+    /// Returns references to appended node or nil in case of error.
+    /// It can be other than NewChild, for example text node can be merged with other text nodes
+    /// </returns>
+    function  AppendChild(const NewChild: IXMLNode): IXMLNode;
+
+    /// <summary>
+    /// Clones node
+    /// </summary>
+    /// <param name="Deep">
+    /// if True clones all subtree
+    /// <param>
+    /// <returns>
+    ///  New cloned node
+    /// </returns>
+    function  CloneNode(Deep: WordBool): IXMLNode;
+
     function  Get_Attributes: IXMLAttributes;
     function  Get_BaseName: string;
     function  Get_ChildNodes: IXMLNodeList;
@@ -187,30 +274,156 @@ type
     function  Get_PreviousSibling: IXMLNode;
     function  Get_Text: string;
     function  Get_Xml: string;
+
+    /// <summary>
+    /// Checks that node has children
+    /// </summary>
+    /// <returns>
+    ///  Returns True if node has children
+    /// </returns>
     function  HasChildNodes: Boolean;
-    function  InsertBefore(const newChild: IXMLNode; refChild: IXMLNode) : IXMLNode;
-    function  RemoveChild(const childNode: IXMLNode): IXMLNode;
-    function  ReplaceChild(const newChild: IXMLNode; const oldChild: IXMLNode) : IXMLNode;
-    function  SelectNodes(const queryString: string): IXMLNodeList;
-    function  SelectSingleNode(const queryString: string): IXMLNode;
+
+    /// <summary>
+    /// Inserts node into into child list, before other node
+    /// </summary>
+    /// <param name="NewChild">
+    ///  Node to insert
+    /// <param>
+    /// <param name="RefChild">
+    ///  NewChild is inserted before RefChild. If RefChild is nil, NewChild append to end of list.
+    /// <param>
+    /// <returns>
+    /// Returns inserted node or nil in case of error
+    /// </returns>
+    function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode) : IXMLNode;
+
+    /// <summary>
+    /// Removes ChildNode from child nodes list
+    /// </summary>
+    /// <param name="ChildNode">
+    ///  Node to remove
+    /// <param>
+    /// <returns>
+    ///  Removed node or nil in case of error
+    /// </returns>
+    function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
+
+    /// <summary>
+    /// Replaces OldChild with NewChild
+    /// </summary>
+    /// <param name="NewChild">
+    ///  Node to replace old node
+    /// <param>
+    /// <param name="OldChild">
+    ///  Node that is to be replaced by NewChild
+    /// <param>
+    /// <returns>
+    ///  Returns OldChild or nil in case of error
+    /// </returns>
+    function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode) : IXMLNode;
+
+    /// <summary>
+    /// Returns list of nodes that matched XPath expression
+    /// </summary>
+    /// <param name="QueryString">
+    ///  XPath expression
+    /// <param>
+    /// <returns>
+    ///  List of nodes, that matching expression
+    /// </returns>
+    function  SelectNodes(const QueryString: string): IXMLNodeList;
+
+    /// <summary>
+    /// Returns first node that matched XPath expression
+    /// </summary>
+    /// <param name="QueryString">
+    /// <param>
+    /// <returns>
+    /// </returns>
+    function  SelectSingleNode(const QueryString: string): IXMLNode;
+
     procedure Set_NodeValue(const Value: string);
     procedure Set_Text(const text: string);
-    property  NodeName: string read Get_NodeName;
-    property  NodeValue: string read Get_NodeValue write Set_NodeValue;
-    property  NodeType: DOMNodeType read Get_NodeType;
-    property  ParentNode: IXMLNode read Get_ParentNode;
-    property  ChildNodes: IXMLNodeList read Get_ChildNodes;
-    property  FirstChild: IXMLNode read Get_FirstChild;
-    property  LastChild: IXMLNode read Get_LastChild;
-    property  PreviousSibling: IXMLNode read Get_PreviousSibling;
-    property  NextSibling: IXMLNode read Get_NextSibling;
+
+    /// <summary>
+    ///
+    /// </summary>
     property  Attributes: IXMLAttributes read Get_Attributes;
-    property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
-    property  Text: string read Get_Text write Set_Text;
-    property  Xml: string read Get_Xml;
-    property  NamespaceURI: string read Get_NamespaceURI;
-    property  Prefix: string read Get_Prefix;
+
+    /// <summary>
+    ///
+    /// </summary>
     property  BaseName: string read Get_BaseName;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  ChildNodes: IXMLNodeList read Get_ChildNodes;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  FirstChild: IXMLNode read Get_FirstChild;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  LastChild: IXMLNode read Get_LastChild;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  NamespaceURI: string read Get_NamespaceURI;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  NextSibling: IXMLNode read Get_NextSibling;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  NodeName: string read Get_NodeName;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  NodeType: DOMNodeType read Get_NodeType;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  NodeValue: string read Get_NodeValue write Set_NodeValue;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  ParentNode: IXMLNode read Get_ParentNode;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  Prefix: string read Get_Prefix;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  PreviousSibling: IXMLNode read Get_PreviousSibling;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  Text: string read Get_Text write Set_Text;
+
+    /// <summary>
+    ///
+    /// </summary>
+    property  Xml: string read Get_Xml;
   end;
 
   IXMLAttribute = interface(IXMLNode)
@@ -344,7 +557,7 @@ type
     function  CreateNode(NodeType: Integer; const name: string; const namespaceURI: string): IXMLNode;
     function  NodeFromID(const idString: string): IXMLNode;
     function  Get_ReadyState: Integer;
-    function  Get_ParseError: IXMLError;
+    function  Get_ParseError: IXMLParseError;
     function  Get_Url: string;
     function  Get_ValidateOnParse: Boolean;
     procedure Set_ValidateOnParse(isValidating: Boolean);
@@ -355,15 +568,25 @@ type
     property  Doctype: IXMLDocumentType read Get_Doctype;
     property  DocumentElement: IXMLElement read Get_DocumentElement write Set_DocumentElement;
     property  ReadyState: Integer read Get_readyState;
-    property  ParseError: IXMLError read Get_parseError;
+    property  ParseError: IXMLParseError read Get_parseError;
     property  Url: string read Get_Url;
     property  ValidateOnParse: Boolean read Get_ValidateOnParse write Set_ValidateOnParse;
     property  ResolveExternals: Boolean read Get_ResolveExternals write Set_ResolveExternals;
     property  PreserveWhiteSpace: Boolean read Get_PreserveWhiteSpace write Set_PreserveWhiteSpace;
-    function  Validate: IXMLError;
-    function  ValidateNode(const node: IXMLNode): IXMLError;
+    function  Validate: IXMLParseError;
+    function  ValidateNode(const node: IXMLNode): IXMLParseError;
   end;
 
+  function CoCreateXMLDocument: IXMLDocument;
+
 implementation
+
+uses
+  LX2.DOM.Classes;
+
+function CoCreateXMLDocument: IXMLDocument;
+begin
+  Result := TXMLDocument.Create;
+end;
 
 end.

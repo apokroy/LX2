@@ -36,11 +36,32 @@ uses
   {$ELSE}
   Posix.Pthread,
   {$ENDIF}
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils,
   libxml2.API;
 
 type
   EXmlError = class(Exception)
+  end;
+
+  EXmlParserError = class(EXmlError)
+  private
+    FUrl: string;
+    FLevel: xmlErrorLevel;
+    FCode: Integer;
+    FCol: Integer;
+    FLine: Integer;
+  public
+    constructor Create(error: xmlError); overload;
+    property  Code: Integer read FCode;
+    property  Level: xmlErrorLevel read FLevel;
+    property  Url: string read FUrl;
+    property  Line: Integer read FLine;
+    property  Col: Integer read FCol;
+  end;
+
+  EXmlNsHrefNotFound = class(EXmlError)
+  public
+    constructor Create(const URI: string);
   end;
 
   TXmlCompatibility = (
@@ -68,7 +89,8 @@ type
     xmlParseNoXXE,
     xmlParseUnzip,
     xmlParseNoSysCatalog,
-    xmlParseNoCatalogPI
+    xmlParseNoCatalogPI,
+    xmlParseBigLines
   );
 
   TXmlParserOptions = set of TXmlParserOption;
@@ -96,36 +118,13 @@ type
     xmlC14N11
   );
 
-  TxmlSaveOptions = set of TxmlSaveOption;
+  TXmlSaveOptions = set of TXmlSaveOption;
 
 const
-  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs];
+  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines];
 
 type
-  IXmlList<T> = interface
-    function  GetCount: NativeInt;
-    function  GetItem(const Index: NativeInt): T;
-    function  GetEnumerator: TEnumerator<T>;
-    function  ToArray: TArray<T>;
-    property  Count: NativeInt read GetCount;
-    property  Items[const Index: NativeInt]: T read GetItem; default;
-  end;
-
-  TXmlListBase<T> = class(TNoRefCountObject, IXmlList<T>)
-  private
-    FList: TList<T>;
-    function  GetCount: NativeInt;
-    function  GetItem(const Index: NativeInt): T;
-  protected
-    property  List: TList<T> read FList;
-  public
-    constructor Create;
-    destructor Destroy; override;
-    function  GetEnumerator: TEnumerator<T>;
-    function  ToArray: TArray<T>;
-    property  Count: NativeInt read GetCount;
-    property  Items[const Index: NativeInt]: T read GetItem; default;
-  end;
+  TXmlParseErrors = class;
 
   TXmlParseError = record
   private
@@ -147,10 +146,30 @@ type
     property Col: Integer read FCol;
   end;
 
-  TXmlParseErrors = class(TXmlListBase<TXmlParseError>)
+  TXmlParseErrorEnumerator = class
+  private
+    FErrors: TXmlParseErrors;
+    FIndex: NativeInt;
+    function GetCurrent: TXmlParseError;
   public
+    constructor Create(Errors: TXmlParseErrors);
+    function MoveNext: Boolean; inline;
+    property Current: TXmlParseError read GetCurrent;
+  end;
+
+  TXmlParseErrors = class
+  private
+    FList: TArray<TXmlParseError>;
+    function GetCount: NativeInt;
+    function GetItem(const Index: NativeInt): TXmlParseError;
+  public
+    constructor Create;
     procedure Add(const error: xmlError);
     procedure Clear;
+    function  GetEnumerator: TXmlParseErrorEnumerator;
+    function  ToArray: TArray<TXmlParseError>;
+    property  Count: NativeInt read GetCount;
+    property  Items[const Index: NativeInt]: TXmlParseError read GetItem; default;
   end;
 
 function  xmlStrSame(P1, P2: xmlCharPtr): Boolean;
@@ -165,6 +184,7 @@ function  xmlCharToRawAndFree(const S: xmlCharPtr): RawByteString; inline;
 function  xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
 function  SplitXMLName(const Name: string; out Prefix, LocalName: string): Boolean; overload;
 function  SplitXMLName(const Name: RawByteString; out Prefix, LocalName: RawByteString): Boolean; overload;
+function  xmlNormalizeString(const S: string): string;
 
 function  Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt; overload;
 function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
@@ -177,6 +197,9 @@ procedure LX2InternalError;
 procedure LX2LocalAllocError;
 procedure LX2NodeTypeError(nodeType: xmlElementType);
 procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);
+
+resourcestring
+  SXmlNsHrefNotFound  = 'Namespace with URI "%s" not found';
 
 implementation
 
@@ -381,6 +404,55 @@ begin
   Result := False;
 end;
 
+function xmlNormalizeString(const S: string): string;
+label
+  HasSpaces;
+begin
+  // Most cases
+  var Src := PWord(Pointer(S));
+  while Src^ <> 0 do
+  begin
+    if (Src^ <= 32) and (Src^ in [32, 9, 10, 13]) then
+      goto HasSpaces;
+    Inc(Src);
+  end;
+  Result := S;
+
+ HasSpaces:
+  SetString(Result, nil, Length(S));
+  Src := PWord(Pointer(S));
+  var Dst := PWord(Pointer(Result));
+  while (Src^ <= 32) and (Src^ in [32, 9, 10, 13]) do
+    Inc(Src);
+
+  var L := 0;
+  while Src^ <> 0 do
+  begin
+    if (Src^ <= 32) and (Src^ in [32, 9, 10, 13]) then
+    begin
+      Dst^ := 32;
+      Inc(Src);
+      Inc(Dst);
+      Inc(L);
+      while (Src^ <= 32) and (Src^ in [32, 9, 10, 13]) do
+        Inc(Src);
+      if Src^ = 0 then
+        Break;
+    end;
+    Dst^ := Src^;
+    Inc(Src);
+    Inc(Dst);
+    Inc(L);
+  end;
+  Dec(Dst);
+  while (Dst^ = 32) and (L > 0) do
+  begin
+    Dec(Dst);
+    Dec(L);
+  end;
+  SetLength(Result, L);
+end;
+
 function NodeTypeName(nodeType: xmlElementType): string;
 const
   NodeTypeNames: array[xmlElementType] of string = ('Unknown',
@@ -457,7 +529,8 @@ const
     XML_PARSE_NO_XXE,
     XML_PARSE_UNZIP,
     XML_PARSE_NO_SYS_CATALOG,
-    XML_PARSE_NO_CATALOG_PI
+    XML_PARSE_NO_CATALOG_PI,
+    XML_PARSE_BIG_LINES
   );
 begin
   Result := 0;
@@ -488,40 +561,31 @@ begin
       Result := Result or Values[Opt];
 end;
 
-{ TXmlListBase<T> }
+{ TXmlParseErrorEnumerator }
 
-constructor TXmlListBase<T>.Create;
+constructor TXmlParseErrorEnumerator.Create(Errors: TXmlParseErrors);
 begin
-  FList := TList<T>.Create;
+  FErrors := Errors;
+  FIndex := -1;
 end;
 
-destructor TXmlListBase<T>.Destroy;
+function TXmlParseErrorEnumerator.GetCurrent: TXmlParseError;
 begin
-  FreeAndNil(FList);
-  inherited;
+  Result := FErrors.FList[FIndex];
 end;
 
-function TXmlListBase<T>.GetCount: NativeInt;
+function TXmlParseErrorEnumerator.MoveNext: Boolean;
 begin
-  Result := List.Count;
-end;
-
-function TXmlListBase<T>.GetEnumerator: TEnumerator<T>;
-begin
-  Result := List.GetEnumerator;
-end;
-
-function TXmlListBase<T>.GetItem(const Index: NativeInt): T;
-begin
-  Result := List.List[Index];
-end;
-
-function TXmlListBase<T>.ToArray: TArray<T>;
-begin
-  Result := List.ToArray;
+  Inc(FIndex);
+  Result := FIndex < Length(FErrors.FList);
 end;
 
 { TXmlParseErrors }
+
+constructor TXmlParseErrors.Create;
+begin
+  inherited Create;
+end;
 
 procedure TXmlParseErrors.Add(const error: xmlError);
 var
@@ -529,12 +593,32 @@ var
 begin
   Item := TXmlParseError.Create(error);
 
-  List.Add(Item);
+  FList := FList + [Item];
 end;
 
 procedure TXmlParseErrors.Clear;
 begin
-  List.Clear;
+  SetLength(FList, 0);
+end;
+
+function TXmlParseErrors.GetCount: NativeInt;
+begin
+  Result := Length(FList);
+end;
+
+function TXmlParseErrors.GetEnumerator: TXmlParseErrorEnumerator;
+begin
+  Result := TXmlParseErrorEnumerator.Create(Self);
+end;
+
+function TXmlParseErrors.GetItem(const Index: NativeInt): TXmlParseError;
+begin
+  Result := FList[Index];
+end;
+
+function TXmlParseErrors.ToArray: TArray<TXmlParseError>;
+begin
+  Result := FList;
 end;
 
 { TXmlParseError }
@@ -547,6 +631,25 @@ begin
   FUrl    := UTF8ToUnicodeString(err.&file);
   FLine   := err.line;
   FCol    := err.int2;
+end;
+
+{ EXmlParserError }
+
+constructor EXmlParserError.Create(error: xmlError);
+begin
+  inherited Create(UTF8ToUnicodeString(error.message));
+  FCode   := error.code;
+  FLevel  := error.level;
+  FUrl    := UTF8ToUnicodeString(error.&file);
+  FLine   := error.line;
+  FCol    := error.int2;
+end;
+
+{ EXmlNsHrefNotFound }
+
+constructor EXmlNsHrefNotFound.Create(const URI: string);
+begin
+  inherited CreateResFmt(@SXmlNsHrefNotFound, [URI]);
 end;
 
 end.
