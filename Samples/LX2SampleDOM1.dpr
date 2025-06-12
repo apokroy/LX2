@@ -33,8 +33,6 @@ begin
 
   Child.SetAttribute('Hello', 'World');
 
-  Child.Attributes.SetNamedItem
-
   TestStart('Remove child');
   TestEnd(Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild) <> nil);
 
