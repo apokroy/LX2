@@ -33,7 +33,9 @@ Contains types common to all library units (except API wrapper units):
 - Utility functions
 
 ## LX2.Helpers
-Unit contains record helpers for libxml2 structures, that provides more "object oriented" style:
+Unit contains record helpers for libxml2 structures, that provides more "object oriented" style. Also adds support for some Delphi types, TStream for example.
+
+Sample code:
 ```Delphi
 var Doc := xmlDoc.CreateFromFile('C:\Test.xml');
 
