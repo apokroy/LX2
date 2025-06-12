@@ -2,6 +2,8 @@
 Delphi bindings to [libxml2](https://gitlab.gnome.org/GNOME/libxml2) and [libxslt](https://gitlab.gnome.org/GNOME/libxslt/) libraries. 
 Requeries version 2.14 or higher of libxml2 and 1.1 of libxslt. 
 
+One of the most important goals of the project is the cross-platform replacement of MSXML 6.0. Therefore, where possible, the library should follow the W3C DOM model, but compatibility with MSXML is a priority.
+
 Contains:
 
 - Pure interface to the API (libxml2.API.pas, libxslt.API.pas), with the possibility of late binding to library files that you specify or load with defaults.
@@ -9,6 +11,21 @@ Contains:
 - Small, but convenient layer above the SAX parser (LX2.SAX.pas), that contains base SAX parser wrapper and more complex version, based on context handler interfaces, that near to MS XML SAX parser interfaces.
 - DOM interfaces that are close to the W3C standards and the MSXML library (LX2.DOM).
 - If you need it, binaries to Win64 & Linux in repository.
+
+> [!WARNING]
+> A significant part of the library's code has been tested using synthetic tests, but has not yet been tested in production environment.
+>
+> Win32 not tested at all.
+
+## TODOs
+- Cover near to full sources by DUnit tests;
+- XML Doc all significant sources;
+- Bring LX2.DOM even closer to the W3C DOM & MSXML DOM 6.0 model;
+- Reader API wrappers;
+- Sample project like xmllint, mostly to test library itself.
+
+## Samples
+All provided sample projects uses simple test API, that tracking libxml2 memory leaks and DOM interfaces refcounting errors. In the near future, FastMM memory leaks detection has been added.
 
 ## Initialize library
 Before using the library, it must be initialized. You can specify which files will be used or use default settings.
