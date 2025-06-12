@@ -10,7 +10,7 @@ Contains:
 - Provides a more convenient way to work with library, based on record helpers for native libxml types (LX2.Helpers.pas).
 - Small, but convenient layer above the SAX parser (LX2.SAX.pas), that contains base SAX parser wrapper and more complex version, based on context handler interfaces, that near to MS XML SAX parser interfaces.
 - DOM interfaces that are close to the W3C standards and the MSXML library (LX2.DOM).
-- If you need it, binaries to Win64 & Linux in repository.
+- If you need it, binaries for Win64 & Linux in repository.
 
 > [!WARNING]
 > A significant part of the library's code has been tested using synthetic tests, but has not yet been tested in production environment.
