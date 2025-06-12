@@ -23,7 +23,7 @@ THE SOFTWARE.
 
 
 ///This file contains translation of libxml2 header files, libxml2 license:
-/// <see cref="https://github.com/apokroy/LX2/blob/main/LIBXML2-LICENSE"/>
+/// see https://gitlab.gnome.org/GNOME/libxml2/-/blob/master/Copyright?ref_type=heads
 
 /// <summary>
 /// <para>
@@ -989,7 +989,7 @@ var
   /// Future versions might return the first parser error instead.
   /// </summary>
   /// <param name="ctx">an XML parser context </param>
-  /// <returns>NULL if no error occurred or a pointer to the error </returns>
+  /// <returns>nil if no error occurred or a pointer to the error </returns>
   xmlCtxtGetLastError          : function (ctx: Pointer): xmlErrorPtr; cdecl;
 
   /// <summary>
@@ -1063,7 +1063,7 @@ var
   /// Create a new dictionary.
   /// </summary>
   /// <returns>
-  ///  the newly created dictionary, or NULL if an error occurred.
+  ///  the newly created dictionary, or nil if an error occurred.
   /// </returns>
   xmlDictCreate               : function: xmlDictPtr; cdecl;
 
@@ -1092,7 +1092,7 @@ var
   /// </summary>
   /// <param name="sub">an existing dictionary</param>
   /// <returns>
-  /// the newly created dictionary, or NULL if an error occurred.
+  /// the newly created dictionary, or nil if an error occurred.
   /// </returns>
   xmlDictCreateSub            : function (sub: xmlDictPtr): xmlDictPtr; cdecl;
 
@@ -1117,9 +1117,9 @@ var
   /// </summary>
   /// <param name="dict">dictionary</param>
   /// <param name="name">string key</param>
-  /// <param name="lem">length of the key, if -1 it is recomputed</param>
+  /// <param name="len">length of the key, if -1 it is recomputed</param>
   /// <returns>
-  ///  the interned copy of the string or NULL if a memory allocation failed.
+  ///  the interned copy of the string or nil if a memory allocation failed.
   /// </returns>
   xmlDictLookup               : function (dict: xmlDictPtr; name: xmlCharPtr; len: Integer): xmlCharPtr; cdecl;
 
@@ -1128,9 +1128,9 @@ var
   /// </summary>
   /// <param name="dict">dictionary</param>
   /// <param name="name">the name of the userdata </param>
-  /// <param name="lem">length of the key, if -1 it is recomputed</param>
+  /// <param name="len">length of the key, if -1 it is recomputed</param>
   /// <returns>
-  ///  the internal copy of the name or NULL if not found.
+  ///  the internal copy of the name or nil if not found.
   /// </returns>
   xmlDictExists               : function (dict: xmlDictPtr; name: xmlCharPtr; len: Integer): xmlCharPtr; cdecl;
 
@@ -1141,7 +1141,7 @@ var
   /// <param name="prefix">the prefix</param>
   /// <param name="name">the name</param>
   /// <returns>
-  /// The interned copy of the string or NULL if a memory allocation failed.
+  /// The interned copy of the string or nil if a memory allocation failed.
   /// </returns>
   xmlDictQLookup              : function (dict: xmlDictPtr; prefix: xmlCharPtr; name: xmlCharPtr): xmlCharPtr; cdecl;
 
@@ -1300,7 +1300,7 @@ type
   xmlNodePtr = ^xmlNode;
 
   /// <summary>
-  /// Note that prefix == NULL is valid, it defines the default namespace within the subtree (until overridden).
+  /// Note that prefix = nil is valid, it defines the default namespace within the subtree (until overridden).
   /// xmlNsType is unified with xmlElementType.
   /// </summary>
   xmlNsPtr = ^xmlNs;
@@ -1695,19 +1695,19 @@ var
 
   /// <summary>
   /// Build a QName from prefix and local name.
-  /// Builds the QName prefix:ncname in memory if there is enough space and prefix is not NULL nor empty, otherwise allocate a new string. If prefix is NULL or empty it returns ncname.
+  /// Builds the QName prefix:ncname in memory if there is enough space and prefix is not nil nor empty, otherwise allocate a new string. If prefix is nil or empty it returns ncname.
   ///</summary>
   /// <param name="ncname">the Name</param>
   /// <param name="prefix">the prefix</param>
   /// <param name="memory">preallocated memory</param>
   /// <param name="len">preallocated memory length</param>
-  /// <returns>the new string which must be freed by the caller if different from memory and ncname or NULL in case of error </returns>
+  /// <returns>the new string which must be freed by the caller if different from memory and ncname or nil in case of error </returns>
   xmlBuildQName             : function(const ncname, prefix, memory: xmlCharPtr; len: Integer): xmlCharPtr; cdecl;
 
   /// <summary>Parse an XML qualified name</summary>
   /// <param name="name">the full QName</param>
   /// <param name="len">len</param>
-  /// <returns>NULL if it is not a Qualified Name, otherwise, update len with the length in byte of the prefix and return a pointer to the start of the name without the prefix</returns>
+  /// <returns>nil if it is not a Qualified Name, otherwise, update len with the length in byte of the prefix and return a pointer to the start of the name without the prefix</returns>
   xmlSplitQName3            : function(const name: xmlCharPtr; var len: Integer): xmlCharPtr; cdecl;
 
   /// <summary>Create a DTD node.
@@ -1718,21 +1718,21 @@ var
   /// <param name="name">the DTD name (optional) </param>
   /// <param name="publicId">public identifier of the DTD (optional) </param>
   /// <param name="systemId">system identifier (URL) of the DTD (optional)</param>
-  /// <returns>a pointer to the new or existing DTD object or NULL if arguments are invalid or a memory allocation failed.</returns>
+  /// <returns>a pointer to the new or existing DTD object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlCreateIntSubset        : function(doc: xmlDocPtr; const name, publicId, systemId: xmlCharPtr): xmlDtdPtr; cdecl;
 
 
   /// <summary></summary>
   /// <param name="doc">the document pointer (optional) </param>
   /// <param name="name">the DTD name (optional) </param>
-  /// <param name="publicId">public identifier of the DTD (optional) </param>
-  /// <param name="systemId">system identifier (URL) of the DTD (optional)</param>
+  /// <param name="ExternalID">public identifier of the DTD (optional) </param>
+  /// <param name="SystemID">system identifier (URL) of the DTD (optional)</param>
   /// <returns></returns>
   xmlNewDtd                 : function(doc: xmlDocPtr; const name, ExternalID, SystemID: xmlCharPtr): xmlDtdPtr; cdecl;
 
   /// <summary>Get the internal subset of a document. </summary>
   /// <param name="doc">the document pointer </param>
-  /// <returns>a pointer to the DTD object or NULL if not found. </returns>
+  /// <returns>a pointer to the DTD object or nil if not found. </returns>
   xmlGetIntSubset           : function(doc: xmlDocPtr): xmlDtdPtr; cdecl;
 
   /// <summary>Free a DTD structure. </summary>
@@ -1741,7 +1741,7 @@ var
 
   /// <summary>Create a new namespace.
   ///
-  /// For a default namespace, prefix should be NULL. The namespace URI in href is not checked. You should make sure to pass a valid URI.
+  /// For a default namespace, prefix should be nil. The namespace URI in href is not checked. You should make sure to pass a valid URI.
   ///
   /// If node is provided, it must be an element node. The namespace will be appended to the node's namespace declarations. It is an error if the node already has a definition for the prefix or default namespace.
   /// </summary>
@@ -1761,10 +1761,10 @@ var
 
   /// <summary>
   ///  Creates a new XML document.
-  ///  If version is NULL, "1.0" is used.
+  ///  If version is nil, "1.0" is used.
   /// </summary>
   /// <param name="version">XML version string like "1.0" (optional) </param>
-  /// <returns>a new document or NULL if a memory allocation failed. </returns>
+  /// <returns>a new document or nil if a memory allocation failed. </returns>
   xmlNewDoc                 : function(const version: xmlCharPtr): xmlDocPtr; cdecl;
 
   /// <summary>Free a document including all children and associated DTDs. </summary>
@@ -1780,7 +1780,7 @@ var
   /// <param name="doc">the target document (optional) </param>
   /// <param name="name">the name of the attribute </param>
   /// <param name="value">attribute value with XML references (optional) </param>
-  /// <returns>a pointer to the attribute or NULL if arguments are invalid or a memory allocation failed. </returns>
+  /// <returns>a pointer to the attribute or nil if arguments are invalid or a memory allocation failed. </returns>
   xmlNewDocProp             : function(doc: xmlDocPtr; const name, value: xmlCharPtr): xmlAttrPtr; cdecl;
 
   /// <summary>
@@ -1801,7 +1801,7 @@ var
   /// <param name="ns">the namespace (optional) </param>
   /// <param name="name">the local name of the attribute </param>
   /// <param name="value">the value of the attribute (optional) </param>
-  /// <returns>a pointer to the attribute or NULL if arguments are invalid or a memory allocation failed. </returns>
+  /// <returns>a pointer to the attribute or nil if arguments are invalid or a memory allocation failed. </returns>
   xmlNewNsProp              : function(node: xmlNodePtr; ns: xmlNsPtr; const name, value: xmlCharPtr): xmlAttrPtr; cdecl;
 
   /// <summary>
@@ -1825,11 +1825,11 @@ var
 
   /// <summary>
   ///  Create a copy of the attribute.
-  ///  This function sets the parent pointer of the copy to target but doesn't set the attribute on the target element. Users should consider to set the attribute by calling <see cref="xmlAddChild"/> afterwards or reset the parent pointer to NULL.
+  ///  This function sets the parent pointer of the copy to target but doesn't set the attribute on the target element. Users should consider to set the attribute by calling <see cref="xmlAddChild"/> afterwards or reset the parent pointer to nil.
   /// </summary>
   /// <param name="target">the element where the attribute will be grafted </param>
   /// <param name="cur">the attribute</param>
-  /// <returns>the copied attribute or NULL if a memory allocation failed. </returns>
+  /// <returns>the copied attribute or nil if a memory allocation failed. </returns>
   xmlCopyProp               : function(target: xmlNodePtr; cur: xmlAttrPtr): xmlAttrPtr; cdecl;
 
   /// <summary>
@@ -1838,19 +1838,19 @@ var
   /// </summary>
   /// <param name="target">the element where the attributes will be grafted </param>
   /// <param name="cur">the first attribute </param>
-  /// <returns>the head of the copied list or NULL if a memory allocation failed. </returns>
+  /// <returns>the head of the copied list or nil if a memory allocation failed. </returns>
   xmlCopyPropList           : function(target: xmlNodePtr; cur: xmlAttrPtr): xmlAttrPtr; cdecl;
 
   /// <summary>Copy a DTD.</summary>
   /// <param name="dtd">the DTD </param>
-  /// <returns>the copied DTD or NULL if a memory allocation failed.</returns>
+  /// <returns>the copied DTD or nil if a memory allocation failed.</returns>
   xmlCopyDtd                : function(dtd: xmlDtdPtr): xmlDtdPtr; cdecl;
 
   /// <summary>Copy a document.
   /// If recursive, the content tree will be copied too as well as DTD, namespaces and entities.</summary>
   /// <param name="doc">the document </param>
   /// <param name="recursive">if not zero do a recursive copy.</param>
-  /// <returns>the copied document or NULL if a memory allocation failed. </returns>
+  /// <returns>the copied document or nil if a memory allocation failed. </returns>
   xmlCopyDoc                : function(doc: xmlDocPtr; recursive: Integer): xmlDocPtr; cdecl;
 
   /// <summary>
@@ -1871,7 +1871,7 @@ var
   /// <param name="ns">namespace (optional)</param>
   /// <param name="name">the node name</param>
   /// <param name="content">text content with XML references (optional) </param>
-  /// <returns>a pointer to the new node object or NULL if arguments are invalid or a memory allocation failed.</returns>
+  /// <returns>a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewDocNode             : function(doc: xmlDocPtr; ns: xmlNsPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
 
   /// <summary>
@@ -1882,471 +1882,982 @@ var
   /// <param name="ns">namespace (optional)</param>
   /// <param name="name">the node name</param>
   /// <param name="content">text content with XML references (optional) </param>
-  /// <returns>a pointer to the new node object or NULL if arguments are invalid or a memory allocation failed.</returns>
+  /// <returns>a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewDocNodeEatName      : function(doc: xmlDocPtr; ns: xmlNsPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
 
   /// <summary>Create a new child element and append it to a parent element.
-  /// If ns is NULL, the newly created element inherits the namespace of the parent.
+  /// If ns is nil, the newly created element inherits the namespace of the parent.
   /// If provided, content is expected to be a valid XML attribute value possibly containing character and entity references. Text and entity reference node will be added to the child element, see xmlNewDocNode().</summary>
   /// <param name="parent">the parent node</param>
   /// <param name="ns">a namespace (optional)</param>
   /// <param name="name">the name of the child </param>
   /// <param name="content">text content with XML references (optional)</param>
-  /// <returns>a pointer to the new node object or NULL if arguments are invalid or a memory allocation failed. </returns>
+  /// <returns>a pointer to the new node object or nil if arguments are invalid or a memory allocation failed. </returns>
   xmlNewChild               : function(parent: xmlNodePtr; ns: xmlNsPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
 
   /// <summary>Create a new text node. </summary>
   /// <param name="doc">the target document</param>
   /// <param name="content">raw text content (optional) </param>
-  /// <returns>a pointer to the new node object or NULL if a memory allocation failed. </returns>
+  /// <returns>a pointer to the new node object or nil if a memory allocation failed. </returns>
   xmlNewDocText             : function(const doc: xmlDocPtr; content: xmlCharPtr): xmlNodePtr; cdecl;
 
   /// <summary>Create a processing instruction object. </summary>
   /// <param name="doc">the target document (optional) </param>
   /// <param name="name">the processing instruction target</param>
   /// <param name="content">the PI content (optional) </param>
-  /// <returns>a pointer to the new node object or NULL if arguments are invalid or a memory allocation failed.</returns>
+  /// <returns>a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewDocPI               : function(doc: xmlDocPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Create a new text node.</summary>
+  /// <param name="doc">the target document</param>
+  /// <param name="content">raw text content (optional)</param>
+  /// <param name="len">size of text content</param>
+  /// <returns>Returns a pointer to the new node object or nil if a memory allocation failed.</returns>
   xmlNewDocTextLen          : function(doc: xmlDocPtr; const content: xmlCharPtr; len: Integer): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Create a comment node.</summary>
+  /// <param name="doc">the document</param>
+  /// <param name="content">the comment content</param>
+  /// <returns>Returns a pointer to the new node object or nil if a memory allocation failed.</returns>
   xmlNewDocComment          : function(doc: xmlDocPtr; const content: xmlCharPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Create a CDATA section node.</summary>
+  /// <param name="doc">the document</param>
+  /// <param name="content">the comment content</param>
+  /// <param name="len">size of text content</param>
+  /// <returns>Returns a pointer to the new node object or nil if a memory allocation failed.</returns>
   xmlNewCDataBlock          : function(doc: xmlDocPtr; const content: xmlCharPtr; len: Integer): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///  This function is MISNAMED. It doesn't create a character reference but an entity reference.
+  ///  Create an empty entity reference node. This function doesn't attempt to look up the entity in doc.
+  ///  Entity names like '&entity;' are handled as well
+  /// </summary>
+  /// <param name="doc">the target document (optional)</param>
+  /// <param name="name">the entity name</param>
+  /// <returns>Returns a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewCharRef             : function(doc: xmlDocPtr; const name: xmlCharPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Create a new entity reference node, linking the result with the entity in doc if found.
+  /// Entity names like '&entity;' are handled as we</summary>
+  /// <param name="doc">the target document (optional)</param>
+  /// <param name="name">the entity name</param>
+  /// <returns>Returns a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewReference           : function(doc: xmlDocPtr; const name: xmlCharPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Copy a node into another document.</summary>
+  /// <param name="node">the node</param>
+  /// <param name="doc">the document</param>
+  /// <param name="recursive">
+  /// if 1 do a recursive copy (properties, namespaces and children when applicable)
+  /// if 2 copy properties and namespaces (when applicable)
+  // </param>
+  /// <returns>Returns the copied node or nil if a memory allocation failed.</returns>
   xmlDocCopyNode            : function(node: xmlNodePtr; doc: xmlDocPtr; recursive: Integer): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Copy a node list and all children into a new document.</summary>
+  /// <param name="doc">the target document</param>
+  /// <param name="node"the first node in the list.></param>
+  /// <returns>Returns the head of the copied list or nil if a memory allocation failed.</returns>
   xmlDocCopyNodeList        : function(doc: xmlDocPtr; node: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///  Create a new child element and append it to a parent element.
+  ///
+  /// If ns is nil, the newly created element inherits the namespace
+  /// of the parent.
+  ///
+  /// If content is provided, a text node will be added to the child
+  /// element, <see cref="xmlNewDocRawNode"/>.
+  /// </summary>
+  /// <param name="parent">the parent node</param>
+  /// <param name="ns">a namespace (optional)</param>
+  /// <param name="name">the name of the child</param>
+  /// <param name="content">raw text content of the child (optional)</param>
+  /// <returns>Returns a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewTextChild           : function(parent: xmlNodePtr; ns: xmlNsPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Create an element node.
+  ///
+  /// If provided, content should be a raw, unescaped string.
+  ///
+  /// Returns a pointer to the new node object or nil if arguments are
+  /// invalid or a memory allocation failed.
+  ///</summary>
+  /// <param name="doc">the target document</param>
+  /// <param name="ns">a namespace (optional)</param>
+  /// <param name="name">the node name</param>
+  /// <param name="content">raw text content (optional)</param>
+  /// <returns>Returns a pointer to the new node object or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlNewDocRawNode          : function(doc: xmlDocPtr; ns: xmlNsPtr; const name, content: xmlCharPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Create a document fragment node.</summary>
+  /// <param name="doc">the target document (optional)</param>
+  /// <returns>Returns a pointer to the new node object or nil if a memory allocation failed.</returns>
   xmlNewDocFragment         : function(doc: xmlDocPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Get line number of node.
+  /// Try to override the limitation of lines being store in 16 bits ints
+  /// if XML_PARSE_BIG_LINES parser option was used
+  /// </summary>
+  /// <param name="node">valid node</param>
+  /// <returns>Returns the line number if successful, -1 otherwise</returns>
   xmlGetLineNo              : function(const node: xmlNodePtr): LongInt; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Build a structure based Path for the given node</summary>
+  /// <param name="node">a node</param>
+  /// <returns>Returns the new path or nil in case of error. The caller must free the returned string</returns>
   xmlGetNodePath            : function(const node: xmlNodePtr): xmlCharPtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Get the root element of the document (doc.children is a list containing possibly comments, PIs, etc ...).</summary>
+  /// <param name="doc">the document</param>
+  /// <returns>Returns the root element or nil if no element was found.</returns>
   xmlDocGetRootElement      : function(const doc: xmlDocPtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Find the last child of a node.</summary>
+  /// <param name="parent">the parent node</param>
+  /// <returns>Returns the last child or mil if parent has no children.</returns>
   xmlGetLastChild           : function(const parent: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Is this node a Text node ?</summary>
+  /// <param name="node">the node</param>
+  /// <returns>Returns 1 yes, 0 no</returns>
   xmlNodeIsText             : function(const node: xmlNodePtr): Integer; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Checks whether this node is an empty or whitespace only (and possibly ignorable) text-node.</summary>
+  /// <param name="node">The node</param>
+  /// <returns>Returns 1 yes, 0 no</returns>
   xmlIsBlankNode            : function(const node: xmlNodePtr): Integer; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///  Set the root element of the document (doc.children is a list
+  ///  containing possibly comments, PIs, etc ...).
+  ///
+  /// root must be an element node. It is unlinked before insertion.
+  /// </summary>
+  /// <param name="doc">the document</param>
+  /// <param name="root">the new document root element, if root is nil no action is taken, to remove a node from a document use xmlUnlinkNode(root) instead.</param>
+  /// <returns>Returns the unlinked old root element or nil if the document didn't have a root element or a memory allocation failed.</returns>
   xmlDocSetRootElement      : function(doc: xmlDocPtr; root: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Set (or reset) the name of a node.</summary>
+  /// <param name="cur">the node being changed</param>
+  /// <param name="name">the new tag name</param>
   xmlNodeSetName            : procedure(cur: xmlNodePtr; const name: xmlCharPtr); cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///
+  /// Unlink cur and append it to the children of parent.
+  ///
+  /// If cur is a text node, it may be merged with an adjacent text
+  /// node and freed. In this case the text node containing the merged
+  /// content is returned.
+  ///
+  /// If cur is an attribute node, it is appended to the attributes of
+  /// parent. If the attribute list contains an attribute with a name
+  /// matching cur, the old attribute is destroyed.
+  ///
+  /// General notes:
+  ///
+  /// Move operations like xmlAddChild can cause element or attribute
+  /// nodes to reference namespaces that aren't declared in one of
+  /// their ancestors. This can lead to use-after-free errors if the
+  /// elements containing the declarations are freed later, especially
+  /// when moving nodes from one document to another. You should
+  /// consider calling xmlReconciliateNs after a move operation to
+  /// normalize namespaces. Another option is to call
+  /// xmlDOMWrapAdoptNode with the target parent before moving a node.
+  ///
+  /// For the most part, move operations don't check whether the
+  /// resulting tree structure is valid. Users must make sure that
+  /// parent nodes only receive children of valid types. Inserted
+  /// child nodes must never be an ancestor of the parent node to
+  /// avoid cycles in the tree structure. In general, only
+  /// document, document fragments, elements and attributes
+  /// should be used as parent nodes.
+  ///
+  /// When moving a node between documents and a memory allocation
+  /// fails, the node's content will be corrupted and it will be
+  /// unlinked. In this case, the node must be freed manually.
+  ///
+  /// Moving DTDs between documents isn't supported.
+  /// </summary>
+  /// <param name="parent">the parent node</param>
+  /// <param name="cur">the child node</param>
+  /// <returns>Returns cur or a sibling if cur was merged. Returns nil if arguments are invalid or a memory allocation failed.</returns>
   xmlAddChild               : function(parent, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///  Append a node list to another node. <see cref="xmlAddChild"/>
+  /// <summary>
+  /// <param name="parent">the parent node</param>
+  /// <param name="cur">the first node in the list</param>
+  /// <returns>Returns the last child or nil in case of error.</returns>
   xmlAddChildList           : function(parent, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Unlink the old node. If cur is provided, it is unlinked and
+  /// inserted in place of old.
+  ///
+  /// It is an error if old has no parent.
+  ///
+  /// Unlike xmlAddChild, this function doesn't merge text nodes or
+  /// delete duplicate attributes.
+  ///
+  /// See the notes in <see cref="xmlAddChild"/>.
+  /// </summary>
+  /// <param name="old">the old node</param>
+  /// <param name="cur">the node (optional)</param>
+  /// <returns>Returns old or nil if arguments are invalid or a memory allocation failed.</returns>
   xmlReplaceNode            : function(old, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlAddPrevSibling         : function(cur, elem: xmlNodePtr): xmlNodePtr; cdecl;
+  /// <summary>
+  /// Unlinks cur and inserts it as previous sibling before @next.
+  ///
+  /// Unlike xmlAddChild this function does not merge text nodes.
+  ///
+  /// If cur is an attribute node, it is inserted before attribute
+  /// @next. If the attribute list contains an attribute with a name
+  /// matching @cur, the old attribute is destroyed.
+  ///
+  /// See the notes in <see cref="xmlAddChild"/>.
+  ///</summary>
+  /// <param name="next">the target node</param>
+  /// <param name="cur">new node</param>
+  /// <returns>Returns @cur or a sibling if @cur was merged. Returns nil if arguments are invalid or a memory allocation failed.</returns>
+  xmlAddPrevSibling         : function(next, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlAddSibling             : function(cur, elem: xmlNodePtr): xmlNodePtr; cdecl;
+  /// <summary>
+  /// Unlinks cur and inserts it as last sibling of node.
+  ///
+  /// If cur is a text node, it may be merged with an adjacent text
+  /// node and freed. In this case the text node containing the merged
+  /// content is returned.
+  ///
+  /// If cur is an attribute node, it is appended to the attribute
+  /// list containing @node. If the attribute list contains an attribute
+  /// with a name matching cur, the old attribute is destroyed.
+  ///
+  /// See the notes in <see cref="xmlAddChild"/>.
+  ///</summary>
+  /// <param name="node">the target node</param>
+  /// <param name="cur">the new node</param>
+  /// <returns>Returns @cur or a sibling if @cur was merged. Returns nil if arguments are invalid or a memory allocation failed.</returns>
+  xmlAddSibling             : function(node, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlAddNextSibling         : function(cur, elem: xmlNodePtr): xmlNodePtr; cdecl;
+  /// <summary>
+  /// Unlinks cur and inserts it as next sibling after prev.
+  ///
+  /// Unlike xmlAddChild this function does not merge text nodes.
+  ///
+  /// If cur is an attribute node, it is inserted after attribute
+  /// prev. If the attribute list contains an attribute with a name
+  /// matching cur, the old attribute is destroyed.
+  ///
+  /// See the notes in <see cref="xmlAddChild"/>.
+  /// </summary>
+  /// <param name="prev">the target node</param>
+  /// <param name="cur">the new node</param>
+  /// <returns>Returns cur or a sibling if @cur was merged. Returns nil if arguments are invalid or a memory allocation failed.</returns>
+  xmlAddNextSibling         : function(prev, cur: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Unlink a node from its tree.
+  ///
+  /// The node is not freed. Unless it is reinserted, it must be managed
+  /// manually and freed eventually by calling xmlFreeNode.
+  ///</summary>
+  /// <param name="cur">the node</param>
   xmlUnlinkNode             : procedure(cur: xmlNodePtr); cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Merge the second text node into the first. If first is nil, second is returned. Otherwise, the second node is unlinked and freed.</summary>
+  /// <param name="first">the first text node</param>
+  /// <param name="second">the second text node being merged</param>
+  /// <returns>Returns the first text node augmented or nil in case of error.</returns>
   xmlTextMerge              : function(first, second: xmlNodePtr): xmlNodePtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Concat the given string at the end of the existing node content.
+  ///
+  /// If len is -1, the string length will be calculated.
+  /// </summary>
+  /// <param name="node">the node</param>
+  /// <param name="content">the content</param>
+  /// <param name="len">content len</param>
+  /// <returns>Returns -1 in case of error, 0 otherwise</returns>
   xmlTextConcat             : function(node: xmlNodePtr; const content: xmlCharPtr; len: Integer): Integer; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Free a node list including all children.</summary>
+  /// <param name="cur">the first node in the list</param>
   xmlFreeNodeList           : procedure(cur: xmlNodePtr); cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  ///  Free a node including all the children.
+  ///
+  /// This doesn't unlink the node from the tree. Call xmlUnlinkNode first unless cur is a root node.
+  ///</summary>
+  /// <param name="cur">The node</param>
   xmlFreeNode               : procedure(cur: xmlNodePtr); cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlSetTreeDoc             : function(tree: xmlNodePtr; doc: xmlDocPtr): Integer; cdecl;
-
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlSetListDoc             : function(list: xmlNodePtr; doc: xmlDocPtr): Integer; cdecl;
-
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Set (or reset) an attribute carried by a node.
+  /// If name has a prefix, then the corresponding namespace-binding will be used, if in scope; it is an error it there's no such ns-binding for the prefix in scope.</summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name (a QName)</param>
+  /// <param name="value">the attribute value</param>
+  /// <returns>Returns the attribute pointer.</returns>
   xmlSetProp                : function(node: xmlNodePtr; const name, value: xmlCharPtr): xmlAttrPtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>Set (or reset) an attribute carried by a node. The ns structure must be in scope, this is not checked</summary>
+  /// <param name="node">the node</param>
+  /// <param name="ns">the namespace definition</param>
+  /// <param name="name">the attribute name</param>
+  /// <param name="value">the attribute value</param>
+  /// <returns>Returns the attribute pointer.</returns>
   xmlSetNsProp              : function(node: xmlNodePtr; ns: xmlNsPtr; const name, value: xmlCharPtr): xmlAttrPtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
+  /// <summary>
+  /// Search and get the value of an attribute associated to a node
+  /// This attribute has to be anchored in the namespace specified.
+  /// This does the entity substitution. The returned value must be
+  /// freed by the caller.
+  ///
+  /// Returns 0 on success, 1 if no attribute was found, -1 if a memory allocation failed.
+  /// </summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
+  /// <param name="nsUri">the URI of the namespace</param>
+  /// <param name="out">the returned string</param>
   /// <returns></returns>
   xmlNodeGetAttrValue       : function(const node: xmlNodePtr; const name, nsUri: xmlCharPtr; var &out: xmlCharPtr): Integer; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlGetNoNsProp            : function(const node: xmlNodePtr; const name: xmlCharPtr): xmlCharPtr; cdecl;
-
-  /// <summary></summary>
-  /// <param name=""></param>
+  /// <summary>
+  /// Search and get the value of an attribute associated to a node.
+  /// This does the entity substitution.
+  /// This function looks in DTD attribute declaration for #FIXED or default declaration values.
+  /// </summary>
+  /// <remarks>
+  /// This function acts independently of namespaces associated to the attribute. Use xmlGetNsProp() or xmlGetNoNsProp() for namespace aware processing.
+  ///
+  /// This function doesn't allow to distinguish malloc failures from  missing attributes. It's more robust to use xmlNodeGetAttrValue.
+  /// </remarks>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
   /// <returns></returns>
   xmlGetProp                : function(const node: xmlNodePtr; const name: xmlCharPtr): xmlCharPtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Search an attribute associated to a node
+  /// This function also looks in DTD attribute declaration for #FIXED or default declaration values.
+  /// </summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
+  /// <returns>Returns the attribute or the attribute declaration or nil if neither was found.
+  /// Also returns nill if a memory allocation failed making this function unreliable.
+  /// </returns>
   xmlHasProp                : function(const node: xmlNodePtr; const name: xmlCharPtr): xmlAttrPtr; cdecl;
 
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+  /// <summary>
+  /// Search for an attribute associated to a node
+  /// This attribute has to be anchored in the namespace specified.
+  /// This does the entity substitution.
+  /// This function looks in DTD attribute declaration for #FIXED or default declaration values.
+  /// Note that a namespace of nil indicates to use the default namespace.
+  /// </summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
+  /// <param name="nameSpace">the URI of the namespace</param>
+  /// <returns>
+  /// Returns the attribute or the attribute declaration or nil if neither was found. Also returns nil if a memory allocation failed making this function unreliable.
+  /// </returns>
   xmlHasNsProp              : function(const node: xmlNodePtr; const name, nameSpace: xmlCharPtr): xmlAttrPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Search for an attribute associated to a node
+  /// This attribute has to be anchored in the namespace specified.
+  /// This does the entity substitution.
+  /// This function looks in DTD attribute declaration for #FIXED or
+  /// default declaration values.
+  /// Note that a namespace of nil indicates to use the default namespace.
+  /// </summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
+  /// <param name="nameSpace">the URI of the namespace</param>
+  /// <returns>
+  /// Returns the attribute or the attribute declaration or nil if
+  /// neither was found. Also returns nil if a memory allocation failed
+  /// making this function unreliable.
+  ///</returns>
   xmlGetNsProp              : function(const node: xmlNodePtr; const name, nameSpace: xmlCharPtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlStringGetNodeList      : function(const doc: xmlDocPtr; const value: xmlCharPtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlStringLenGetNodeList   : function(const doc: xmlDocPtr; const value: xmlCharPtr; len: Integer): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Serializes attribute children (text and entity reference nodes) into a string.
+  ///
+  /// If inLine is true, entity references will be substituted.
+  /// Otherwise, entity references will be kept and special characters
+  /// like '&' as well as non-ASCII chars will be escaped. See <see cref="xmlNodeListGetRawString"/> for an alternative option.
+  /// </summary>
+  /// <param name="doc">a document (optional)</param>
+  /// <param name="list">a node list of attribute children</param>
+  /// <param name="inLine">whether entity references are substituted</param>
+  /// <returns>Returns a string or nil if a memory allocation failed.</returns>
   xmlNodeListGetString      : function(const doc: xmlDocPtr; const list: xmlNodePtr; &inLine: Integer): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Serializes attribute children (text and entity reference nodes) into a string.
+  ///
+  /// If inLine is true, entity references will be substituted.
+  /// Otherwise, entity references will be kept and special characters
+  /// like '&' will be escaped.
+  ///</summary>
+  /// <param name="doc">a document (optional)</param>
+  /// <param name="list">a node list of attribute children</param>
+  /// <param name="inLine">whether entity references are substituted</param>
+  /// <returns>Returns a string or nil if a memory allocation failed.</returns>
   xmlNodeListGetRawString   : function(const doc: xmlDocPtr; const list: xmlNodePtr; &inLine: Integer): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
+
+  /// <summary>
+  /// Replace the text content of a node.
+  ///
+  /// Sets the raw text content of text, CDATA, comment or PI nodes.
+  ///
+  /// For element and attribute nodes, removes all children and
+  /// replaces them by parsing content which is expected to be a
+  /// valid XML attribute value possibly containing character and
+  /// entity references. Syntax errors and references to undeclared
+  /// entities are ignored silently. Unfortunately, there isn't an
+  /// API to pass raw content directly. An inefficient work-around
+  /// is to escape the content with xmlEncodeSpecialChars before
+  /// passing it. A better trick is clearing the old content
+  /// with xmlNodeSetContent(node, nil) first and then calling
+  /// xmlNodeAddContent(node, content). Unlike this function,
+  /// xmlNodeAddContent accepts raw text.
+  /// </summary>
+  /// <param name="cur">the node being modified</param>
+  /// <param name="content">the new value of the content</param>
   /// <returns></returns>
   xmlNodeSetContent         : function(const cur: xmlNodePtr; const content: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>See <see cref="xmlNodeSetContent"/>.</summary>
+  /// <param name="cur">the node being modified</param>
+  /// <param name="content">the new value of the content</param>
+  /// <param name="len">the size of content</param>
+  /// <returns>Returns 0 on success, 1 on error, -1 if a memory allocation failed.</returns>
   xmlNodeSetContentLen      : function(const cur: xmlNodePtr; const content: xmlCharPtr; len: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Append the extra substring to the node content.</summary>
+  /// <remarks>In contrast to xmlNodeSetContent(), content is supposed to be raw text, so unescaped XML special chars are allowed, entity references are not supported.</remarks>
+  /// <param name="cur">the node being modified</param>
+  /// <param name="content">extra content</param>
+  /// <returns>Returns 0 on success, 1 on error, -1 if a memory allocation failed.</returns>
   xmlNodeAddContent         : function(const cur: xmlNodePtr; const content: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Append the extra substring to the node content.</summary>
+  /// <remarks>In contrast to xmlNodeSetContentLen(), content is supposed to be raw text, so unescaped XML special chars are allowed, entity references are not supported.</remarks>
+  /// <param name="cur">the node being modified</param>
+  /// <param name="content">extra content</param>
+  /// <param name="len">the size of content</param>
+  /// <returns>Returns 0 on success, 1 on error, -1 if a memory allocation failed.</returns>
   xmlNodeAddContentLen      : function(const cur: xmlNodePtr; const content: xmlCharPtr; len: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Read the value of a node, this can be either the text carried
+  /// directly by this node if it's a TEXT node or the aggregate string
+  /// of the values carried by this node child's (TEXT and ENTITY_REF).
+  /// Entity references are substituted.
+  /// </summary>
+  /// <param name="cur">the node being read</param>
+  /// <returns>
+  /// Returns a new xmlCharPtr or nil if no content is available.
+  /// It's up to the caller to free the memory with xmlFree().
+  ///</returns>
   xmlNodeGetContent         : function(const cur: xmlNodePtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Read the value of a node cur, this can be either the text carried
+  /// directly by this node if it's a TEXT node or the aggregate string
+  /// of the values carried by this node child's (TEXT and ENTITY_REF).
+  /// Entity references are substituted.
+  /// Fills up the buffer buf with this value
+  /// </summary>
+  /// <param name="buf">a buffer xmlBufPtr</param>
+  /// <param name="cur">the node being read</param>
+  /// <returns>Returns 0 in case of success and -1 in case of error.</returns>
   xmlBufGetNodeContent      : function(buf: xmlBufPtr; cur: xmlNodePtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Searches the language of a node, i.e. the values of the xml:lang attribute or the one carried by the nearest ancestor.</summary>
+  /// <param name="cur">the node being checked</param>
+  /// <returns>
+  /// Returns a pointer to the lang value, or nil if not found.
+  /// It's up to the caller to free the memory with xmlFree().
+  /// </returns>
   xmlNodeGetLang            : function(const cur: xmlNodePtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Searches the space preserving behaviour of a node, i.e. the values of the xml:space attribute or the one carried by the nearest ancestor.</summary>
+  /// <param name="cur">the node being checked</param>
+  /// <returns>Returns -1 if xml:space is not inherited, 0 if "default", 1 if "preserve"</returns>
   xmlNodeGetSpacePreserve   : function(const cur: xmlNodePtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Set the language of a node, i.e. the values of the xml:lang attribute.</summary>
+  /// <param name="cur">the node being changed</param>
+  /// <param name="lang">the language description</param>
+  /// <returns>Return 0 on success, 1 if arguments are invalid, -1 if a memory allocation failed.</returns>
   xmlNodeSetLang            : function(const cur: xmlNodePtr; const lang: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Set (or reset) the space preserving behaviour of a node, i.e. the value of the xml:space attribute.</summary>
+  /// <param name="cur">the node being changed</param>
+  /// <param name="val">the xml:space value ("0": default, 1: "preserve")</param>
+  /// <returns>Return 0 on success, 1 if arguments are invalid, -1 if a memory allocation failed.</returns>
   xmlNodeSetSpacePreserve   : function(const cur: xmlNodePtr; val: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Searches for the BASE URL. The code should work on both XML
+  /// and HTML document even if base mechanisms are completely different.
+  /// It returns the base as defined in RFC 2396 sections
+  /// 5.1.1. Base URI within Document Content
+  /// and
+  /// 5.1.2. Base URI from the Encapsulating Entity
+  /// However it does not return the document base (5.1.3), use doc.URL in this case
+  /// </summary>
+  /// <param name="doc">the document the node pertains to</param>
+  /// <param name="cur">the node being checked</param>
+  /// <param name="baseOut">pointer to base</param>
+  /// <returns>Return 0 in case of success, 1 if a URI or argument is invalid, -1 if a memory allocation failed.</returns>
   xmlNodeGetBaseSafe        : function(const doc: xmlDocPtr; const cur: xmlNodePtr; var baseOut: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
+
+  /// <summary>
+  /// See <see cref="xmlNodeGetBaseSafe"/>.
+  /// This function doesn't allow to distinguish memory allocation failures from a non-existing base.
+  /// </summary>
+  /// <param name="doc">the document the node pertains to</param>
+  /// <param name="cur">the node being checked</param>
   /// <returns></returns>
   xmlNodeGetBase            : function(const doc: xmlDocPtr; const cur: xmlNodePtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Set (or reset) the base URI of a node, i.e. the value of the xml:base attribute.</summary>
+  /// <param name="cur">the node being changed</param>
+  /// <param name="uri">the new base URI</param>
+  /// <returns>Returns 0 on success, -1 on error.</returns>
   xmlNodeSetBase            : function(const cur: xmlNodePtr; const uri: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Unlink and free an attribute including all children.
+  ///
+  /// Note this doesn't work for namespace declarations.
+  ///
+  /// The attribute must have a non-nill parent pointer.</summary>
+  /// <param name="cur">an attribute</param>
+  /// <returns>Returns 0 on success or -1 if the attribute was not found or arguments are invalid.</returns>
   xmlRemoveProp             : function(cur: xmlAttrPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Remove an attribute carried by a node.</summary>
+  /// <param name="node">the node</param>
+  /// <param name="ns">the namespace definition</param>
+  /// <param name="name">the attribute name</param>
+  /// <returns>Returns 0 if successful, -1 if not found</returns>
   xmlUnsetNsProp            : function(node: xmlNodePtr; ns: xmlNsPtr; const name: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Remove an attribute carried by a node.</summary>
+  /// <param name="node">the node</param>
+  /// <param name="name">the attribute name</param>
+  /// <returns>Returns 0 if successful, -1 if not found</returns>
   xmlUnsetProp              : function(node: xmlNodePtr; const name: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>Serialize text attribute values to an xml simple buffer</summary>
+  /// <param name="buf">the XML buffer output</param>
+  /// <param name="doc">the document</param>
+  /// <param name="attr">the attribute node</param>
+  /// <param name="str">the text content</param>
   xmlAttrSerializeTxtContent: procedure(buf: xmlBufferPtr; doc: xmlDocPtr; attr: xmlAttrPtr; str: xmlCharPtr); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// This function checks that all the namespaces declared within the given tree are properly declared.
+  /// This is needed for example after Copy or Cut and then paste operations.
+  /// The subtree may still hold pointers to namespace declarations outside the subtree or invalid/masked.
+  /// As much as possible the function try to reuse the existing namespaces found in the new environment.
+  /// If not possible the new namespaces are redeclared on tree at the top of the given subtree
+  /// </summary>
+  /// <param name="doc">the document</param>
+  /// <param name="tree">a node defining the subtree to reconciliate</param>
+  /// <returns>Returns 0 on success or -1 in case of error.</returns>
   xmlReconciliateNs         : function(doc: xmlDocPtr; tree: xmlNodePtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
+
+  /// <summary>
+  /// Dump an XML document in memory and return the #xmlChar and it's size.
+  /// It's up to the caller to free the memory with xmlFree().
+  /// Note that format = 1 provide node indenting only if xmlIndentTreeOutput = 1
+  /// or xmlKeepBlanksDefault(0) was called
+  /// </summary>
+  /// <param name="cur">the document</param>
+  /// <param name="mem">the memory pointer</param>
+  /// <param name="size">the memory length</param>
+  /// <param name="format">should formatting spaces been added</param>
   xmlDocDumpFormatMemory    : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer; format: Integer); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
+
+  /// <summary>
+  /// Dump an XML document in memory and return the #xmlChar and it's size in bytes.
+  /// It's up to the caller to free the memory with xmlFree().
+  /// The resulting byte array is zero terminated, though the last 0 is not included in the returned size.
+  /// </summary>
+  /// <param name="cur">the document</param>
+  /// <param name="mem">the memory pointer</param>
+  /// <param name="size">the memory length</param>
   /// <returns></returns>
   xmlDocDumpMemory          : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDocDumpMemoryEnc       : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer; const encoding: PUTF8Char); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDocDumpFormatMemoryEnc : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer; const encoding: PUTF8Char; format: Integer); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufNodeDump            : function(buf: xmlBufPtr; doc: xmlDocPtr; cur: xmlNodePtr; level, format: Integer): size_t; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlIsXHTML                : function(const systemID, publicID: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlGetDocCompressMode     : function(const doc: xmlDoc): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlSetDocCompressMode     : procedure(const doc: xmlDoc; mode: Integer); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapNewCtxt         : function: xmlDOMWrapCtxtPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapFreeCtxt        : procedure(ctxt: xmlDOMWrapCtxtPtr); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapReconcileNamespaces : function(ctxt: xmlDOMWrapCtxtPtr; elem: xmlNodePtr; options: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapAdoptNode       : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; destDoc: xmlDocPtr; destParent: xmlNodePtr; options: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapRemoveNode      : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; options: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDOMWrapCloneNode       : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; var clonedNode: xmlNodePtr; destDoc: xmlDocPtr; destParent: xmlNodePtr; deep, options: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlChildElementCount      : function(parent: xmlNodePtr): ulong; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlNextElementSibling     : function(node: xmlNodePtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlFirstElementChild      : function(parent: xmlNodePtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlLastElementChild       : function(parent: xmlNodePtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlPreviousElementSibling : function(node: xmlNodePtr): xmlNodePtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlRegisterNodeDefault    : function(func: xmlRegisterNodeFunc): xmlRegisterNodeFunc; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlDeregisterNodeDefault  : function(func: xmlDeregisterNodeFunc): xmlDeregisterNodeFunc; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferCreate           : function: xmlBufferPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferCreateSize       : function (size: size_t): xmlBufferPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferCreateStatic     : function (mem: Pointer; size: size_t): xmlBufferPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferFree             : procedure(buf: xmlBufferPtr); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferAdd              : function (buf: xmlBufferPtr; const str: xmlCharPtr; len: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferAddHead          : function (buf: xmlBufferPtr; const str: xmlCharPtr; len: Integer): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferCat              : function (buf: xmlBufferPtr; const str: xmlCharPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferCCat             : function (buf: xmlBufferPtr; const str: PUTF8Char): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferEmpty            : procedure(buf: xmlBufferPtr); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferContent          : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferDetach           : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferLength           : function (buf: xmlBufferPtr): Integer; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufferWriteQuotedString: procedure (buf: xmlBufferPtr; str: xmlCharPtr); cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufContent             : function(buf: xmlBufferPtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufEnd                 : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufUse                 : function (buf: xmlBufferPtr): size_t; cdecl;
-  /// <summary></summary>
-  /// <param name=""></param>
-  /// <returns></returns>
-  xmlBufShrink              : function (buf: xmlBufferPtr; len: size_t): size_t; cdecl;
 
+  /// <summary>
+  /// Dump the current DOM tree into memory using the character encoding specified by the caller.
+  /// Note it is up to the caller of this function to free the allocated memory with xmlFree().
+  /// </summary>
+  /// <param name="cur">Document to generate XML text from</param>
+  /// <param name="mem">Memory pointer for allocated XML text</param>
+  /// <param name="size">Length of the generated XML text</param>
+  /// <param name="encoding">Character encoding to use when generating XML text</param>
+  xmlDocDumpMemoryEnc       : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer; const encoding: PUTF8Char); cdecl;
+
+  /// <summary>
+  /// Dump the current DOM tree into memory using the character encoding specified
+  /// by the caller.  Note it is up to the caller of this function to free the
+  /// allocated memory with xmlFree().
+  /// Note that format = 1 provide node indenting only if xmlIndentTreeOutput = 1
+  /// or xmlKeepBlanksDefault(0) was calle
+  /// </summary>
+  /// <param name="cur">Document to generate XML text from</param>
+  /// <param name="mem">Memory pointer for allocated XML text</param>
+  /// <param name="size">Length of the generated XML text</param>
+  /// <param name="encoding">Character encoding to use when generating XML text</param>
+  /// <param name="format">should formatting spaces been added</param>
+  xmlDocDumpFormatMemoryEnc : procedure(cur: xmlDocPtr; var mem: Pointer; var size: Integer; const encoding: PUTF8Char; format: Integer); cdecl;
+
+  /// <summary>
+  /// Dump an XML node, recursive behaviour, children are printed too.
+  /// Note that @format = 1 provide node indenting only if xmlIndentTreeOutput = 1 or xmlKeepBlanksDefault(0) was called
+  /// </summary>
+  /// <param name="buf">the XML buffer output</param>
+  /// <param name="doc">the document</param>
+  /// <param name="cur">the current node</param>
+  /// <param name="level">the imbrication level for indenting</param>
+  /// <param name="format">is formatting allowed</param>
+  /// <returns>Returns the number of bytes written to the buffer, in case of error 0 is returned or buf stores the error</returns>
+  xmlBufNodeDump            : function(buf: xmlBufPtr; doc: xmlDocPtr; cur: xmlNodePtr; level, format: Integer): size_t; cdecl;
+
+  /// <summary>Try to find if the document correspond to an XHTML DTD</summary>
+  /// <param name="systemID">the system identifier</param>
+  /// <param name="publicID">the public identifier</param>
+  /// <returns>Returns 1 if true, 0 if not and -1 in case of error</returns>
+  xmlIsXHTML                : function(const systemID, publicID: xmlCharPtr): Integer; cdecl;
+
+  /// <summary>get the compression ratio for a document, ZLIB based</summary>
+  /// <param name="doc">the document</param>
+  /// <returns>Returns 0 (uncompressed) to 9 (max compression)</returns>
+  xmlGetDocCompressMode     : function(const doc: xmlDoc): Integer; cdecl;
+
+  /// <summary>
+  /// set the compression ratio for a document, ZLIB based
+  /// Correct values: 0 (uncompressed) to 9 (max compression
+  /// </summary>
+  /// <param name="doc">the document</param>
+  /// <param name="mode">the compression ratio</param>
+  xmlSetDocCompressMode     : procedure(const doc: xmlDoc; mode: Integer); cdecl;
+
+  /// <summary>Allocates and initializes a new DOM-wrapper context.</summary>
+  /// <returns>Returns the xmlDOMWrapCtxtPtr or nil in case of an internal error.</returns>
+  xmlDOMWrapNewCtxt         : function: xmlDOMWrapCtxtPtr; cdecl;
+
+  /// <summary>Frees the DOM-wrapper context.</summary>
+  /// <param name="ctxt">the DOM-wrapper context</param>
+  xmlDOMWrapFreeCtxt        : procedure(ctxt: xmlDOMWrapCtxtPtr); cdecl;
+
+  /// <summary>
+  /// Ensures that ns-references point to ns-decls hold on element-nodes.
+  /// Ensures that the tree is namespace wellformed by creating additional
+  /// ns-decls where needed. Note that, since prefixes of already existent
+  /// ns-decls can be shadowed by this process, it could break QNames in
+  /// attribute values or element content.
+  /// </summary>
+  /// <param name="ctxt">DOM wrapper context, unused at the moment</param>
+  /// <param name="elem">the element-node</param>
+  /// <param name="options">option flags</param>
+  /// <returns>Returns 0 if succeeded, -1 otherwise and on API/internal errors</returns>
+  xmlDOMWrapReconcileNamespaces : function(ctxt: xmlDOMWrapCtxtPtr; elem: xmlNodePtr; options: Integer): Integer; cdecl;
+
+  /// <summary>
+  /// References of out-of scope ns-decls are remapped to point to destDoc:
+  /// 1) If destParent is given, then nsDef entries on element-nodes are used
+  /// 2) If no destParent is given, then destDoc.oldNs entries are used
+  ///    This is the case when you have an unlinked node and just want to move it
+  ///    to the context of
+  ///
+  /// If destParent is given, it ensures that the tree is namespace
+  /// wellformed by creating additional ns-decls where needed.
+  /// Note that, since prefixes of already existent ns-decls can be
+  /// shadowed by this process, it could break QNames in attribute
+  /// values or element content.
+  /// </summary>
+  /// <param name="ctxt">the optional context for custom processing</param>
+  /// <param name="srcDoc">the optional sourceDoc</param>
+  /// <param name="node">the node to start wit</param>
+  /// <param name="destDoc">the destination doc</param>
+  /// <param name="destParent">the optional new parent of node in destDoc</param>
+  /// <param name="options">option flags</param>
+  /// <returns>
+  /// Returns 0 if the operation succeeded,
+  ///         1 if a node of unsupported type was given,
+  ///         2 if a node of not yet supported type was given and
+  ///         -1 on API/internal errors.
+  ///</returns>
+  xmlDOMWrapAdoptNode       : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; destDoc: xmlDocPtr; destParent: xmlNodePtr; options: Integer): Integer; cdecl;
+
+  /// <summary>
+  /// Unlinks the given node from its owner.
+  /// This will substitute ns-references to node.nsDef for
+  /// ns-references to doc.oldNs, thus ensuring the removed
+  /// branch to be autark wrt ns-references.
+  /// </summary>
+  /// <param name="ctxt">a DOM wrapper context</param>
+  /// <param name="srcDoc">the doc</param>
+  /// <param name="node">the node to be removed.</param>
+  /// <param name="options">set of options, unused at the moment</param>
+  /// <returns>Returns 0 on success, 1 if the node is not supported, -1 on API and internal errors.</returns>
+  xmlDOMWrapRemoveNode      : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; options: Integer): Integer; cdecl;
+
+  /// <summary>
+  /// References of out-of scope ns-decls are remapped to point to destDoc:
+  /// 1) If destParent is given, then nsDef entries on element-nodes are used
+  /// 2) If no destParent is given, then destDoc.oldNs entries are used.
+  ///    This is the case when you don't know already where the cloned branch
+  ///    will be added to.
+  ///
+  /// If destParent is given, it ensures that the tree is namespace
+  /// wellformed by creating additional ns-decls where needed.
+  /// Note that, since prefixes of already existent ns-decls can be
+  /// shadowed by this process, it could break QNames in attribute
+  /// values or element content.
+  /// TODO:
+  ///   1) What to do with XInclude? Currently this returns an error for XInclude.
+  /// </summary>
+  /// <param name="ctxt">the optional context for custom processing</param>
+  /// <param name="srcDoc">the optional sourceDoc</param>
+  /// <param name="node">the node to start with</param>
+  /// <param name="clonedNode">the clone of the given node</param>
+  /// <param name="destDoc">the destination doc</param>
+  /// <param name="destParent">the optional new parent of node in destDoc</param>
+  /// <param name="deep">descend into child if set</param>
+  /// <param name="options">option flags</param>
+  /// <returns>
+  /// Returns 0 if the operation succeeded,
+  ///         1 if a node of unsupported (or not yet supported) type was given,
+  ///         -1 on API/internal errors.
+  /// </returns>
+  xmlDOMWrapCloneNode       : function(ctxt: xmlDOMWrapCtxtPtr; srcDoc: xmlDocPtr; node: xmlNodePtr; var clonedNode: xmlNodePtr; destDoc: xmlDocPtr; destParent: xmlNodePtr; deep, options: Integer): Integer; cdecl;
+
+  /// <summary>Count the number of child nodes which are elements.
+  /// Note that entity references are not expanded.</summary>
+  /// <param name="parent">the parent node</param>
+  /// <returns>Returns the number of element children or 0 if arguments are invalid.</returns>
+  xmlChildElementCount      : function(parent: xmlNodePtr): ulong; cdecl;
+
+  /// <summary>
+  /// Find the closest following sibling which is a element.
+  /// Note that entity references are not expanded.</summary>
+  /// <param name="node">the current node</param>
+  /// <returns>Returns the sibling or nil if no sibling was found.</returns>
+  xmlNextElementSibling     : function(node: xmlNodePtr): xmlNodePtr; cdecl;
+
+  /// <summary>Find the first child node which is an element.
+  /// Note that entity references are not expanded.
+  /// </summary>
+  /// <param name="parent">the parent node</param>
+  /// <returns>Returns the first element or NULL if parent has no children</returns>
+  xmlFirstElementChild      : function(parent: xmlNodePtr): xmlNodePtr; cdecl;
+
+  /// <summary>
+  /// Find the first child node which is an element.
+  /// Note that entity references are not expanded.
+  /// </summary>
+  /// <param name="parent">the parent node</param>
+  /// <returns>Returns the first element or nil if parent has no children.</returns>
+  xmlLastElementChild       : function(parent: xmlNodePtr): xmlNodePtr; cdecl;
+
+  /// <summary>
+  ///  Find the closest preceding sibling which is a element.
+  ///  Note that entity references are not expanded.
+  /// </summary>
+  /// <param name="node">the current node</param>
+  /// <returns>Returns the sibling or NULL if no sibling was found.</returns>
+  xmlPreviousElementSibling : function(node: xmlNodePtr): xmlNodePtr; cdecl;
+
+  /// <summary>Registers a callback for node destruction</summary>
+  /// <param name="func">function pointer to the new DeregisterNodeFunc</param>
+  /// <returns>Returns the previous value of the deregistration function</returns>
+  xmlDeregisterNodeDefault  : function(func: xmlDeregisterNodeFunc): xmlDeregisterNodeFunc; cdecl;
+
+  /// <summary>routine to create an XML buffer.</summary>
+  /// <returns>the new structure.</returns>
+  xmlBufferCreate           : function: xmlBufferPtr; cdecl;
+
+  /// <summary>routine to create an XML buffer.</summary>
+  /// <param name="size">initial size of buffer</param>
+  /// <returns>the new structure.</returns>
+  xmlBufferCreateSize       : function (size: size_t): xmlBufferPtr; cdecl;
+
+  /// <param name="mem">the memory area</param>
+  /// <param name="size">the size in bytes</param>
+  /// <returns>Returns an XML buffer initialized with bytes</returns>
+  xmlBufferCreateStatic     : function (mem: Pointer; size: size_t): xmlBufferPtr; cdecl;
+
+  /// <summary>Frees an XML buffer. It frees both the content and the structure which encapsulate it.</summary>
+  /// <param name="buf">the buffer to free</param>
+  xmlBufferFree             : procedure(buf: xmlBufferPtr); cdecl;
+
+  /// <summary>Add a string range to an XML buffer. if len == -1, the length of str is recomputed.</summary>
+  /// <param name="buf">the buffer to dump</param>
+  /// <param name="str">the xmlCharPtr string</param>
+  /// <param name="len">the number of xmlChar to add</param>
+  /// <returns>Returns a xmlParserErrors code.</returns>
+  xmlBufferAdd              : function (buf: xmlBufferPtr; const str: xmlCharPtr; len: Integer): Integer; cdecl;
+
+  /// <summary>Add a string range to the beginning of an XML buffer.
+  /// if len = -1, the length of str is recomputed.</summary>
+  /// <param name="buf">the buffer</param>
+  /// <param name="str">the xmlCharPtr string</param>
+  /// <param name="len">the number of xmlChar to add</param>
+  /// <returns>Returns a xmlParserErrors code.</returns>
+  xmlBufferAddHead          : function (buf: xmlBufferPtr; const str: xmlCharPtr; len: Integer): Integer; cdecl;
+
+  /// <summary>Append a zero terminated string to an XML buffer.</summary>
+  /// <param name="buf">the buffer to add to</param>
+  /// <param name="str">the #xmlChar string</param>
+  /// <returns>Returns 0 successful, a positive error code number otherwise and -1 in case of internal or API error.</returns>
+  xmlBufferCat              : function (buf: xmlBufferPtr; const str: xmlCharPtr): Integer; cdecl;
+
+  /// <summary>Append a zero terminated C string to an XML buffer.</summary>
+  /// <param name="buf">the buffer to dump</param>
+  /// <param name="str">the C char string</param>
+  /// <returns>Returns 0 successful, a positive error code number otherwise and -1 in case of internal or API error</returns>
+  xmlBufferCCat             : function (buf: xmlBufferPtr; const str: PAnsiChar): Integer; cdecl;
+
+  /// <summary>empty a buffer</summary>
+  /// <param name="buf">the buffer</param>
+  xmlBufferEmpty            : procedure(buf: xmlBufferPtr); cdecl;
+
+  /// <summary>Function to extract the content of a buffer</summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the internal content</returns>
+  xmlBufferContent          : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
+
+  /// <summary>
+  /// Remove the string contained in a buffer and gie it back to the
+  /// caller. The buffer is reset to an empty content.
+  /// This doesn't work with immutable buffers as they can't be reset.
+  /// </summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the previous string contained by the buffer</returns>
+  xmlBufferDetach           : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
+
+  /// <summary>
+  /// Remove the string contained in a buffer and give it back to the
+  /// caller. The buffer is reset to an empty content.
+  /// This doesn't work with immutable buffers as they can't be reset.
+  /// </summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the previous string contained by the buffer.</returns>
+  xmlBufferLength           : function (buf: xmlBufferPtr): Integer; cdecl;
+
+  /// <summary>
+  /// routine which manage and grows an output buffer. This one writes
+  /// a quoted or double quoted #xmlChar string, checking first if it holds
+  /// quote or double-quotes internally
+  /// </summary>
+  /// <param name="buf">the XML buffer output</param>
+  /// <param name="str">the string to add</param>
+  xmlBufferWriteQuotedString: procedure (buf: xmlBufferPtr; str: xmlCharPtr); cdecl;
+
+  /// <summary>Function to extract the content of a buffer</summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the internal content</returns>
+  xmlBufContent             : function(buf: xmlBufferPtr): xmlCharPtr; cdecl;
+
+  /// <summary>Function to extract the end of the content of a buffer</summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the end of the internal content or nil in case of error</returns>
+  xmlBufEnd                 : function (buf: xmlBufferPtr): xmlCharPtr; cdecl;
+
+  /// <summary>Function to get the length of a buffer</summary>
+  /// <param name="buf">the buffer</param>
+  /// <returns>Returns the length of data in the internal content</returns>
+  xmlBufUse                 : function (buf: xmlBufferPtr): size_t; cdecl;
+
+  /// <summary>
+  /// Search a Ns registered under a given name space for a document.
+  /// recurse on the parents until it finds the defined namespace
+  /// or return nil otherwise.
+  /// nameSpace can be nil, this is a search for the default namespace.
+  /// We don't allow to cross entities boundaries. If you don't declare
+  /// the namespace within those you will be in troubles !!! A warning
+  /// is generated to cover this case.
+  ///</summary>
+  /// <param name="doc">the document</param>
+  /// <param name="node">the current node</param>
+  /// <param name="nameSpace">the namespace prefix</param>
+  /// <returns>
+  /// Returns the namespace pointer or NULL if no namespace was found or
+  /// a memory allocation failed. Allocations can only fail if the "xml"
+  /// namespace is queried.
+  /// </returns>
   xmlSearchNs               : function(doc: xmlDocPtr; node: xmlNodePtr; const nameSpace: xmlCharPtr): xmlNsPtr; cdecl;
+
+  /// <summary>
+  /// Search a Ns aliasing a given URI. Recurse on the parents until it finds the defined namespace or return nil otherwise.
+  /// </summary>
+  /// <param name="doc">the document</param>
+  /// <param name="node">the current node</param>
+  /// <param name="href">the namespace value</param>
+  /// <returns>
+  /// Returns the namespace pointer or nil if no namespace was found or a memory allocation failed.
+  /// Allocations can only fail if the "xml" namespace is queried.
+  /// </returns>
   xmlSearchNsByHref         : function(doc: xmlDocPtr; node: xmlNodePtr; const href: xmlCharPtr): xmlNsPtr; cdecl;
+
+  /// <summary>
+  /// Find all in-scope namespaces of a node. out returns a nil
+  /// terminated array of namespace pointers that must be freed by
+  /// the caller.
+  /// </summary>
+  /// <param name="doc">the document</param>
+  /// <param name="node">the current node</param>
+  /// <param name="out">the returned namespace array</param>
+  /// <returns>Returns 0 on success, 1 if no namespaces were found, -1 if a memory allocation failed.</returns>
   xmlGetNsListSafe          : function(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArray): Integer; cdecl;
+
+  /// <summary>
+  /// Find all in-scope namespaces of a node.
+  ///
+  /// Use<see cref="xmlGetNsListSafe"/> for better error reporting.</summary>
+  /// <param name="doc">the document</param>
+  /// <param name="node">the current node</param>
+  /// <returns>
+  /// Returns a nil terminated array of namespace pointers that must
+  /// be freed by the caller or nil if no namespaces were found or
+  /// a memory allocation failed.
+  ///</returns>
   xmlGetNsList              : function(const doc: xmlDocPtr; node: xmlNodePtr): xmlNsPtr; cdecl;
+
+  /// <summary>Set the namespace of an element or attribute node. Passing a nil namespace unsets the namespace.</summary>
+  /// <param name="node">a node in the document</param>
+  /// <param name="ns">a namespace pointer (optional)</param>
   xmlSetNs                  : procedure(node: xmlNodePtr; ns: xmlNsPtr); cdecl;
+
+  /// <summary>Copy a namespace.</summary>
+  /// <param name="cur">the namespace</param>
+  /// <returns>Returns the copied namespace or NULL if a memory allocation failed.</returns>
   xmlCopyNamespace          : function(cur: xmlNsPtr): xmlNsPtr; cdecl;
+
+  /// <summary>Copy a namespace list.</summary>
+  /// <param name="cur">the first namespace</param>
+  /// <returns>Returns the head of the copied list or nil if a memory allocation failed.</returns>
   xmlCopyNamespaceList      : function(cur: xmlNsPtr): xmlNsPtr; cdecl;
 
 {$endregion}
@@ -2447,7 +2958,7 @@ type
   /// <param name="output">a pointer to an array of bytes to store the UTF-8 result</param>
   /// <param name="outlen">the length of out </param>
   /// <param name="input">a pointer to an array of chars in the original encoding </param>
-  /// <param name="inlem">the length of input </param>
+  /// <param name="inlen">the length of input </param>
   /// <returns>
   /// the number of bytes written or an xmlCharEncError code.
   /// </returns>
@@ -2460,7 +2971,7 @@ type
   /// <param name="output">a pointer to an array of bytes to store the result </param>
   /// <param name="outlen">the length of out </param>
   /// <param name="input">a pointer to an array of UTF-8 chars </param>
-  /// <param name="inlem">the length of input </param>
+  /// <param name="inlen">the length of input </param>
   /// <returns>
   /// the number of bytes written or an xmlCharEncError code.
   /// </returns>
@@ -2471,7 +2982,7 @@ type
   /// The value of inlen after return is the number of bytes consumed and outlen is the number of bytes produced.
   /// If the converter can consume partial multi-byte sequences, the flush flag can be used to detect truncated sequences at EOF. Otherwise, the flag can be ignored.
   /// </summary>
-  /// <param name="vctx">conversion context </param>
+  /// <param name="vctxt">conversion context </param>
   /// <param name="output">a pointer to an array of bytes to store the result </param>
   /// <param name="outlen">the length of out</param>
   /// <param name="input">a pointer to an array of input bytes</param>
@@ -2487,7 +2998,7 @@ type
   /// The handler can be obtained from <see cref="xmlCharEncNewCustomHandler"/>.
   /// flags can contain <see cref="XML_ENC_INPUT"/>, <see cref="XML_ENC_OUTPUT"/> or both.
   /// </summary>
-  /// <param name="vctx">user data </param>
+  /// <param name="vctxt">user data </param>
   /// <param name="name">encoding name </param>
   /// <param name="flags">bit mask of flags </param>
   /// <param name="output">pointer to resulting handler </param>
@@ -2508,7 +3019,7 @@ var
   ///
   /// The handler must be closed with xmlCharEncCloseFunc().
   ///
-  /// If the encoding is UTF-8, a NULL handler and no error code will be returned.
+  /// If the encoding is UTF-8, a nil handler and no error code will be returned.
   /// </summary>
   /// <param name="enc">an xmlCharEncoding value. </param>
   /// <param name="output">pointer to result </param>
@@ -2528,7 +3039,7 @@ var
   ///
   /// The handler must be closed with xmlCharEncCloseFunc().
   ///
-  /// If the encoding is UTF-8, a NULL handler and no error code will be returned.
+  /// If the encoding is UTF-8, a nil handler and no error code will be returned.
   /// </summary>
   /// <param name="name">a string describing the char encoding. </param>
   /// <param name="output">boolean, use handler for output</param>
@@ -2588,9 +3099,9 @@ type
   /// <summary>
   /// Callback used in the I/O Input API to detect if the current handler can provide input functionality for this resource.
   /// </summary>
-  /// <param name="context">an Input context </param>
+  /// <param name="filename">the filename or URI</param>
   /// <returns>
-  /// 0 or -1 in case of error
+  /// Returns 1 if yes and 0 if another Input module should be used
   /// </returns>
   xmlInputMatchCallback  = function(filename: PUTF8Char): Integer; cdecl;
 
@@ -2599,7 +3110,7 @@ type
   /// </summary>
   /// <param name="filename">the filename or URI </param>
   /// <returns>
-  /// an Input context or NULL in case or error
+  /// an Input context or nil in case or error
   /// </returns>
   xmlInputOpenCallback   = function(filename: PUTF8Char): Pointer; cdecl;
 
@@ -2637,7 +3148,7 @@ type
   /// </summary>
   /// <param name="filename">the filename or URI </param>
   /// <returns>
-  /// an Output context or NULL in case or error
+  /// an Output context or nil in case or error
   /// </returns>
   xmlOutputOpenCallback  = function(const filename: PUTF8Char): Pointer; cdecl;
 
@@ -2667,7 +3178,7 @@ type
   /// <param name="URI">the URI to read from </param>
   ///  <param name="enc">the requested source encoding </param>
   /// <returns>
-  /// the new xmlParserInputBuffer in case of success or NULL if no method was found.
+  /// the new xmlParserInputBuffer in case of success or nil if no method was found.
   /// </returns>
   xmlParserInputBufferCreateFilenameFunc = function(const URI: PUTF8Char; enc: xmlCharEncoding): xmlParserInputBufferPtr; cdecl;
 
@@ -2678,7 +3189,7 @@ type
   /// Internal implementation, never uses the callback installed with <see cref="xmlOutputBufferCreateFilenameDefault"/>
   /// </summary>
   /// <param name="URI">a C string containing the URI or filename </param>
-  /// <param name="encoder">the encoding converter or NULL </param>
+  /// <param name="encoder">the encoding converter or nil </param>
   /// <param name="compression">the compression ration (0 none, 9 max)</param>
   /// <returns>
   ///
@@ -3516,8 +4027,8 @@ type
 
   xmlNodeSetPtr = ^xmlNodeSet;
   xmlNodeSet = record
-    nodeNr: Integer;      // number of nodes in the set
-    nodeMax: Integer;     // size of the array as allocated
+    nodeNr: Integer;          // number of nodes in the set
+    nodeMax: Integer;         // size of the array as allocated
     nodeTab: xmlNodeArrayPtr; // array of nodes in no particular order
   end;
 
@@ -3557,7 +4068,7 @@ type
   ///<param name="ctxt">an XPath context </param>
   ///<param name="name">name of the variable </param>
   ///<param name="ns_uri">the namespace name hosting this variable</param>
-  ///<results>the XPath function or NULL if not found.</results>
+  ///<results>the XPath function or nil if not found.</results>
   xmlXPathVariableLookupFunc = function(ctxt: Pointer; name, ns_uri: xmlCharPtr): xmlXPathObject; cdecl;
 
   ///<summary>
@@ -3566,7 +4077,7 @@ type
   ///<param name="ctxt">an XPath context </param>
   ///<param name="name">name of the function </param>
   ///<param name="ns_uri">the namespace name hosting this variable</param>
-  ///<results>the XPath function or NULL if not found.</results>
+  ///<results>the XPath function or nil if not found.</results>
   xmlXPathFuncLookupFunc = function(ctxt: Pointer; name, ns_uri: xmlCharPtr): xmlXPathFunction; cdecl;
 
 var
@@ -4224,712 +4735,703 @@ begin
 
 {$region 'load procs'}
 
-  xmlACatalogAdd               := GetProcAddress(Handle, 'xmlACatalogAdd');
-  xmlACatalogRemove            := GetProcAddress(Handle, 'xmlACatalogRemove');
-  xmlACatalogResolve           := GetProcAddress(Handle, 'xmlACatalogResolve');
-  xmlACatalogResolvePublic     := GetProcAddress(Handle, 'xmlACatalogResolvePublic');
-  xmlACatalogResolveSystem     := GetProcAddress(Handle, 'xmlACatalogResolveSystem');
-  xmlACatalogResolveURI        := GetProcAddress(Handle, 'xmlACatalogResolveURI');
-  xmlAddChild                  := GetProcAddress(Handle, 'xmlAddChild');
-  xmlAddChildList              := GetProcAddress(Handle, 'xmlAddChildList');
-  xmlAddDocEntity              := GetProcAddress(Handle, 'xmlAddDocEntity');
-  xmlAddDtdEntity              := GetProcAddress(Handle, 'xmlAddDtdEntity');
-  xmlAddEncodingAlias          := GetProcAddress(Handle, 'xmlAddEncodingAlias');
-  xmlAddEntity                 := GetProcAddress(Handle, 'xmlAddEntity');
-  xmlAddID                     := GetProcAddress(Handle, 'xmlAddID');
-  xmlAddIDSafe                 := GetProcAddress(Handle, 'xmlAddIDSafe');
-  xmlAddNextSibling            := GetProcAddress(Handle, 'xmlAddNextSibling');
-  xmlAddNotationDecl           := GetProcAddress(Handle, 'xmlAddNotationDecl');
-  xmlAddPrevSibling            := GetProcAddress(Handle, 'xmlAddPrevSibling');
-  xmlAddSibling                := GetProcAddress(Handle, 'xmlAddSibling');
-  xmlAllocOutputBuffer      := GetProcAddress(Handle, 'xmlAllocOutputBuffer');
-  xmlAllocParserInputBuffer := GetProcAddress(Handle, 'xmlAllocParserInputBuffer');
-  xmlAttrSerializeTxtContent   := GetProcAddress(Handle, 'xmlAttrSerializeTxtContent');
-  xmlBufContent                := GetProcAddress(Handle, 'xmlBufContent');
-  xmlBufEnd                    := GetProcAddress(Handle, 'xmlBufEnd');
-  xmlBufferAdd              := GetProcAddress(Handle, 'xmlBufferAdd');
-  xmlBufferAddHead          := GetProcAddress(Handle, 'xmlBufferAddHead');
-  xmlBufferCat              := GetProcAddress(Handle, 'xmlBufferCat');
-  xmlBufferCCat             := GetProcAddress(Handle, 'xmlBufferCCat');
-  xmlBufferContent          := GetProcAddress(Handle, 'xmlBufferContent');
-  xmlBufferCreate           := GetProcAddress(Handle, 'xmlBufferCreate');
-  xmlBufferCreateSize       := GetProcAddress(Handle, 'xmlBufferCreateSize');
-  xmlBufferCreateStatic     := GetProcAddress(Handle, 'xmlBufferCreateStatic');
-  xmlBufferDetach           := GetProcAddress(Handle, 'xmlBufferDetach');
-  xmlBufferEmpty            := GetProcAddress(Handle, 'xmlBufferEmpty');
-  xmlBufferFree             := GetProcAddress(Handle, 'xmlBufferFree');
-  xmlBufferLength           := GetProcAddress(Handle, 'xmlBufferLength');
-  xmlBufferWriteQuotedString   := GetProcAddress(Handle, 'xmlBufferWriteQuotedString');
-  xmlBufGetNodeContent         := GetProcAddress(Handle, 'xmlBufGetNodeContent');
-  xmlBufNodeDump               := GetProcAddress(Handle, 'xmlBufNodeDump');
-  xmlBufShrink                 := GetProcAddress(Handle, 'xmlBufShrink');
-  xmlBufUse                    := GetProcAddress(Handle, 'xmlBufUse');
-  xmlBuildQName                := GetProcAddress(Handle, 'xmlBuildQName');
-  xmlC14NDocDumpMemory         := GetProcAddress(Handle, 'xmlC14NDocDumpMemory');
-  xmlC14NDocSave               := GetProcAddress(Handle, 'xmlC14NDocSave');
-  xmlC14NDocSaveTo             := GetProcAddress(Handle, 'xmlC14NDocSaveTo');
-  xmlCatalogAdd                := GetProcAddress(Handle, 'xmlCatalogAdd');
-  xmlCatalogAddLocal           := GetProcAddress(Handle, 'xmlCatalogAddLocal');
-  xmlCatalogCleanup            := GetProcAddress(Handle, 'xmlCatalogCleanup');
-  xmlCatalogConvert            := GetProcAddress(Handle, 'xmlCatalogConvert');
-  xmlCatalogFreeLocal          := GetProcAddress(Handle, 'xmlCatalogFreeLocal');
-  xmlCatalogGetDefaults        := GetProcAddress(Handle, 'xmlCatalogGetDefaults');
-  xmlCatalogIsEmpty            := GetProcAddress(Handle, 'xmlCatalogIsEmpty');
-  xmlCatalogLocalResolve       := GetProcAddress(Handle, 'xmlCatalogLocalResolve');
-  xmlCatalogLocalResolveURI    := GetProcAddress(Handle, 'xmlCatalogLocalResolveURI');
-  xmlCatalogRemove             := GetProcAddress(Handle, 'xmlCatalogRemove');
-  xmlCatalogResolve            := GetProcAddress(Handle, 'xmlCatalogResolve');
-  xmlCatalogResolvePublic      := GetProcAddress(Handle, 'xmlCatalogResolvePublic');
-  xmlCatalogResolveSystem      := GetProcAddress(Handle, 'xmlCatalogResolveSystem');
-  xmlCatalogResolveURI         := GetProcAddress(Handle, 'xmlCatalogResolveURI');
-  xmlCatalogSetDebug           := GetProcAddress(Handle, 'xmlCatalogSetDebug');
-  xmlCatalogSetDefaults        := GetProcAddress(Handle, 'xmlCatalogSetDefaults');
-  xmlCharEncCloseFunc          := GetProcAddress(Handle, 'xmlCharEncCloseFunc');
-  xmlCharEncInFunc             := GetProcAddress(Handle, 'xmlCharEncInFunc');
-  xmlCharEncNewCustomHandler   := GetProcAddress(Handle, 'xmlCharEncNewCustomHandler');
-  xmlCharEncOutFunc            := GetProcAddress(Handle, 'xmlCharEncOutFunc');
-  xmlChildElementCount         := GetProcAddress(Handle, 'xmlChildElementCount');
-  xmlCleanupEncodingAliases    := GetProcAddress(Handle, 'xmlCleanupEncodingAliases');
-  xmlCleanupInputCallbacks     := GetProcAddress(Handle, 'xmlCleanupInputCallbacks');
-  xmlCleanupOutputCallbacks    := GetProcAddress(Handle, 'xmlCleanupOutputCallbacks');
-  xmlCleanupParser             := GetProcAddress(Handle, 'xmlCleanupParser');
-  xmlClearNodeInfoSeq          := GetProcAddress(Handle, 'xmlClearNodeInfoSeq');
-  xmlConvertSGMLCatalog        := GetProcAddress(Handle, 'xmlConvertSGMLCatalog');
-  xmlCopyDoc                   := GetProcAddress(Handle, 'xmlCopyDoc');
-  xmlCopyDtd                   := GetProcAddress(Handle, 'xmlCopyDtd');
-  xmlCopyEntitiesTable         := GetProcAddress(Handle, 'xmlCopyEntitiesTable');
-  xmlCopyError                 := GetProcAddress(Handle, 'xmlCopyError');
-  xmlCopyNamespace             := GetProcAddress(Handle, 'xmlCopyNamespace');
-  xmlCopyNamespaceList         := GetProcAddress(Handle, 'xmlCopyNamespaceList');
-  xmlCopyProp                  := GetProcAddress(Handle, 'xmlCopyProp');
-  xmlCopyPropList              := GetProcAddress(Handle, 'xmlCopyPropList');
-  xmlCreateCharEncodingHandler := GetProcAddress(Handle, 'xmlCreateCharEncodingHandler');
-  xmlCreateDocParserCtxt       := GetProcAddress(Handle, 'xmlCreateDocParserCtxt');
-  xmlCreateEntitiesTable       := GetProcAddress(Handle, 'xmlCreateEntitiesTable');
-  xmlCreateEntityParserCtxt    := GetProcAddress(Handle, 'xmlCreateEntityParserCtxt');
-  xmlCreateFileParserCtxt      := GetProcAddress(Handle, 'xmlCreateFileParserCtxt');
-  xmlCreateIntSubset           := GetProcAddress(Handle, 'xmlCreateIntSubset');
-  xmlCreateIOParserCtxt     := GetProcAddress(Handle, 'xmlCreateIOParserCtxt');
-  xmlCreateMemoryParserCtxt := GetProcAddress(Handle, 'xmlCreateMemoryParserCtxt');
-  xmlCreatePushParserCtxt   := GetProcAddress(Handle, 'xmlCreatePushParserCtxt');
-  xmlCreateURLParserCtxt    := GetProcAddress(Handle, 'xmlCreateURLParserCtxt');
-  xmlCtxtErrMemory          := GetProcAddress(Handle, 'xmlCtxtErrMemory');
-  xmlCtxtGetCatalogs        := GetProcAddress(Handle, 'xmlCtxtGetCatalogs');
-  xmlCtxtGetDeclaredEncoding:= GetProcAddress(Handle, 'xmlCtxtGetDeclaredEncoding');
-  xmlCtxtGetDict            := GetProcAddress(Handle, 'xmlCtxtGetDict');
-  xmlCtxtGetLastError       := GetProcAddress(Handle, 'xmlCtxtGetLastError');
-  xmlCtxtGetOptions         := GetProcAddress(Handle, 'xmlCtxtGetOptions');
-  xmlCtxtGetPrivate         := GetProcAddress(Handle, 'xmlCtxtGetPrivate');
-  xmlCtxtGetStandalone      := GetProcAddress(Handle, 'xmlCtxtGetStandalone');
-  xmlCtxtGetStatus          := GetProcAddress(Handle, 'xmlCtxtGetStatus');
-  xmlCtxtGetValidCtxt       := GetProcAddress(Handle, 'xmlCtxtGetValidCtxt');
-  xmlCtxtGetVersion         := GetProcAddress(Handle, 'xmlCtxtGetVersion');
-  xmlCtxtParseContent       := GetProcAddress(Handle, 'xmlCtxtParseContent');
-  xmlCtxtParseDocument      := GetProcAddress(Handle, 'xmlCtxtParseDocument');
-  xmlCtxtParseDtd           := GetProcAddress(Handle, 'xmlCtxtParseDtd');
-  xmlCtxtReadDoc            := GetProcAddress(Handle, 'xmlCtxtReadDoc');
-  xmlCtxtReadFd             := GetProcAddress(Handle, 'xmlCtxtReadFd');
-  xmlCtxtReadFile           := GetProcAddress(Handle, 'xmlCtxtReadFile');
-  xmlCtxtReadIO             := GetProcAddress(Handle, 'xmlCtxtReadIO');
-  xmlCtxtReset              := GetProcAddress(Handle, 'xmlCtxtReset');
-  xmlCtxtResetLastError     := GetProcAddress(Handle, 'xmlCtxtResetLastError');
-  xmlCtxtResetPush          := GetProcAddress(Handle, 'xmlCtxtResetPush');
-  xmlCtxtSetCatalogs        := GetProcAddress(Handle, 'xmlCtxtSetCatalogs');
-  xmlCtxtSetCharEncConvImpl := GetProcAddress(Handle, 'xmlCtxtSetCharEncConvImpl');
-  xmlCtxtSetDict            := GetProcAddress(Handle, 'xmlCtxtSetDict');
-  xmlCtxtSetErrorHandler    := GetProcAddress(Handle, 'xmlCtxtSetErrorHandler');
-  xmlCtxtSetMaxAmplification:= GetProcAddress(Handle, 'xmlCtxtSetMaxAmplification');
-  xmlCtxtSetOptions         := GetProcAddress(Handle, 'xmlCtxtSetOptions');
-  xmlCtxtSetPrivate         := GetProcAddress(Handle, 'xmlCtxtSetPrivate');
-  xmlCtxtSetResourceLoader  := GetProcAddress(Handle, 'xmlCtxtSetResourceLoader');
-  xmlCtxtUseOptions         := GetProcAddress(Handle, 'xmlCtxtUseOptions');
-  xmlCtxtValidateDocument   := GetProcAddress(Handle, 'xmlCtxtValidateDocument');
-  xmlCtxtValidateDtd        := GetProcAddress(Handle, 'xmlCtxtValidateDtd');
-  xmlDelEncodingAlias          := GetProcAddress(Handle, 'xmlDelEncodingAlias');
-  xmlDeregisterNodeDefault     := GetProcAddress(Handle, 'xmlDeregisterNodeDefault');
-  xmlDetectCharEncoding        := GetProcAddress(Handle, 'xmlDetectCharEncoding');
-  xmlDictCreate             := GetProcAddress(Handle, 'xmlDictCreate');
-  xmlDictCreateSub          := GetProcAddress(Handle, 'xmlDictCreateSub');
-  xmlDictExists             := GetProcAddress(Handle, 'xmlDictExists');
-  xmlDictFree               := GetProcAddress(Handle, 'xmlDictFree');
-  xmlDictGetUsage           := GetProcAddress(Handle, 'xmlDictGetUsage');
-  xmlDictLookup             := GetProcAddress(Handle, 'xmlDictLookup');
-  xmlDictOwns               := GetProcAddress(Handle, 'xmlDictOwns');
-  xmlDictQLookup            := GetProcAddress(Handle, 'xmlDictQLookup');
-  xmlDictReference          := GetProcAddress(Handle, 'xmlDictReference');
-  xmlDictSetLimit           := GetProcAddress(Handle, 'xmlDictSetLimit');
-  xmlDictSize               := GetProcAddress(Handle, 'xmlDictSize');
-  xmlDocCopyNode               := GetProcAddress(Handle, 'xmlDocCopyNode');
-  xmlDocCopyNodeList           := GetProcAddress(Handle, 'xmlDocCopyNodeList');
-  xmlDocDumpFormatMemory       := GetProcAddress(Handle, 'xmlDocDumpFormatMemory');
-  xmlDocDumpFormatMemoryEnc    := GetProcAddress(Handle, 'xmlDocDumpFormatMemoryEnc');
-  xmlDocDumpMemory             := GetProcAddress(Handle, 'xmlDocDumpMemory');
-  xmlDocDumpMemoryEnc          := GetProcAddress(Handle, 'xmlDocDumpMemoryEnc');
-  xmlDocGetRootElement         := GetProcAddress(Handle, 'xmlDocGetRootElement');
-  xmlDocSetRootElement         := GetProcAddress(Handle, 'xmlDocSetRootElement');
-  xmlDOMWrapAdoptNode          := GetProcAddress(Handle, 'xmlDOMWrapAdoptNode');
-  xmlDOMWrapCloneNode          := GetProcAddress(Handle, 'xmlDOMWrapCloneNode');
-  xmlDOMWrapFreeCtxt           := GetProcAddress(Handle, 'xmlDOMWrapFreeCtxt');
-  xmlDOMWrapNewCtxt            := GetProcAddress(Handle, 'xmlDOMWrapNewCtxt');
-  xmlDOMWrapReconcileNamespaces:= GetProcAddress(Handle, 'xmlDOMWrapReconcileNamespaces');
-  xmlDOMWrapRemoveNode         := GetProcAddress(Handle, 'xmlDOMWrapRemoveNode');
-  xmlDumpEntitiesTable         := GetProcAddress(Handle, 'xmlDumpEntitiesTable');
-  xmlDumpEntityDecl            := GetProcAddress(Handle, 'xmlDumpEntityDecl');
-  xmlEncodeEntitiesReentrant   := GetProcAddress(Handle, 'xmlEncodeEntitiesReentrant');
-  xmlEncodeSpecialChars        := GetProcAddress(Handle, 'xmlEncodeSpecialChars');
-  xmlFindCharEncodingHandler   := GetProcAddress(Handle, 'xmlFindCharEncodingHandler');
-  xmlFirstElementChild         := GetProcAddress(Handle, 'xmlFirstElementChild');
-  xmlFreeCatalog               := GetProcAddress(Handle, 'xmlFreeCatalog');
-  xmlFreeDoc                   := GetProcAddress(Handle, 'xmlFreeDoc');
-  xmlFreeDtd                   := GetProcAddress(Handle, 'xmlFreeDtd');
-  xmlFreeEntitiesTable         := GetProcAddress(Handle, 'xmlFreeEntitiesTable');
-  xmlFreeEntity                := GetProcAddress(Handle, 'xmlFreeEntity');
-  xmlFreeEnumeration           := GetProcAddress(Handle, 'xmlFreeEnumeration');
-  xmlFreeIDTable               := GetProcAddress(Handle, 'xmlFreeIDTable');
-  xmlFreeInputStream        := GetProcAddress(Handle, 'xmlFreeInputStream');
-  xmlFreeNode                  := GetProcAddress(Handle, 'xmlFreeNode');
-  xmlFreeNodeList              := GetProcAddress(Handle, 'xmlFreeNodeList');
-  xmlFreeNs                    := GetProcAddress(Handle, 'xmlFreeNs');
-  xmlFreeNsList                := GetProcAddress(Handle, 'xmlFreeNsList');
-  xmlFreeParserCtxt         := GetProcAddress(Handle, 'xmlFreeParserCtxt');
-  xmlFreeParserInputBuffer  := GetProcAddress(Handle, 'xmlFreeParserInputBuffer');
-  xmlFreeProp                  := GetProcAddress(Handle, 'xmlFreeProp');
-  xmlFreePropList              := GetProcAddress(Handle, 'xmlFreePropList');
-  xmlFreeValidCtxt             := GetProcAddress(Handle, 'xmlFreeValidCtxt');
-  xmlGetCharEncodingHandler    := GetProcAddress(Handle, 'xmlGetCharEncodingHandler');
-  xmlGetCharEncodingName       := GetProcAddress(Handle, 'xmlGetCharEncodingName');
-  xmlGetDocCompressMode        := GetProcAddress(Handle, 'xmlGetDocCompressMode');
-  xmlGetDocEntity              := GetProcAddress(Handle, 'xmlGetDocEntity');
-  xmlGetDtdAttrDesc            := GetProcAddress(Handle, 'xmlGetDtdAttrDesc');
-  xmlGetDtdElementDesc         := GetProcAddress(Handle, 'xmlGetDtdElementDesc');
-  xmlGetDtdEntity              := GetProcAddress(Handle, 'xmlGetDtdEntity');
-  xmlGetDtdNotationDesc        := GetProcAddress(Handle, 'xmlGetDtdNotationDesc');
-  xmlGetDtdQAttrDesc           := GetProcAddress(Handle, 'xmlGetDtdQAttrDesc');
-  xmlGetDtdQElementDesc        := GetProcAddress(Handle, 'xmlGetDtdQElementDesc');
-  xmlGetEncodingAlias          := GetProcAddress(Handle, 'xmlGetEncodingAlias');
-  xmlGetExternalEntityLoader:= GetProcAddress(Handle, 'xmlGetExternalEntityLoader');
-  xmlGetID                     := GetProcAddress(Handle, 'xmlGetID');
-  xmlGetIntSubset              := GetProcAddress(Handle, 'xmlGetIntSubset');
-  xmlGetLastChild              := GetProcAddress(Handle, 'xmlGetLastChild');
-  xmlGetLastError           := GetProcAddress(Handle, 'xmlGetLastError');
-  xmlGetLineNo                 := GetProcAddress(Handle, 'xmlGetLineNo');
-  xmlGetNodePath               := GetProcAddress(Handle, 'xmlGetNodePath');
-  xmlGetNoNsProp               := GetProcAddress(Handle, 'xmlGetNoNsProp');
-  xmlGetNsList                 := GetProcAddress(Handle, 'xmlGetNsList');
-  xmlGetNsListSafe             := GetProcAddress(Handle, 'xmlGetNsListSafe');
-  xmlGetNsProp                 := GetProcAddress(Handle, 'xmlGetNsProp');
-  xmlGetParameterEntity        := GetProcAddress(Handle, 'xmlGetParameterEntity');
-  xmlGetPredefinedEntity       := GetProcAddress(Handle, 'xmlGetPredefinedEntity');
-  xmlGetProp                   := GetProcAddress(Handle, 'xmlGetProp');
-  xmlHasNsProp                 := GetProcAddress(Handle, 'xmlHasNsProp');
-  xmlHasProp                   := GetProcAddress(Handle, 'xmlHasProp');
-  xmlInitializeCatalog         := GetProcAddress(Handle, 'xmlInitializeCatalog');
-  xmlInitNodeInfoSeq        := GetProcAddress(Handle, 'xmlInitNodeInfoSeq');
-  xmlInputSetEncodingHandler:= GetProcAddress(Handle, 'xmlInputSetEncodingHandler');
-  xmlIOParseDTD             := GetProcAddress(Handle, 'xmlIOParseDTD');
-  xmlIsBlankNode               := GetProcAddress(Handle, 'xmlIsBlankNode');
-  xmlIsID                      := GetProcAddress(Handle, 'xmlIsID');
-  xmlIsMixedElement            := GetProcAddress(Handle, 'xmlIsMixedElement');
-  xmlIsolat1ToUTF8             := GetProcAddress(Handle, 'xmlIsolat1ToUTF8');
-  xmlIsXHTML                   := GetProcAddress(Handle, 'xmlIsXHTML');
-  xmlLastElementChild          := GetProcAddress(Handle, 'xmlLastElementChild');
-  xmlLoadACatalog              := GetProcAddress(Handle, 'xmlLoadACatalog');
-  xmlLoadCatalog               := GetProcAddress(Handle, 'xmlLoadCatalog');
-  xmlLoadCatalogs              := GetProcAddress(Handle, 'xmlLoadCatalogs');
-  xmlLoadExternalEntity        := GetProcAddress(Handle, 'xmlLoadExternalEntity');
-  xmlLoadSGMLSuperCatalog      := GetProcAddress(Handle, 'xmlLoadSGMLSuperCatalog');
-  xmlLookupCharEncodingHandler := GetProcAddress(Handle, 'xmlLookupCharEncodingHandler');
-  xmlMemFree                   := GetProcAddress(Handle, 'xmlMemFree');
-  xmlMemGet                    := GetProcAddress(Handle, 'xmlMemGet');
-  xmlMemMalloc                 := GetProcAddress(Handle, 'xmlMemMalloc');
-  xmlMemoryStrdup              := GetProcAddress(Handle, 'xmlMemoryStrdup');
-  xmlMemRealloc                := GetProcAddress(Handle, 'xmlMemRealloc');
-  xmlMemSetup                  := GetProcAddress(Handle, 'xmlMemSetup');
-  xmlMemUsed                   := GetProcAddress(Handle, 'xmlMemUsed');
-  xmlNewCatalog                := GetProcAddress(Handle, 'xmlNewCatalog');
-  xmlNewCDataBlock             := GetProcAddress(Handle, 'xmlNewCDataBlock');
-  xmlNewCharEncodingHandler    := GetProcAddress(Handle, 'xmlNewCharEncodingHandler');
-  xmlNewCharRef                := GetProcAddress(Handle, 'xmlNewCharRef');
-  xmlNewChild                  := GetProcAddress(Handle, 'xmlNewChild');
-  xmlNewDoc                    := GetProcAddress(Handle, 'xmlNewDoc');
-  xmlNewDocComment             := GetProcAddress(Handle, 'xmlNewDocComment');
-  xmlNewDocFragment            := GetProcAddress(Handle, 'xmlNewDocFragment');
-  xmlNewDocNode                := GetProcAddress(Handle, 'xmlNewDocNode');
-  xmlNewDocNodeEatName         := GetProcAddress(Handle, 'xmlNewDocNodeEatName');
-  xmlNewDocPI                  := GetProcAddress(Handle, 'xmlNewDocPI');
-  xmlNewDocProp                := GetProcAddress(Handle, 'xmlNewDocProp');
-  xmlNewDocRawNode             := GetProcAddress(Handle, 'xmlNewDocRawNode');
-  xmlNewDocText                := GetProcAddress(Handle, 'xmlNewDocText');
-  xmlNewDocTextLen             := GetProcAddress(Handle, 'xmlNewDocTextLen');
-  xmlNewDtd                    := GetProcAddress(Handle, 'xmlNewDtd');
-  xmlNewEntity                 := GetProcAddress(Handle, 'xmlNewEntity');
-  xmlNewInputFromFd         := GetProcAddress(Handle, 'xmlNewInputFromFd');
-  xmlNewInputFromFile       := GetProcAddress(Handle, 'xmlNewInputFromFile');
-  xmlNewInputFromIO         := GetProcAddress(Handle, 'xmlNewInputFromIO');
-  xmlNewInputFromMemory     := GetProcAddress(Handle, 'xmlNewInputFromMemory');
-  xmlNewInputFromString     := GetProcAddress(Handle, 'xmlNewInputFromString');
-  xmlNewInputFromUrl        := GetProcAddress(Handle, 'xmlNewInputFromUrl');
-  xmlNewInputStream         := GetProcAddress(Handle, 'xmlNewInputStream');
-  xmlNewIOInputStream       := GetProcAddress(Handle, 'xmlNewIOInputStream');
-  xmlNewNs                     := GetProcAddress(Handle, 'xmlNewNs');
-  xmlNewNsProp                 := GetProcAddress(Handle, 'xmlNewNsProp');
-  xmlNewNsPropEatName          := GetProcAddress(Handle, 'xmlNewNsPropEatName');
-  xmlNewParserCtxt          := GetProcAddress(Handle, 'xmlNewParserCtxt');
-  xmlNewProp                   := GetProcAddress(Handle, 'xmlNewProp');
-  xmlNewReference              := GetProcAddress(Handle, 'xmlNewReference');
-  xmlNewSAXParserCtxt       := GetProcAddress(Handle, 'xmlNewSAXParserCtxt');
-  xmlNewStringInputStream   := GetProcAddress(Handle, 'xmlNewStringInputStream');
-  xmlNewTextChild              := GetProcAddress(Handle, 'xmlNewTextChild');
-  xmlNewValidCtxt              := GetProcAddress(Handle, 'xmlNewValidCtxt');
-  xmlNextElementSibling        := GetProcAddress(Handle, 'xmlNextElementSibling');
-  xmlNodeAddContent            := GetProcAddress(Handle, 'xmlNodeAddContent');
-  xmlNodeAddContentLen         := GetProcAddress(Handle, 'xmlNodeAddContentLen');
-  xmlNodeDump                  := GetProcAddress(Handle, 'xmlNodeDump');
-  xmlNodeDumpOutput            := GetProcAddress(Handle, 'xmlNodeDumpOutput');
-  xmlNodeGetAttrValue          := GetProcAddress(Handle, 'xmlNodeGetAttrValue');
-  xmlNodeGetBase               := GetProcAddress(Handle, 'xmlNodeGetBase');
-  xmlNodeGetBaseSafe           := GetProcAddress(Handle, 'xmlNodeGetBaseSafe');
-  xmlNodeGetContent            := GetProcAddress(Handle, 'xmlNodeGetContent');
-  xmlNodeGetLang               := GetProcAddress(Handle, 'xmlNodeGetLang');
-  xmlNodeGetSpacePreserve      := GetProcAddress(Handle, 'xmlNodeGetSpacePreserve');
-  xmlNodeIsText                := GetProcAddress(Handle, 'xmlNodeIsText');
-  xmlNodeListGetRawString      := GetProcAddress(Handle, 'xmlNodeListGetRawString');
-  xmlNodeListGetString         := GetProcAddress(Handle, 'xmlNodeListGetString');
-  xmlNodeSetBase               := GetProcAddress(Handle, 'xmlNodeSetBase');
-  xmlNodeSetContent            := GetProcAddress(Handle, 'xmlNodeSetContent');
-  xmlNodeSetContentLen         := GetProcAddress(Handle, 'xmlNodeSetContentLen');
-  xmlNodeSetLang               := GetProcAddress(Handle, 'xmlNodeSetLang');
-  xmlNodeSetName               := GetProcAddress(Handle, 'xmlNodeSetName');
-  xmlNodeSetSpacePreserve      := GetProcAddress(Handle, 'xmlNodeSetSpacePreserve');
-  xmlNoNetExternalEntityLoader := GetProcAddress(Handle, 'xmlNoNetExternalEntityLoader');
-  xmlOpenCharEncodingHandler   := GetProcAddress(Handle, 'xmlOpenCharEncodingHandler');
-  xmlOutputBufferClose      := GetProcAddress(Handle, 'xmlOutputBufferClose');
-  xmlOutputBufferCreateBuffer  := GetProcAddress(Handle, 'xmlOutputBufferCreateBuffer');
-  xmlOutputBufferCreateFd   := GetProcAddress(Handle, 'xmlOutputBufferCreateFd');
-  xmlOutputBufferCreateFilename := GetProcAddress(Handle, 'xmlOutputBufferCreateFilename');
+  xmlACatalogAdd                  := GetProcAddress(Handle, 'xmlACatalogAdd');
+  xmlACatalogRemove               := GetProcAddress(Handle, 'xmlACatalogRemove');
+  xmlACatalogResolve              := GetProcAddress(Handle, 'xmlACatalogResolve');
+  xmlACatalogResolvePublic        := GetProcAddress(Handle, 'xmlACatalogResolvePublic');
+  xmlACatalogResolveSystem        := GetProcAddress(Handle, 'xmlACatalogResolveSystem');
+  xmlACatalogResolveURI           := GetProcAddress(Handle, 'xmlACatalogResolveURI');
+  xmlAddChild                     := GetProcAddress(Handle, 'xmlAddChild');
+  xmlAddChildList                 := GetProcAddress(Handle, 'xmlAddChildList');
+  xmlAddDocEntity                 := GetProcAddress(Handle, 'xmlAddDocEntity');
+  xmlAddDtdEntity                 := GetProcAddress(Handle, 'xmlAddDtdEntity');
+  xmlAddEncodingAlias             := GetProcAddress(Handle, 'xmlAddEncodingAlias');
+  xmlAddEntity                    := GetProcAddress(Handle, 'xmlAddEntity');
+  xmlAddID                        := GetProcAddress(Handle, 'xmlAddID');
+  xmlAddIDSafe                    := GetProcAddress(Handle, 'xmlAddIDSafe');
+  xmlAddNextSibling               := GetProcAddress(Handle, 'xmlAddNextSibling');
+  xmlAddNotationDecl              := GetProcAddress(Handle, 'xmlAddNotationDecl');
+  xmlAddPrevSibling               := GetProcAddress(Handle, 'xmlAddPrevSibling');
+  xmlAddSibling                   := GetProcAddress(Handle, 'xmlAddSibling');
+  xmlAllocOutputBuffer            := GetProcAddress(Handle, 'xmlAllocOutputBuffer');
+  xmlAllocParserInputBuffer       := GetProcAddress(Handle, 'xmlAllocParserInputBuffer');
+  xmlAttrSerializeTxtContent      := GetProcAddress(Handle, 'xmlAttrSerializeTxtContent');
+  xmlBufContent                   := GetProcAddress(Handle, 'xmlBufContent');
+  xmlBufEnd                       := GetProcAddress(Handle, 'xmlBufEnd');
+  xmlBufferAdd                    := GetProcAddress(Handle, 'xmlBufferAdd');
+  xmlBufferAddHead                := GetProcAddress(Handle, 'xmlBufferAddHead');
+  xmlBufferCat                    := GetProcAddress(Handle, 'xmlBufferCat');
+  xmlBufferCCat                   := GetProcAddress(Handle, 'xmlBufferCCat');
+  xmlBufferContent                := GetProcAddress(Handle, 'xmlBufferContent');
+  xmlBufferCreate                 := GetProcAddress(Handle, 'xmlBufferCreate');
+  xmlBufferCreateSize             := GetProcAddress(Handle, 'xmlBufferCreateSize');
+  xmlBufferCreateStatic           := GetProcAddress(Handle, 'xmlBufferCreateStatic');
+  xmlBufferDetach                 := GetProcAddress(Handle, 'xmlBufferDetach');
+  xmlBufferEmpty                  := GetProcAddress(Handle, 'xmlBufferEmpty');
+  xmlBufferFree                   := GetProcAddress(Handle, 'xmlBufferFree');
+  xmlBufferLength                 := GetProcAddress(Handle, 'xmlBufferLength');
+  xmlBufferWriteQuotedString      := GetProcAddress(Handle, 'xmlBufferWriteQuotedString');
+  xmlBufGetNodeContent            := GetProcAddress(Handle, 'xmlBufGetNodeContent');
+  xmlBufNodeDump                  := GetProcAddress(Handle, 'xmlBufNodeDump');
+  xmlBufUse                       := GetProcAddress(Handle, 'xmlBufUse');
+  xmlBuildQName                   := GetProcAddress(Handle, 'xmlBuildQName');
+  xmlBuildRelativeURI             := GetProcAddress(Handle, 'xmlBuildRelativeURI');
+  xmlBuildRelativeURISafe         := GetProcAddress(Handle, 'xmlBuildRelativeURISafe');
+  xmlBuildURI                     := GetProcAddress(Handle, 'xmlBuildURI');
+  xmlBuildURISafe                 := GetProcAddress(Handle, 'xmlBuildURISafe');
+  xmlC14NDocDumpMemory            := GetProcAddress(Handle, 'xmlC14NDocDumpMemory');
+  xmlC14NDocSave                  := GetProcAddress(Handle, 'xmlC14NDocSave');
+  xmlC14NDocSaveTo                := GetProcAddress(Handle, 'xmlC14NDocSaveTo');
+  xmlCanonicPath                  := GetProcAddress(Handle, 'xmlCanonicPath');
+  xmlCatalogAdd                   := GetProcAddress(Handle, 'xmlCatalogAdd');
+  xmlCatalogAddLocal              := GetProcAddress(Handle, 'xmlCatalogAddLocal');
+  xmlCatalogCleanup               := GetProcAddress(Handle, 'xmlCatalogCleanup');
+  xmlCatalogConvert               := GetProcAddress(Handle, 'xmlCatalogConvert');
+  xmlCatalogFreeLocal             := GetProcAddress(Handle, 'xmlCatalogFreeLocal');
+  xmlCatalogGetDefaults           := GetProcAddress(Handle, 'xmlCatalogGetDefaults');
+  xmlCatalogIsEmpty               := GetProcAddress(Handle, 'xmlCatalogIsEmpty');
+  xmlCatalogLocalResolve          := GetProcAddress(Handle, 'xmlCatalogLocalResolve');
+  xmlCatalogLocalResolveURI       := GetProcAddress(Handle, 'xmlCatalogLocalResolveURI');
+  xmlCatalogRemove                := GetProcAddress(Handle, 'xmlCatalogRemove');
+  xmlCatalogResolve               := GetProcAddress(Handle, 'xmlCatalogResolve');
+  xmlCatalogResolvePublic         := GetProcAddress(Handle, 'xmlCatalogResolvePublic');
+  xmlCatalogResolveSystem         := GetProcAddress(Handle, 'xmlCatalogResolveSystem');
+  xmlCatalogResolveURI            := GetProcAddress(Handle, 'xmlCatalogResolveURI');
+  xmlCatalogSetDebug              := GetProcAddress(Handle, 'xmlCatalogSetDebug');
+  xmlCatalogSetDefaults           := GetProcAddress(Handle, 'xmlCatalogSetDefaults');
+  xmlCharEncCloseFunc             := GetProcAddress(Handle, 'xmlCharEncCloseFunc');
+  xmlCharEncInFunc                := GetProcAddress(Handle, 'xmlCharEncInFunc');
+  xmlCharEncNewCustomHandler      := GetProcAddress(Handle, 'xmlCharEncNewCustomHandler');
+  xmlCharEncOutFunc               := GetProcAddress(Handle, 'xmlCharEncOutFunc');
+  xmlChildElementCount            := GetProcAddress(Handle, 'xmlChildElementCount');
+  xmlCleanupEncodingAliases       := GetProcAddress(Handle, 'xmlCleanupEncodingAliases');
+  xmlCleanupInputCallbacks        := GetProcAddress(Handle, 'xmlCleanupInputCallbacks');
+  xmlCleanupOutputCallbacks       := GetProcAddress(Handle, 'xmlCleanupOutputCallbacks');
+  xmlCleanupParser                := GetProcAddress(Handle, 'xmlCleanupParser');
+  xmlClearNodeInfoSeq             := GetProcAddress(Handle, 'xmlClearNodeInfoSeq');
+  xmlConvertSGMLCatalog           := GetProcAddress(Handle, 'xmlConvertSGMLCatalog');
+  xmlCopyDoc                      := GetProcAddress(Handle, 'xmlCopyDoc');
+  xmlCopyDtd                      := GetProcAddress(Handle, 'xmlCopyDtd');
+  xmlCopyEntitiesTable            := GetProcAddress(Handle, 'xmlCopyEntitiesTable');
+  xmlCopyError                    := GetProcAddress(Handle, 'xmlCopyError');
+  xmlCopyNamespace                := GetProcAddress(Handle, 'xmlCopyNamespace');
+  xmlCopyNamespaceList            := GetProcAddress(Handle, 'xmlCopyNamespaceList');
+  xmlCopyProp                     := GetProcAddress(Handle, 'xmlCopyProp');
+  xmlCopyPropList                 := GetProcAddress(Handle, 'xmlCopyPropList');
+  xmlCreateCharEncodingHandler    := GetProcAddress(Handle, 'xmlCreateCharEncodingHandler');
+  xmlCreateDocParserCtxt          := GetProcAddress(Handle, 'xmlCreateDocParserCtxt');
+  xmlCreateEntitiesTable          := GetProcAddress(Handle, 'xmlCreateEntitiesTable');
+  xmlCreateEntityParserCtxt       := GetProcAddress(Handle, 'xmlCreateEntityParserCtxt');
+  xmlCreateFileParserCtxt         := GetProcAddress(Handle, 'xmlCreateFileParserCtxt');
+  xmlCreateIntSubset              := GetProcAddress(Handle, 'xmlCreateIntSubset');
+  xmlCreateIOParserCtxt           := GetProcAddress(Handle, 'xmlCreateIOParserCtxt');
+  xmlCreateMemoryParserCtxt       := GetProcAddress(Handle, 'xmlCreateMemoryParserCtxt');
+  xmlCreatePushParserCtxt         := GetProcAddress(Handle, 'xmlCreatePushParserCtxt');
+  xmlCreateURI                    := GetProcAddress(Handle, 'xmlCreateURI');
+  xmlCreateURLParserCtxt          := GetProcAddress(Handle, 'xmlCreateURLParserCtxt');
+  xmlCtxtErrMemory                := GetProcAddress(Handle, 'xmlCtxtErrMemory');
+  xmlCtxtGetCatalogs              := GetProcAddress(Handle, 'xmlCtxtGetCatalogs');
+  xmlCtxtGetDeclaredEncoding      := GetProcAddress(Handle, 'xmlCtxtGetDeclaredEncoding');
+  xmlCtxtGetDict                  := GetProcAddress(Handle, 'xmlCtxtGetDict');
+  xmlCtxtGetLastError             := GetProcAddress(Handle, 'xmlCtxtGetLastError');
+  xmlCtxtGetOptions               := GetProcAddress(Handle, 'xmlCtxtGetOptions');
+  xmlCtxtGetPrivate               := GetProcAddress(Handle, 'xmlCtxtGetPrivate');
+  xmlCtxtGetStandalone            := GetProcAddress(Handle, 'xmlCtxtGetStandalone');
+  xmlCtxtGetStatus                := GetProcAddress(Handle, 'xmlCtxtGetStatus');
+  xmlCtxtGetValidCtxt             := GetProcAddress(Handle, 'xmlCtxtGetValidCtxt');
+  xmlCtxtGetVersion               := GetProcAddress(Handle, 'xmlCtxtGetVersion');
+  xmlCtxtParseContent             := GetProcAddress(Handle, 'xmlCtxtParseContent');
+  xmlCtxtParseDocument            := GetProcAddress(Handle, 'xmlCtxtParseDocument');
+  xmlCtxtParseDtd                 := GetProcAddress(Handle, 'xmlCtxtParseDtd');
+  xmlCtxtReadDoc                  := GetProcAddress(Handle, 'xmlCtxtReadDoc');
+  xmlCtxtReadFd                   := GetProcAddress(Handle, 'xmlCtxtReadFd');
+  xmlCtxtReadFile                 := GetProcAddress(Handle, 'xmlCtxtReadFile');
+  xmlCtxtReadIO                   := GetProcAddress(Handle, 'xmlCtxtReadIO');
+  xmlCtxtReset                    := GetProcAddress(Handle, 'xmlCtxtReset');
+  xmlCtxtResetLastError           := GetProcAddress(Handle, 'xmlCtxtResetLastError');
+  xmlCtxtResetPush                := GetProcAddress(Handle, 'xmlCtxtResetPush');
+  xmlCtxtSetCatalogs              := GetProcAddress(Handle, 'xmlCtxtSetCatalogs');
+  xmlCtxtSetCharEncConvImpl       := GetProcAddress(Handle, 'xmlCtxtSetCharEncConvImpl');
+  xmlCtxtSetDict                  := GetProcAddress(Handle, 'xmlCtxtSetDict');
+  xmlCtxtSetErrorHandler          := GetProcAddress(Handle, 'xmlCtxtSetErrorHandler');
+  xmlCtxtSetMaxAmplification      := GetProcAddress(Handle, 'xmlCtxtSetMaxAmplification');
+  xmlCtxtSetOptions               := GetProcAddress(Handle, 'xmlCtxtSetOptions');
+  xmlCtxtSetPrivate               := GetProcAddress(Handle, 'xmlCtxtSetPrivate');
+  xmlCtxtSetResourceLoader        := GetProcAddress(Handle, 'xmlCtxtSetResourceLoader');
+  xmlCtxtUseOptions               := GetProcAddress(Handle, 'xmlCtxtUseOptions');
+  xmlCtxtValidateDocument         := GetProcAddress(Handle, 'xmlCtxtValidateDocument');
+  xmlCtxtValidateDtd              := GetProcAddress(Handle, 'xmlCtxtValidateDtd');
+  xmlDelEncodingAlias             := GetProcAddress(Handle, 'xmlDelEncodingAlias');
+  xmlDeregisterNodeDefault        := GetProcAddress(Handle, 'xmlDeregisterNodeDefault');
+  xmlDetectCharEncoding           := GetProcAddress(Handle, 'xmlDetectCharEncoding');
+  xmlDictCreate                   := GetProcAddress(Handle, 'xmlDictCreate');
+  xmlDictCreateSub                := GetProcAddress(Handle, 'xmlDictCreateSub');
+  xmlDictExists                   := GetProcAddress(Handle, 'xmlDictExists');
+  xmlDictFree                     := GetProcAddress(Handle, 'xmlDictFree');
+  xmlDictGetUsage                 := GetProcAddress(Handle, 'xmlDictGetUsage');
+  xmlDictLookup                   := GetProcAddress(Handle, 'xmlDictLookup');
+  xmlDictOwns                     := GetProcAddress(Handle, 'xmlDictOwns');
+  xmlDictQLookup                  := GetProcAddress(Handle, 'xmlDictQLookup');
+  xmlDictReference                := GetProcAddress(Handle, 'xmlDictReference');
+  xmlDictSetLimit                 := GetProcAddress(Handle, 'xmlDictSetLimit');
+  xmlDictSize                     := GetProcAddress(Handle, 'xmlDictSize');
+  xmlDocCopyNode                  := GetProcAddress(Handle, 'xmlDocCopyNode');
+  xmlDocCopyNodeList              := GetProcAddress(Handle, 'xmlDocCopyNodeList');
+  xmlDocDumpFormatMemory          := GetProcAddress(Handle, 'xmlDocDumpFormatMemory');
+  xmlDocDumpFormatMemoryEnc       := GetProcAddress(Handle, 'xmlDocDumpFormatMemoryEnc');
+  xmlDocDumpMemory                := GetProcAddress(Handle, 'xmlDocDumpMemory');
+  xmlDocDumpMemoryEnc             := GetProcAddress(Handle, 'xmlDocDumpMemoryEnc');
+  xmlDocGetRootElement            := GetProcAddress(Handle, 'xmlDocGetRootElement');
+  xmlDocSetRootElement            := GetProcAddress(Handle, 'xmlDocSetRootElement');
+  xmlDOMWrapAdoptNode             := GetProcAddress(Handle, 'xmlDOMWrapAdoptNode');
+  xmlDOMWrapCloneNode             := GetProcAddress(Handle, 'xmlDOMWrapCloneNode');
+  xmlDOMWrapFreeCtxt              := GetProcAddress(Handle, 'xmlDOMWrapFreeCtxt');
+  xmlDOMWrapNewCtxt               := GetProcAddress(Handle, 'xmlDOMWrapNewCtxt');
+  xmlDOMWrapReconcileNamespaces   := GetProcAddress(Handle, 'xmlDOMWrapReconcileNamespaces');
+  xmlDOMWrapRemoveNode            := GetProcAddress(Handle, 'xmlDOMWrapRemoveNode');
+  xmlDumpEntitiesTable            := GetProcAddress(Handle, 'xmlDumpEntitiesTable');
+  xmlDumpEntityDecl               := GetProcAddress(Handle, 'xmlDumpEntityDecl');
+  xmlEncodeEntitiesReentrant      := GetProcAddress(Handle, 'xmlEncodeEntitiesReentrant');
+  xmlEncodeSpecialChars           := GetProcAddress(Handle, 'xmlEncodeSpecialChars');
+  xmlFindCharEncodingHandler      := GetProcAddress(Handle, 'xmlFindCharEncodingHandler');
+  xmlFirstElementChild            := GetProcAddress(Handle, 'xmlFirstElementChild');
+  xmlFreeCatalog                  := GetProcAddress(Handle, 'xmlFreeCatalog');
+  xmlFreeDoc                      := GetProcAddress(Handle, 'xmlFreeDoc');
+  xmlFreeDtd                      := GetProcAddress(Handle, 'xmlFreeDtd');
+  xmlFreeEntitiesTable            := GetProcAddress(Handle, 'xmlFreeEntitiesTable');
+  xmlFreeEntity                   := GetProcAddress(Handle, 'xmlFreeEntity');
+  xmlFreeEnumeration              := GetProcAddress(Handle, 'xmlFreeEnumeration');
+  xmlFreeIDTable                  := GetProcAddress(Handle, 'xmlFreeIDTable');
+  xmlFreeInputStream              := GetProcAddress(Handle, 'xmlFreeInputStream');
+  xmlFreeNode                     := GetProcAddress(Handle, 'xmlFreeNode');
+  xmlFreeNodeList                 := GetProcAddress(Handle, 'xmlFreeNodeList');
+  xmlFreeNs                       := GetProcAddress(Handle, 'xmlFreeNs');
+  xmlFreeNsList                   := GetProcAddress(Handle, 'xmlFreeNsList');
+  xmlFreeParserCtxt               := GetProcAddress(Handle, 'xmlFreeParserCtxt');
+  xmlFreeParserInputBuffer        := GetProcAddress(Handle, 'xmlFreeParserInputBuffer');
+  xmlFreeProp                     := GetProcAddress(Handle, 'xmlFreeProp');
+  xmlFreePropList                 := GetProcAddress(Handle, 'xmlFreePropList');
+  xmlFreeTextReader               := GetProcAddress(Handle, 'xmlFreeTextReader');
+  xmlFreeURI                      := GetProcAddress(Handle, 'xmlFreeURI');
+  xmlFreeValidCtxt                := GetProcAddress(Handle, 'xmlFreeValidCtxt');
+  xmlGetCharEncodingHandler       := GetProcAddress(Handle, 'xmlGetCharEncodingHandler');
+  xmlGetCharEncodingName          := GetProcAddress(Handle, 'xmlGetCharEncodingName');
+  xmlGetDocCompressMode           := GetProcAddress(Handle, 'xmlGetDocCompressMode');
+  xmlGetDocEntity                 := GetProcAddress(Handle, 'xmlGetDocEntity');
+  xmlGetDtdAttrDesc               := GetProcAddress(Handle, 'xmlGetDtdAttrDesc');
+  xmlGetDtdElementDesc            := GetProcAddress(Handle, 'xmlGetDtdElementDesc');
+  xmlGetDtdEntity                 := GetProcAddress(Handle, 'xmlGetDtdEntity');
+  xmlGetDtdNotationDesc           := GetProcAddress(Handle, 'xmlGetDtdNotationDesc');
+  xmlGetDtdQAttrDesc              := GetProcAddress(Handle, 'xmlGetDtdQAttrDesc');
+  xmlGetDtdQElementDesc           := GetProcAddress(Handle, 'xmlGetDtdQElementDesc');
+  xmlGetEncodingAlias             := GetProcAddress(Handle, 'xmlGetEncodingAlias');
+  xmlGetExternalEntityLoader      := GetProcAddress(Handle, 'xmlGetExternalEntityLoader');
+  xmlGetID                        := GetProcAddress(Handle, 'xmlGetID');
+  xmlGetIntSubset                 := GetProcAddress(Handle, 'xmlGetIntSubset');
+  xmlGetLastChild                 := GetProcAddress(Handle, 'xmlGetLastChild');
+  xmlGetLastError                 := GetProcAddress(Handle, 'xmlGetLastError');
+  xmlGetLineNo                    := GetProcAddress(Handle, 'xmlGetLineNo');
+  xmlGetNodePath                  := GetProcAddress(Handle, 'xmlGetNodePath');
+  xmlGetNsList                    := GetProcAddress(Handle, 'xmlGetNsList');
+  xmlGetNsListSafe                := GetProcAddress(Handle, 'xmlGetNsListSafe');
+  xmlGetNsProp                    := GetProcAddress(Handle, 'xmlGetNsProp');
+  xmlGetParameterEntity           := GetProcAddress(Handle, 'xmlGetParameterEntity');
+  xmlGetPredefinedEntity          := GetProcAddress(Handle, 'xmlGetPredefinedEntity');
+  xmlGetProp                      := GetProcAddress(Handle, 'xmlGetProp');
+  xmlHasNsProp                    := GetProcAddress(Handle, 'xmlHasNsProp');
+  xmlHasProp                      := GetProcAddress(Handle, 'xmlHasProp');
+  xmlInitializeCatalog            := GetProcAddress(Handle, 'xmlInitializeCatalog');
+  xmlInitNodeInfoSeq              := GetProcAddress(Handle, 'xmlInitNodeInfoSeq');
+  xmlInputSetEncodingHandler      := GetProcAddress(Handle, 'xmlInputSetEncodingHandler');
+  xmlIOParseDTD                   := GetProcAddress(Handle, 'xmlIOParseDTD');
+  xmlIsBlankNode                  := GetProcAddress(Handle, 'xmlIsBlankNode');
+  xmlIsID                         := GetProcAddress(Handle, 'xmlIsID');
+  xmlIsMixedElement               := GetProcAddress(Handle, 'xmlIsMixedElement');
+  xmlIsolat1ToUTF8                := GetProcAddress(Handle, 'xmlIsolat1ToUTF8');
+  xmlIsXHTML                      := GetProcAddress(Handle, 'xmlIsXHTML');
+  xmlLastElementChild             := GetProcAddress(Handle, 'xmlLastElementChild');
+  xmlLoadACatalog                 := GetProcAddress(Handle, 'xmlLoadACatalog');
+  xmlLoadCatalog                  := GetProcAddress(Handle, 'xmlLoadCatalog');
+  xmlLoadCatalogs                 := GetProcAddress(Handle, 'xmlLoadCatalogs');
+  xmlLoadExternalEntity           := GetProcAddress(Handle, 'xmlLoadExternalEntity');
+  xmlLoadSGMLSuperCatalog         := GetProcAddress(Handle, 'xmlLoadSGMLSuperCatalog');
+  xmlLookupCharEncodingHandler    := GetProcAddress(Handle, 'xmlLookupCharEncodingHandler');
+  xmlMemFree                      := GetProcAddress(Handle, 'xmlMemFree');
+  xmlMemGet                       := GetProcAddress(Handle, 'xmlMemGet');
+  xmlMemMalloc                    := GetProcAddress(Handle, 'xmlMemMalloc');
+  xmlMemoryStrdup                 := GetProcAddress(Handle, 'xmlMemoryStrdup');
+  xmlMemRealloc                   := GetProcAddress(Handle, 'xmlMemRealloc');
+  xmlMemSetup                     := GetProcAddress(Handle, 'xmlMemSetup');
+  xmlMemUsed                      := GetProcAddress(Handle, 'xmlMemUsed');
+  xmlNewCatalog                   := GetProcAddress(Handle, 'xmlNewCatalog');
+  xmlNewCDataBlock                := GetProcAddress(Handle, 'xmlNewCDataBlock');
+  xmlNewCharEncodingHandler       := GetProcAddress(Handle, 'xmlNewCharEncodingHandler');
+  xmlNewCharRef                   := GetProcAddress(Handle, 'xmlNewCharRef');
+  xmlNewChild                     := GetProcAddress(Handle, 'xmlNewChild');
+  xmlNewDoc                       := GetProcAddress(Handle, 'xmlNewDoc');
+  xmlNewDocComment                := GetProcAddress(Handle, 'xmlNewDocComment');
+  xmlNewDocFragment               := GetProcAddress(Handle, 'xmlNewDocFragment');
+  xmlNewDocNode                   := GetProcAddress(Handle, 'xmlNewDocNode');
+  xmlNewDocNodeEatName            := GetProcAddress(Handle, 'xmlNewDocNodeEatName');
+  xmlNewDocPI                     := GetProcAddress(Handle, 'xmlNewDocPI');
+  xmlNewDocProp                   := GetProcAddress(Handle, 'xmlNewDocProp');
+  xmlNewDocRawNode                := GetProcAddress(Handle, 'xmlNewDocRawNode');
+  xmlNewDocText                   := GetProcAddress(Handle, 'xmlNewDocText');
+  xmlNewDocTextLen                := GetProcAddress(Handle, 'xmlNewDocTextLen');
+  xmlNewDtd                       := GetProcAddress(Handle, 'xmlNewDtd');
+  xmlNewEntity                    := GetProcAddress(Handle, 'xmlNewEntity');
+  xmlNewInputFromFd               := GetProcAddress(Handle, 'xmlNewInputFromFd');
+  xmlNewInputFromFile             := GetProcAddress(Handle, 'xmlNewInputFromFile');
+  xmlNewInputFromIO               := GetProcAddress(Handle, 'xmlNewInputFromIO');
+  xmlNewInputFromMemory           := GetProcAddress(Handle, 'xmlNewInputFromMemory');
+  xmlNewInputFromString           := GetProcAddress(Handle, 'xmlNewInputFromString');
+  xmlNewInputFromUrl              := GetProcAddress(Handle, 'xmlNewInputFromUrl');
+  xmlNewInputStream               := GetProcAddress(Handle, 'xmlNewInputStream');
+  xmlNewIOInputStream             := GetProcAddress(Handle, 'xmlNewIOInputStream');
+  xmlNewNs                        := GetProcAddress(Handle, 'xmlNewNs');
+  xmlNewNsProp                    := GetProcAddress(Handle, 'xmlNewNsProp');
+  xmlNewNsPropEatName             := GetProcAddress(Handle, 'xmlNewNsPropEatName');
+  xmlNewParserCtxt                := GetProcAddress(Handle, 'xmlNewParserCtxt');
+  xmlNewProp                      := GetProcAddress(Handle, 'xmlNewProp');
+  xmlNewReference                 := GetProcAddress(Handle, 'xmlNewReference');
+  xmlNewSAXParserCtxt             := GetProcAddress(Handle, 'xmlNewSAXParserCtxt');
+  xmlNewStringInputStream         := GetProcAddress(Handle, 'xmlNewStringInputStream');
+  xmlNewTextChild                 := GetProcAddress(Handle, 'xmlNewTextChild');
+  xmlNewTextReader                := GetProcAddress(Handle, 'xmlNewTextReader');
+  xmlNewTextReaderFilename        := GetProcAddress(Handle, 'xmlNewTextReaderFilename');
+  xmlNewValidCtxt                 := GetProcAddress(Handle, 'xmlNewValidCtxt');
+  xmlNextElementSibling           := GetProcAddress(Handle, 'xmlNextElementSibling');
+  xmlNodeAddContent               := GetProcAddress(Handle, 'xmlNodeAddContent');
+  xmlNodeAddContentLen            := GetProcAddress(Handle, 'xmlNodeAddContentLen');
+  xmlNodeDump                     := GetProcAddress(Handle, 'xmlNodeDump');
+  xmlNodeDumpOutput               := GetProcAddress(Handle, 'xmlNodeDumpOutput');
+  xmlNodeGetAttrValue             := GetProcAddress(Handle, 'xmlNodeGetAttrValue');
+  xmlNodeGetBase                  := GetProcAddress(Handle, 'xmlNodeGetBase');
+  xmlNodeGetBaseSafe              := GetProcAddress(Handle, 'xmlNodeGetBaseSafe');
+  xmlNodeGetContent               := GetProcAddress(Handle, 'xmlNodeGetContent');
+  xmlNodeGetLang                  := GetProcAddress(Handle, 'xmlNodeGetLang');
+  xmlNodeGetSpacePreserve         := GetProcAddress(Handle, 'xmlNodeGetSpacePreserve');
+  xmlNodeIsText                   := GetProcAddress(Handle, 'xmlNodeIsText');
+  xmlNodeListGetRawString         := GetProcAddress(Handle, 'xmlNodeListGetRawString');
+  xmlNodeListGetString            := GetProcAddress(Handle, 'xmlNodeListGetString');
+  xmlNodeSetBase                  := GetProcAddress(Handle, 'xmlNodeSetBase');
+  xmlNodeSetContent               := GetProcAddress(Handle, 'xmlNodeSetContent');
+  xmlNodeSetContentLen            := GetProcAddress(Handle, 'xmlNodeSetContentLen');
+  xmlNodeSetLang                  := GetProcAddress(Handle, 'xmlNodeSetLang');
+  xmlNodeSetName                  := GetProcAddress(Handle, 'xmlNodeSetName');
+  xmlNodeSetSpacePreserve         := GetProcAddress(Handle, 'xmlNodeSetSpacePreserve');
+  xmlNoNetExternalEntityLoader    := GetProcAddress(Handle, 'xmlNoNetExternalEntityLoader');
+  xmlNormalizeURIPath             := GetProcAddress(Handle, 'xmlNormalizeURIPath');
+  xmlOpenCharEncodingHandler      := GetProcAddress(Handle, 'xmlOpenCharEncodingHandler');
+  xmlOutputBufferClose            := GetProcAddress(Handle, 'xmlOutputBufferClose');
+  xmlOutputBufferCreateBuffer     := GetProcAddress(Handle, 'xmlOutputBufferCreateBuffer');
+  xmlOutputBufferCreateFd         := GetProcAddress(Handle, 'xmlOutputBufferCreateFd');
+  xmlOutputBufferCreateFilename   := GetProcAddress(Handle, 'xmlOutputBufferCreateFilename');
   xmlOutputBufferCreateFilenameDefault := GetProcAddress(Handle, 'xmlOutputBufferCreateFilenameDefault');
-  xmlOutputBufferCreateIO   := GetProcAddress(Handle, 'xmlOutputBufferCreateIO');
-  xmlOutputBufferFlush      := GetProcAddress(Handle, 'xmlOutputBufferFlush');
-  xmlOutputBufferGetContent := GetProcAddress(Handle, 'xmlOutputBufferGetContent');
-  xmlOutputBufferGetSize    := GetProcAddress(Handle, 'xmlOutputBufferGetSize');
-  xmlOutputBufferWrite      := GetProcAddress(Handle, 'xmlOutputBufferWrite');
-  xmlOutputBufferWriteEscape:= GetProcAddress(Handle, 'xmlOutputBufferWriteEscape');
-  xmlOutputBufferWriteString:= GetProcAddress(Handle, 'xmlOutputBufferWriteString');
-  xmlParseBalancedChunkMemory:= GetProcAddress(Handle, 'xmlParseBalancedChunkMemory');
-  xmlParseBalancedChunkMemoryRecover:= GetProcAddress(Handle, 'xmlParseBalancedChunkMemoryRecover');
-  xmlParseCatalogFile          := GetProcAddress(Handle, 'xmlParseCatalogFile');
-  xmlParseCharEncoding         := GetProcAddress(Handle, 'xmlParseCharEncoding');
-  xmlParseChunk             := GetProcAddress(Handle, 'xmlParseChunk');
-  xmlParseCtxtExternalEntity:= GetProcAddress(Handle, 'xmlParseCtxtExternalEntity');
-  xmlParseDoc               := GetProcAddress(Handle, 'xmlParseDoc');
-  xmlParseDocument          := GetProcAddress(Handle, 'xmlParseDocument');
-  xmlParseDTD               := GetProcAddress(Handle, 'xmlParseDTD');
-  xmlParseExtParsedEnt      := GetProcAddress(Handle, 'xmlParseExtParsedEnt');
-  xmlParseFile              := GetProcAddress(Handle, 'xmlParseFile');
-  xmlParseInNodeContext     := GetProcAddress(Handle, 'xmlParseInNodeContext');
-  xmlParseMemory            := GetProcAddress(Handle, 'xmlParseMemory');
-  xmlParserAddNodeInfo      := GetProcAddress(Handle, 'xmlParserAddNodeInfo');
-  xmlParserFindNodeInfo     := GetProcAddress(Handle, 'xmlParserFindNodeInfo');
-  xmlParserFindNodeInfoIndex:= GetProcAddress(Handle, 'xmlParserFindNodeInfoIndex');
-  xmlParserGetDirectory     := GetProcAddress(Handle, 'xmlParserGetDirectory');
-  xmlParserInputBufferCreateFd := GetProcAddress(Handle, 'xmlParserInputBufferCreateFd');
+  xmlOutputBufferCreateIO         := GetProcAddress(Handle, 'xmlOutputBufferCreateIO');
+  xmlOutputBufferFlush            := GetProcAddress(Handle, 'xmlOutputBufferFlush');
+  xmlOutputBufferGetContent       := GetProcAddress(Handle, 'xmlOutputBufferGetContent');
+  xmlOutputBufferGetSize          := GetProcAddress(Handle, 'xmlOutputBufferGetSize');
+  xmlOutputBufferWrite            := GetProcAddress(Handle, 'xmlOutputBufferWrite');
+  xmlOutputBufferWriteEscape      := GetProcAddress(Handle, 'xmlOutputBufferWriteEscape');
+  xmlOutputBufferWriteString      := GetProcAddress(Handle, 'xmlOutputBufferWriteString');
+  xmlParseBalancedChunkMemory     := GetProcAddress(Handle, 'xmlParseBalancedChunkMemory');
+  xmlParseBalancedChunkMemoryRecover := GetProcAddress(Handle, 'xmlParseBalancedChunkMemoryRecover');
+  xmlParseCatalogFile             := GetProcAddress(Handle, 'xmlParseCatalogFile');
+  xmlParseCharEncoding            := GetProcAddress(Handle, 'xmlParseCharEncoding');
+  xmlParseChunk                   := GetProcAddress(Handle, 'xmlParseChunk');
+  xmlParseCtxtExternalEntity      := GetProcAddress(Handle, 'xmlParseCtxtExternalEntity');
+  xmlParseDoc                     := GetProcAddress(Handle, 'xmlParseDoc');
+  xmlParseDocument                := GetProcAddress(Handle, 'xmlParseDocument');
+  xmlParseDTD                     := GetProcAddress(Handle, 'xmlParseDTD');
+  xmlParseExtParsedEnt            := GetProcAddress(Handle, 'xmlParseExtParsedEnt');
+  xmlParseFile                    := GetProcAddress(Handle, 'xmlParseFile');
+  xmlParseInNodeContext           := GetProcAddress(Handle, 'xmlParseInNodeContext');
+  xmlParseMemory                  := GetProcAddress(Handle, 'xmlParseMemory');
+  xmlParserAddNodeInfo            := GetProcAddress(Handle, 'xmlParserAddNodeInfo');
+  xmlParserFindNodeInfo           := GetProcAddress(Handle, 'xmlParserFindNodeInfo');
+  xmlParserFindNodeInfoIndex      := GetProcAddress(Handle, 'xmlParserFindNodeInfoIndex');
+  xmlParserGetDirectory           := GetProcAddress(Handle, 'xmlParserGetDirectory');
+  xmlParserInputBufferCreateFd    := GetProcAddress(Handle, 'xmlParserInputBufferCreateFd');
   xmlParserInputBufferCreateFilename := GetProcAddress(Handle, 'xmlParserInputBufferCreateFilename');
-  xmlParserInputBufferCreateIO := GetProcAddress(Handle, 'xmlParserInputBufferCreateIO');
-  xmlParserInputBufferCreateMem := GetProcAddress(Handle, 'xmlParserInputBufferCreateMem');
-  xmlParserInputBufferCreateStatic := GetProcAddress(Handle, 'xmlParserInputBufferCreateStatic');
-  xmlParserInputGrow        := GetProcAddress(Handle, 'xmlParserInputGrow');
-  xmlPopInputCallbacks      := GetProcAddress(Handle, 'xmlPopInputCallbacks');
-  xmlPopOutputCallbacks     := GetProcAddress(Handle, 'xmlPopOutputCallbacks');
-  xmlPreviousElementSibling    := GetProcAddress(Handle, 'xmlPreviousElementSibling');
-  xmlReadDoc                := GetProcAddress(Handle, 'xmlReadDoc');
-  xmlReadFd                 := GetProcAddress(Handle, 'xmlReadFd');
-  xmlReadFile               := GetProcAddress(Handle, 'xmlReadFile');
-  xmlReadIO                 := GetProcAddress(Handle, 'xmlReadIO');
-  xmlReadMemory             := GetProcAddress(Handle, 'xmlReadMemory');
-  xmlReconciliateNs            := GetProcAddress(Handle, 'xmlReconciliateNs');
-  xmlRegisterDefaultInputCallbacks := GetProcAddress(Handle, 'xmlRegisterDefaultInputCallbacks');
+  xmlParserInputBufferCreateIO    := GetProcAddress(Handle, 'xmlParserInputBufferCreateIO');
+  xmlParserInputBufferCreateMem   := GetProcAddress(Handle, 'xmlParserInputBufferCreateMem');
+  xmlParserInputBufferCreateStatic:= GetProcAddress(Handle, 'xmlParserInputBufferCreateStatic');
+  xmlParserInputGrow              := GetProcAddress(Handle, 'xmlParserInputGrow');
+  xmlParseURI                     := GetProcAddress(Handle, 'xmlParseURI');
+  xmlParseURIRaw                  := GetProcAddress(Handle, 'xmlParseURIRaw');
+  xmlParseURIReference            := GetProcAddress(Handle, 'xmlParseURIReference');
+  xmlParseURISafe                 := GetProcAddress(Handle, 'xmlParseURISafe');
+  xmlPathToURI                    := GetProcAddress(Handle, 'xmlPathToURI');
+  xmlPopInputCallbacks            := GetProcAddress(Handle, 'xmlPopInputCallbacks');
+  xmlPopOutputCallbacks           := GetProcAddress(Handle, 'xmlPopOutputCallbacks');
+  xmlPreviousElementSibling       := GetProcAddress(Handle, 'xmlPreviousElementSibling');
+  xmlReadDoc                      := GetProcAddress(Handle, 'xmlReadDoc');
+  xmlReaderForDoc                 := GetProcAddress(Handle, 'xmlReaderForDoc');
+  xmlReaderForFd                  := GetProcAddress(Handle, 'xmlReaderForFd');
+  xmlReaderForFile                := GetProcAddress(Handle, 'xmlReaderForFile');
+  xmlReaderForIO                  := GetProcAddress(Handle, 'xmlReaderForIO');
+  xmlReaderForMemory              := GetProcAddress(Handle, 'xmlReaderForMemory');
+  xmlReaderNewDoc                 := GetProcAddress(Handle, 'xmlReaderNewDoc');
+  xmlReaderNewFd                  := GetProcAddress(Handle, 'xmlReaderNewFd');
+  xmlReaderNewFile                := GetProcAddress(Handle, 'xmlReaderNewFile');
+  xmlReaderNewIO                  := GetProcAddress(Handle, 'xmlReaderNewIO');
+  xmlReaderNewMemory              := GetProcAddress(Handle, 'xmlReaderNewMemory');
+  xmlReaderNewWalker              := GetProcAddress(Handle, 'xmlReaderNewWalker');
+  xmlReaderWalker                 := GetProcAddress(Handle, 'xmlReaderWalker');
+  xmlReadFd                       := GetProcAddress(Handle, 'xmlReadFd');
+  xmlReadFile                     := GetProcAddress(Handle, 'xmlReadFile');
+  xmlReadIO                       := GetProcAddress(Handle, 'xmlReadIO');
+  xmlReadMemory                   := GetProcAddress(Handle, 'xmlReadMemory');
+  xmlReconciliateNs               := GetProcAddress(Handle, 'xmlReconciliateNs');
+  xmlRegisterDefaultInputCallbacks:= GetProcAddress(Handle, 'xmlRegisterDefaultInputCallbacks');
   xmlRegisterDefaultOutputCallbacks := GetProcAddress(Handle, 'xmlRegisterDefaultOutputCallbacks');
-  xmlRegisterInputCallbacks := GetProcAddress(Handle, 'xmlRegisterInputCallbacks');
-  xmlRegisterNodeDefault       := GetProcAddress(Handle, 'xmlRegisterNodeDefault');
-  xmlRegisterOutputCallbacks:= GetProcAddress(Handle, 'xmlRegisterOutputCallbacks');
-  xmlRemoveID                  := GetProcAddress(Handle, 'xmlRemoveID');
-  xmlRemoveProp                := GetProcAddress(Handle, 'xmlRemoveProp');
-  xmlReplaceNode               := GetProcAddress(Handle, 'xmlReplaceNode');
-  xmlResetError             := GetProcAddress(Handle, 'xmlResetError');
-  xmlResetLastError         := GetProcAddress(Handle, 'xmlResetLastError');
-  xmlSaveClose                 := GetProcAddress(Handle, 'xmlSaveClose');
-  xmlSaveDoc                   := GetProcAddress(Handle, 'xmlSaveDoc');
-  xmlSaveFile                  := GetProcAddress(Handle, 'xmlSaveFile');
-  xmlSaveFileEnc               := GetProcAddress(Handle, 'xmlSaveFileEnc');
-  xmlSaveFinish                := GetProcAddress(Handle, 'xmlSaveFinish');
-  xmlSaveFlush                 := GetProcAddress(Handle, 'xmlSaveFlush');
-  xmlSaveFormatFile            := GetProcAddress(Handle, 'xmlSaveFormatFile');
-  xmlSaveFormatFileEnc         := GetProcAddress(Handle, 'xmlSaveFormatFileEnc');
-  xmlSaveToBuffer              := GetProcAddress(Handle, 'xmlSaveToBuffer');
-  xmlSaveToFd                  := GetProcAddress(Handle, 'xmlSaveToFd');
-  xmlSaveToFilename            := GetProcAddress(Handle, 'xmlSaveToFilename');
-  xmlSaveToIO                  := GetProcAddress(Handle, 'xmlSaveToIO');
-  xmlSaveTree                  := GetProcAddress(Handle, 'xmlSaveTree');
-  xmlSAX2AttributeDecl      := GetProcAddress(Handle, 'xmlSAX2AttributeDecl');
-  xmlSAX2CDataBlock            := GetProcAddress(Handle, 'xmlSAX2CDataBlock');
-  xmlSAX2Characters         := GetProcAddress(Handle, 'xmlSAX2Characters');
-  xmlSAX2Comment               := GetProcAddress(Handle, 'xmlSAX2Comment');
-  xmlSAX2ElementDecl        := GetProcAddress(Handle, 'xmlSAX2ElementDecl');
-  xmlSAX2EndElementNs       := GetProcAddress(Handle, 'xmlSAX2EndElementNs');
-  xmlSAX2EntityDecl         := GetProcAddress(Handle, 'xmlSAX2EntityDecl');
-  xmlSAX2ExternalSubset     := GetProcAddress(Handle, 'xmlSAX2ExternalSubset');
-  xmlSAX2GetColumnNumber    := GetProcAddress(Handle, 'xmlSAX2GetColumnNumber');
-  xmlSAX2GetEntity          := GetProcAddress(Handle, 'xmlSAX2GetEntity');
-  xmlSAX2GetLineNumber      := GetProcAddress(Handle, 'xmlSAX2GetLineNumber');
-  xmlSAX2GetParameterEntity := GetProcAddress(Handle, 'xmlSAX2GetParameterEntity');
-  xmlSAX2GetPublicId        := GetProcAddress(Handle, 'xmlSAX2GetPublicId');
-  xmlSAX2GetSystemId        := GetProcAddress(Handle, 'xmlSAX2GetSystemId');
-  xmlSAX2HasExternalSubset  := GetProcAddress(Handle, 'xmlSAX2HasExternalSubset');
-  xmlSAX2HasInternalSubset  := GetProcAddress(Handle, 'xmlSAX2HasInternalSubset');
-  xmlSAX2IgnorableWhitespace   := GetProcAddress(Handle, 'xmlSAX2IgnorableWhitespace');
-  xmlSAX2InternalSubset     := GetProcAddress(Handle, 'xmlSAX2InternalSubset');
-  xmlSAX2IsStandalone       := GetProcAddress(Handle, 'xmlSAX2IsStandalone');
-  xmlSAX2NotationDecl       := GetProcAddress(Handle, 'xmlSAX2NotationDecl');
-  xmlSAX2ProcessingInstruction :=GetProcAddress(Handle,'xmlSAX2ProcessingInstruction');
-  xmlSAX2Reference          := GetProcAddress(Handle, 'xmlSAX2Reference');
-  xmlSAX2ResolveEntity         := GetProcAddress(Handle, 'xmlSAX2ResolveEntity');
-  xmlSAX2SetDocumentLocator    := GetProcAddress(Handle, 'xmlSAX2SetDocumentLocator');
-  xmlSAX2StartDocument         := GetProcAddress(Handle, 'xmlSAX2StartDocument');
-  xmlSAX2StartElementNs        := GetProcAddress(Handle, 'xmlSAX2StartElementNs');
-  xmlSAX2UnparsedEntityDecl    := GetProcAddress(Handle, 'xmlSAX2UnparsedEntityDecl');
-  xmlSchemaDump                := GetProcAddress(Handle, 'xmlSchemaDump');
-  xmlSchemaFree                := GetProcAddress(Handle, 'xmlSchemaFree');
-  xmlSchemaFreeParserCtxt      := GetProcAddress(Handle, 'xmlSchemaFreeParserCtxt');
-  xmlSchemaFreeValidCtxt       := GetProcAddress(Handle, 'xmlSchemaFreeValidCtxt');
-  xmlSchemaGetParserErrors     := GetProcAddress(Handle, 'xmlSchemaGetParserErrors');
-  xmlSchemaGetValidErrors      := GetProcAddress(Handle, 'xmlSchemaGetValidErrors');
-  xmlSchemaIsValid             := GetProcAddress(Handle, 'xmlSchemaIsValid');
-  xmlSchemaNewDocParserCtxt    := GetProcAddress(Handle, 'xmlSchemaNewDocParserCtxt');
-  xmlSchemaNewMemParserCtxt    := GetProcAddress(Handle, 'xmlSchemaNewMemParserCtxt');
-  xmlSchemaNewParserCtxt       := GetProcAddress(Handle, 'xmlSchemaNewParserCtxt');
-  xmlSchemaNewValidCtxt        := GetProcAddress(Handle, 'xmlSchemaNewValidCtxt');
-  xmlSchemaParse               := GetProcAddress(Handle, 'xmlSchemaParse');
-  xmlSchemaSAXPlug             := GetProcAddress(Handle, 'xmlSchemaSAXPlug');
-  xmlSchemaSAXUnplug           := GetProcAddress(Handle, 'xmlSchemaSAXUnplug');
-  xmlSchemaSetParserErrors     := GetProcAddress(Handle, 'xmlSchemaSetParserErrors');
+  xmlRegisterInputCallbacks       := GetProcAddress(Handle, 'xmlRegisterInputCallbacks');
+  xmlRegisterOutputCallbacks      := GetProcAddress(Handle, 'xmlRegisterOutputCallbacks');
+  xmlRemoveID                     := GetProcAddress(Handle, 'xmlRemoveID');
+  xmlRemoveProp                   := GetProcAddress(Handle, 'xmlRemoveProp');
+  xmlReplaceNode                  := GetProcAddress(Handle, 'xmlReplaceNode');
+  xmlResetError                   := GetProcAddress(Handle, 'xmlResetError');
+  xmlResetLastError               := GetProcAddress(Handle, 'xmlResetLastError');
+  xmlSaveClose                    := GetProcAddress(Handle, 'xmlSaveClose');
+  xmlSaveDoc                      := GetProcAddress(Handle, 'xmlSaveDoc');
+  xmlSaveFile                     := GetProcAddress(Handle, 'xmlSaveFile');
+  xmlSaveFileEnc                  := GetProcAddress(Handle, 'xmlSaveFileEnc');
+  xmlSaveFinish                   := GetProcAddress(Handle, 'xmlSaveFinish');
+  xmlSaveFlush                    := GetProcAddress(Handle, 'xmlSaveFlush');
+  xmlSaveFormatFile               := GetProcAddress(Handle, 'xmlSaveFormatFile');
+  xmlSaveFormatFileEnc            := GetProcAddress(Handle, 'xmlSaveFormatFileEnc');
+  xmlSaveToBuffer                 := GetProcAddress(Handle, 'xmlSaveToBuffer');
+  xmlSaveToFd                     := GetProcAddress(Handle, 'xmlSaveToFd');
+  xmlSaveToFilename               := GetProcAddress(Handle, 'xmlSaveToFilename');
+  xmlSaveToIO                     := GetProcAddress(Handle, 'xmlSaveToIO');
+  xmlSaveTree                     := GetProcAddress(Handle, 'xmlSaveTree');
+  xmlSaveUri                      := GetProcAddress(Handle, 'xmlSaveUri');
+  xmlSAX2AttributeDecl            := GetProcAddress(Handle, 'xmlSAX2AttributeDecl');
+  xmlSAX2CDataBlock               := GetProcAddress(Handle, 'xmlSAX2CDataBlock');
+  xmlSAX2Characters               := GetProcAddress(Handle, 'xmlSAX2Characters');
+  xmlSAX2Comment                  := GetProcAddress(Handle, 'xmlSAX2Comment');
+  xmlSAX2ElementDecl              := GetProcAddress(Handle, 'xmlSAX2ElementDecl');
+  xmlSAX2EndDocument              := GetProcAddress(Handle, 'xmlSAX2EndDocument');
+  xmlSAX2EndElementNs             := GetProcAddress(Handle, 'xmlSAX2EndElementNs');
+  xmlSAX2EntityDecl               := GetProcAddress(Handle, 'xmlSAX2EntityDecl');
+  xmlSAX2ExternalSubset           := GetProcAddress(Handle, 'xmlSAX2ExternalSubset');
+  xmlSAX2GetColumnNumber          := GetProcAddress(Handle, 'xmlSAX2GetColumnNumber');
+  xmlSAX2GetEntity                := GetProcAddress(Handle, 'xmlSAX2GetEntity');
+  xmlSAX2GetLineNumber            := GetProcAddress(Handle, 'xmlSAX2GetLineNumber');
+  xmlSAX2GetParameterEntity       := GetProcAddress(Handle, 'xmlSAX2GetParameterEntity');
+  xmlSAX2GetPublicId              := GetProcAddress(Handle, 'xmlSAX2GetPublicId');
+  xmlSAX2GetSystemId              := GetProcAddress(Handle, 'xmlSAX2GetSystemId');
+  xmlSAX2HasExternalSubset        := GetProcAddress(Handle, 'xmlSAX2HasExternalSubset');
+  xmlSAX2HasInternalSubset        := GetProcAddress(Handle, 'xmlSAX2HasInternalSubset');
+  xmlSAX2IgnorableWhitespace      := GetProcAddress(Handle, 'xmlSAX2IgnorableWhitespace');
+  xmlSAX2InitDefaultSAXHandler    := GetProcAddress(Handle, 'xmlSAX2InitDefaultSAXHandler');
+  xmlSAX2InitHtmlDefaultSAXHandler:= GetProcAddress(Handle, 'xmlSAX2InitHtmlDefaultSAXHandler');
+  xmlSAX2InternalSubset           := GetProcAddress(Handle, 'xmlSAX2InternalSubset');
+  xmlSAX2IsStandalone             := GetProcAddress(Handle, 'xmlSAX2IsStandalone');
+  xmlSAX2NotationDecl             := GetProcAddress(Handle, 'xmlSAX2NotationDecl');
+  xmlSAX2ProcessingInstruction    := GetProcAddress(Handle,'xmlSAX2ProcessingInstruction');
+  xmlSAX2Reference                := GetProcAddress(Handle, 'xmlSAX2Reference');
+  xmlSAX2ResolveEntity            := GetProcAddress(Handle, 'xmlSAX2ResolveEntity');
+  xmlSAX2SetDocumentLocator       := GetProcAddress(Handle, 'xmlSAX2SetDocumentLocator');
+  xmlSAX2StartDocument            := GetProcAddress(Handle, 'xmlSAX2StartDocument');
+  xmlSAX2StartElementNs           := GetProcAddress(Handle, 'xmlSAX2StartElementNs');
+  xmlSAX2UnparsedEntityDecl       := GetProcAddress(Handle, 'xmlSAX2UnparsedEntityDecl');
+  xmlSAXDefaultVersion            := GetProcAddress(Handle, 'xmlSAXDefaultVersion');
+  xmlSAXVersion                   := GetProcAddress(Handle, 'xmlSAXVersion');
+  xmlSchemaDump                   := GetProcAddress(Handle, 'xmlSchemaDump');
+  xmlSchemaFree                   := GetProcAddress(Handle, 'xmlSchemaFree');
+  xmlSchemaFreeParserCtxt         := GetProcAddress(Handle, 'xmlSchemaFreeParserCtxt');
+  xmlSchemaFreeValidCtxt          := GetProcAddress(Handle, 'xmlSchemaFreeValidCtxt');
+  xmlSchemaGetParserErrors        := GetProcAddress(Handle, 'xmlSchemaGetParserErrors');
+  xmlSchemaGetValidErrors         := GetProcAddress(Handle, 'xmlSchemaGetValidErrors');
+  xmlSchemaInitTypes              := GetProcAddress(Handle, 'xmlSchemaInitTypes');
+  xmlSchemaIsValid                := GetProcAddress(Handle, 'xmlSchemaIsValid');
+  xmlSchemaNewDocParserCtxt       := GetProcAddress(Handle, 'xmlSchemaNewDocParserCtxt');
+  xmlSchemaNewMemParserCtxt       := GetProcAddress(Handle, 'xmlSchemaNewMemParserCtxt');
+  xmlSchemaNewParserCtxt          := GetProcAddress(Handle, 'xmlSchemaNewParserCtxt');
+  xmlSchemaNewValidCtxt           := GetProcAddress(Handle, 'xmlSchemaNewValidCtxt');
+  xmlSchemaParse                  := GetProcAddress(Handle, 'xmlSchemaParse');
+  xmlSchemaSAXPlug                := GetProcAddress(Handle, 'xmlSchemaSAXPlug');
+  xmlSchemaSAXUnplug              := GetProcAddress(Handle, 'xmlSchemaSAXUnplug');
+  xmlSchemaSetParserErrors        := GetProcAddress(Handle, 'xmlSchemaSetParserErrors');
   xmlSchemaSetParserStructuredErrors := GetProcAddress(Handle, 'xmlSchemaSetParserStructuredErrors');
-  xmlSchemaSetResourceLoader   := GetProcAddress(Handle, 'xmlSchemaSetResourceLoader');
-  xmlSchemaSetValidErrors      := GetProcAddress(Handle, 'xmlSchemaSetValidErrors');
-  xmlSchemaSetValidOptions     := GetProcAddress(Handle, 'xmlSchemaSetValidOptions');
-  xmlSchemaSetValidStructuredErrors:= GetProcAddress(Handle, 'xmlSchemaSetValidStructuredErrors');
-  xmlSchemaValidateDoc         := GetProcAddress(Handle, 'xmlSchemaValidateDoc');
-  xmlSchemaValidateFile        := GetProcAddress(Handle, 'xmlSchemaValidateFile');
-  xmlSchemaValidateOneElement  := GetProcAddress(Handle, 'xmlSchemaValidateOneElement');
-  xmlSchemaValidateSetFilename := GetProcAddress(Handle, 'xmlSchemaValidateSetFilename');
-  xmlSchemaValidateSetLocator  := GetProcAddress(Handle, 'xmlSchemaValidateSetLocator');
-  xmlSchemaValidateStream      := GetProcAddress(Handle, 'xmlSchemaValidateStream');
-  xmlSchemaValidCtxtGetOptions := GetProcAddress(Handle, 'xmlSchemaValidCtxtGetOptions');
-  xmlSchemaValidCtxtGetParserCtxt:= GetProcAddress(Handle, 'xmlSchemaValidCtxtGetParserCtxt');
-  xmlSearchNs                  := GetProcAddress(Handle, 'xmlSearchNs');
-  xmlSearchNsByHref            := GetProcAddress(Handle, 'xmlSearchNsByHref');
-  xmlSetDocCompressMode        := GetProcAddress(Handle, 'xmlSetDocCompressMode');
-  xmlSetExternalEntityLoader:= GetProcAddress(Handle, 'xmlSetExternalEntityLoader');
-  xmlSetListDoc                := GetProcAddress(Handle, 'xmlSetListDoc');
-  xmlSetNs                     := GetProcAddress(Handle, 'xmlSetNs');
-  xmlSetNsProp                 := GetProcAddress(Handle, 'xmlSetNsProp');
-  xmlSetProp                   := GetProcAddress(Handle, 'xmlSetProp');
-  xmlSetTreeDoc                := GetProcAddress(Handle, 'xmlSetTreeDoc');
-  xmlSchemaInitTypes           := GetProcAddress(Handle, 'xmlSchemaInitTypes');
-  xmlSplitQName                := GetProcAddress(Handle, 'xmlSplitQName');
-  xmlSplitQName3               := GetProcAddress(Handle, 'xmlSplitQName3');
-  xmlStopParser                := GetProcAddress(Handle, 'xmlStopParser');
-  xmlStringGetNodeList         := GetProcAddress(Handle, 'xmlStringGetNodeList');
-  xmlStringLenGetNodeList      := GetProcAddress(Handle, 'xmlStringLenGetNodeList');
-  xmlSwitchEncoding            := GetProcAddress(Handle, 'xmlSwitchEncoding');
-  xmlSwitchEncodingName        := GetProcAddress(Handle, 'xmlSwitchEncodingName');
-  xmlSwitchToEncoding          := GetProcAddress(Handle, 'xmlSwitchToEncoding');
-  xmlTextConcat                := GetProcAddress(Handle, 'xmlTextConcat');
-  xmlTextMerge                 := GetProcAddress(Handle, 'xmlTextMerge');
-  xmlUnlinkNode                := GetProcAddress(Handle, 'xmlUnlinkNode');
-  xmlUnsetNsProp               := GetProcAddress(Handle, 'xmlUnsetNsProp');
-  xmlUnsetProp                 := GetProcAddress(Handle, 'xmlUnsetProp');
-  xmlUTF8ToIsolat1             := GetProcAddress(Handle, 'xmlUTF8ToIsolat1');
-  xmlValidateDtd               := GetProcAddress(Handle, 'xmlValidateDtd');
-  xmlValidateElement           := GetProcAddress(Handle, 'xmlValidateElement');
-  xmlValidateName              := GetProcAddress(Handle, 'xmlValidateName');
-  xmlValidateNamesValue        := GetProcAddress(Handle, 'xmlValidateNamesValue');
-  xmlValidateNameValue         := GetProcAddress(Handle, 'xmlValidateNameValue');
-  xmlValidateNCName            := GetProcAddress(Handle, 'xmlValidateNCName');
-  xmlValidateNMToken           := GetProcAddress(Handle, 'xmlValidateNMToken');
-  xmlValidateNmtokensValue     := GetProcAddress(Handle, 'xmlValidateNmtokensValue');
-  xmlValidateNmtokenValue      := GetProcAddress(Handle, 'xmlValidateNmtokenValue');
-  xmlValidateQName             := GetProcAddress(Handle, 'xmlValidateQName');
-  xmlValidGetPotentialChildren := GetProcAddress(Handle, 'xmlValidGetPotentialChildren');
-  xmlValidGetValidElements     := GetProcAddress(Handle, 'xmlValidGetValidElements');
-  xmlXPathAddValues            := GetProcAddress(Handle, 'xmlXPathAddValues');
-  xmlXPathBooleanFunction      := GetProcAddress(Handle, 'xmlXPathBooleanFunction');
-  xmlXPathCastBooleanToNumber  := GetProcAddress(Handle, 'xmlXPathCastBooleanToNumber');
-  xmlXPathCastBooleanToString  := GetProcAddress(Handle, 'xmlXPathCastBooleanToString');
-  xmlXPathCastNodeSetToBoolean := GetProcAddress(Handle, 'xmlXPathCastNodeSetToBoolean');
-  xmlXPathCastNodeSetToNumber  := GetProcAddress(Handle, 'xmlXPathCastNodeSetToNumber');
-  xmlXPathCastNodeSetToString  := GetProcAddress(Handle, 'xmlXPathCastNodeSetToString');
-  xmlXPathCastNodeToNumber     := GetProcAddress(Handle, 'xmlXPathCastNodeToNumber');
-  xmlXPathCastNodeToString     := GetProcAddress(Handle, 'xmlXPathCastNodeToString');
-  xmlXPathCastNumberToBoolean  := GetProcAddress(Handle, 'xmlXPathCastNumberToBoolean');
-  xmlXPathCastNumberToString   := GetProcAddress(Handle, 'xmlXPathCastNumberToString');
-  xmlXPathCastStringToBoolean  := GetProcAddress(Handle, 'xmlXPathCastStringToBoolean');
-  xmlXPathCastStringToNumber   := GetProcAddress(Handle, 'xmlXPathCastStringToNumber');
-  xmlXPathCastToBoolean        := GetProcAddress(Handle, 'xmlXPathCastToBoolean');
-  xmlXPathCastToNumber         := GetProcAddress(Handle, 'xmlXPathCastToNumber');
-  xmlXPathCastToString         := GetProcAddress(Handle, 'xmlXPathCastToString');
-  xmlXPathCeilingFunction      := GetProcAddress(Handle, 'xmlXPathCeilingFunction');
-  xmlXPathCmpNodes             := GetProcAddress(Handle, 'xmlXPathCmpNodes');
-  xmlXPathCompareValues        := GetProcAddress(Handle, 'xmlXPathCompareValues');
-  xmlXPathCompile              := GetProcAddress(Handle, 'xmlXPathCompile');
-  xmlXPathCompiledEval         := GetProcAddress(Handle, 'xmlXPathCompiledEval');
-  xmlXPathCompiledEvalToBoolean:= GetProcAddress(Handle, 'xmlXPathCompiledEvalToBoolean');
-  xmlXPathConcatFunction       := GetProcAddress(Handle, 'xmlXPathConcatFunction');
-  xmlXPathContainsFunction     := GetProcAddress(Handle, 'xmlXPathContainsFunction');
-  xmlXPathContextSetCache      := GetProcAddress(Handle, 'xmlXPathContextSetCache');
-  xmlXPathConvertBoolean       := GetProcAddress(Handle, 'xmlXPathConvertBoolean');
-  xmlXPathConvertNumber        := GetProcAddress(Handle, 'xmlXPathConvertNumber');
-  xmlXPathConvertString        := GetProcAddress(Handle, 'xmlXPathConvertString');
-  xmlXPathCountFunction        := GetProcAddress(Handle, 'xmlXPathCountFunction');
-  xmlXPathCtxtCompile          := GetProcAddress(Handle, 'xmlXPathCtxtCompile');
-  xmlXPathDifference           := GetProcAddress(Handle, 'xmlXPathDifference');
-  xmlXPathDistinct             := GetProcAddress(Handle, 'xmlXPathDistinct');
-  xmlXPathDistinctSorted       := GetProcAddress(Handle, 'xmlXPathDistinctSorted');
-  xmlXPathDivValues            := GetProcAddress(Handle, 'xmlXPathDivValues');
-  xmlXPathEqualValues          := GetProcAddress(Handle, 'xmlXPathEqualValues');
-  xmlXPathErr                  := GetProcAddress(Handle, 'xmlXPathErr');
-  xmlXPathError                := GetProcAddress(Handle, 'xmlXPatherror');
-  xmlXPathEval                 := GetProcAddress(Handle, 'xmlXPathEval');
-  xmlXPathEvalExpr             := GetProcAddress(Handle, 'xmlXPathEvalExpr');
-  xmlXPathEvalExpression       := GetProcAddress(Handle, 'xmlXPathEvalExpression');
-  xmlXPathEvalPredicate        := GetProcAddress(Handle, 'xmlXPathEvalPredicate');
-  xmlXPathEvaluatePredicateResult:=GetProcAddress(Handle,'xmlXPathEvaluatePredicateResult');
-  xmlXPathFalseFunction        := GetProcAddress(Handle, 'xmlXPathFalseFunction');
-  xmlXPathFloorFunction        := GetProcAddress(Handle, 'xmlXPathFloorFunction');
-  xmlXPathFreeCompExpr         := GetProcAddress(Handle, 'xmlXPathFreeCompExpr');
-  xmlXPathFreeContext          := GetProcAddress(Handle, 'xmlXPathFreeContext');
-  xmlXPathFreeNodeSet          := GetProcAddress(Handle, 'xmlXPathFreeNodeSet');
-  xmlXPathFreeNodeSetList      := GetProcAddress(Handle, 'xmlXPathNodeSetCreate');
-  xmlXPathFreeObject           := GetProcAddress(Handle, 'xmlXPathFreeObject');
-  xmlXPathFreeParserContext    := GetProcAddress(Handle, 'xmlXPathFreeParserContext');
-  xmlXPathFunctionLookup       := GetProcAddress(Handle, 'xmlXPathFunctionLookup');
-  xmlXPathFunctionLookupNS     := GetProcAddress(Handle, 'xmlXPathFunctionLookupNS');
-  xmlXPathHasSameNodes         := GetProcAddress(Handle, 'xmlXPathHasSameNodes');
-  xmlXPathIdFunction           := GetProcAddress(Handle, 'xmlXPathIdFunction');
-  xmlXPathIntersection         := GetProcAddress(Handle, 'xmlXPathIntersection');
-  xmlXPathIsInf                := GetProcAddress(Handle, 'xmlXPathIsInf');
-  xmlXPathIsNaN                := GetProcAddress(Handle, 'xmlXPathIsNaN');
-  xmlXPathIsNodeType           := GetProcAddress(Handle, 'xmlXPathIsNodeType');
-  xmlXPathLangFunction         := GetProcAddress(Handle, 'xmlXPathLangFunction');
-  xmlXPathLastFunction         := GetProcAddress(Handle, 'xmlXPathLastFunction');
-  xmlXPathLeading              := GetProcAddress(Handle, 'xmlXPathLeading');
-  xmlXPathLeadingSorted        := GetProcAddress(Handle, 'xmlXPathLeadingSorted');
-  xmlXPathLocalNameFunction    := GetProcAddress(Handle, 'xmlXPathLocalNameFunction');
-  xmlXPathModValues            := GetProcAddress(Handle, 'xmlXPathModValues');
-  xmlXPathMultValues           := GetProcAddress(Handle, 'xmlXPathMultValues');
-  xmlXPathNamespaceURIFunction := GetProcAddress(Handle, 'xmlXPathNamespaceURIFunction');
-  xmlXPathNewBoolean           := GetProcAddress(Handle, 'xmlXPathNewBoolean');
-  xmlXPathNewContext           := GetProcAddress(Handle, 'xmlXPathNewContext');
-  xmlXPathNewCString           := GetProcAddress(Handle, 'xmlXPathNewCString');
-  xmlXPathNewFloat             := GetProcAddress(Handle, 'xmlXPathNewFloat');
-  xmlXPathNewNodeSet           := GetProcAddress(Handle, 'xmlXPathNewNodeSet');
-  xmlXPathNewNodeSetList       := GetProcAddress(Handle, 'xmlXPathNewNodeSetList');
-  xmlXPathNewParserContext     := GetProcAddress(Handle, 'xmlXPathNewParserContext');
-  xmlXPathNewString            := GetProcAddress(Handle, 'xmlXPathNewString');
-  xmlXPathNewValueTree         := GetProcAddress(Handle, 'xmlXPathNewValueTree');
-  xmlXPathNextAncestor         := GetProcAddress(Handle, 'xmlXPathNextAncestor');
-  xmlXPathNextAncestorOrSelf   := GetProcAddress(Handle, 'xmlXPathNextAncestorOrSelf');
-  xmlXPathNextAttribute        := GetProcAddress(Handle, 'xmlXPathNextAttribute');
-  xmlXPathNextChild            := GetProcAddress(Handle, 'xmlXPathNextChild');
-  xmlXPathNextDescendant       := GetProcAddress(Handle, 'xmlXPathNextDescendant');
-  xmlXPathNextDescendantOrSelf := GetProcAddress(Handle, 'xmlXPathNextDescendantOrSelf');
-  xmlXPathNextFollowing        := GetProcAddress(Handle, 'xmlXPathNextFollowing');
-  xmlXPathNextFollowingSibling := GetProcAddress(Handle, 'xmlXPathNextFollowingSibling');
-  xmlXPathNextNamespace        := GetProcAddress(Handle, 'xmlXPathNextNamespace');
-  xmlXPathNextParent           := GetProcAddress(Handle, 'xmlXPathNextParent');
-  xmlXPathNextPreceding        := GetProcAddress(Handle, 'xmlXPathNextPreceding');
-  xmlXPathNextPrecedingSibling := GetProcAddress(Handle, 'xmlXPathNextPrecedingSibling');
-  xmlXPathNextSelf             := GetProcAddress(Handle, 'xmlXPathNextSelf');
-  xmlXPathNodeEval             := GetProcAddress(Handle, 'xmlXPathNodeEval');
-  xmlXPathNodeLeading          := GetProcAddress(Handle, 'xmlXPathNodeLeading');
-  xmlXPathNodeLeadingSorted    := GetProcAddress(Handle, 'xmlXPathNodeLeadingSorted');
-  xmlXPathNodeSetAdd           := GetProcAddress(Handle, 'xmlXPathNodeSetAdd');
-  xmlXPathNodeSetAddNs         := GetProcAddress(Handle, 'xmlXPathNodeSetAddNs');
-  xmlXPathNodeSetAddUnique     := GetProcAddress(Handle, 'xmlXPathNodeSetAddUnique');
-  xmlXPathNodeSetContains      := GetProcAddress(Handle, 'xmlXPathNodeSetContains');
-  xmlXPathNodeSetCreate        := GetProcAddress(Handle, 'xmlXPathNodeSetCreate');
-  xmlXPathNodeSetDel           := GetProcAddress(Handle, 'xmlXPathNodeSetDel');
-  xmlXPathNodeSetFreeNs        := GetProcAddress(Handle, 'xmlXPathNodeSetFreeNs');
-  xmlXPathNodeSetMerge         := GetProcAddress(Handle, 'xmlXPathNodeSetMerge');
-  xmlXPathNodeSetRemove        := GetProcAddress(Handle, 'xmlXPathNodeSetRemove');
-  xmlXPathNodeSetSort          := GetProcAddress(Handle, 'xmlXPathNodeSetSort');
-  xmlXPathNodeTrailing         := GetProcAddress(Handle, 'xmlXPathNodeTrailing');
-  xmlXPathNodeTrailingSorted   := GetProcAddress(Handle, 'xmlXPathNodeTrailingSorted');
-  xmlXPathNormalizeFunction    := GetProcAddress(Handle, 'xmlXPathNormalizeFunction');
-  xmlXPathNotEqualValues       := GetProcAddress(Handle, 'xmlXPathNotEqualValues');
-  xmlXPathNotFunction          := GetProcAddress(Handle, 'xmlXPathNotFunction');
-  xmlXPathNsLookup             := GetProcAddress(Handle,'xmlXPathNsLookup');
-  xmlXPathNumberFunction       := GetProcAddress(Handle, 'xmlXPathNumberFunction');
-  xmlXPathObjectCopy           := GetProcAddress(Handle, 'xmlXPathObjectCopy');
-  xmlXPathOrderDocElems        := GetProcAddress(Handle, 'xmlXPathOrderDocElems');
-  xmlXPathParseName            := GetProcAddress(Handle, 'xmlXPathParseName');
-  xmlXPathParseNCName          := GetProcAddress(Handle, 'xmlXPathParseNCName');
-  xmlXPathPopBoolean           := GetProcAddress(Handle, 'xmlXPathPopBoolean');
-  xmlXPathPopExternal          := GetProcAddress(Handle, 'xmlXPathPopExternal');
-  xmlXPathPopNodeSet           := GetProcAddress(Handle, 'xmlXPathPopNodeSet');
-  xmlXPathPopNumber            := GetProcAddress(Handle, 'xmlXPathPopNumber');
-  xmlXPathPopString            := GetProcAddress(Handle, 'xmlXPathPopString');
-  xmlXPathPositionFunction     := GetProcAddress(Handle, 'xmlXPathPositionFunction');
-  xmlXPathRegisterAllFunctions := GetProcAddress(Handle, 'xmlXPathRegisterAllFunctions');
-  xmlXPathRegisteredFuncsCleanup:= GetProcAddress(Handle, 'xmlXPathRegisteredFuncsCleanup');
-  xmlXPathRegisteredNsCleanup  := GetProcAddress(Handle, 'xmlXPathRegisteredNsCleanup');
-  xmlXPathRegisteredVariablesCleanup:= GetProcAddress(Handle, 'xmlXPathRegisteredVariablesCleanup');
-  xmlXPathRegisterFunc         := GetProcAddress(Handle, 'xmlXPathRegisterFunc');
-  xmlXPathRegisterFuncLookup   := GetProcAddress(Handle, 'xmlXPathRegisterFuncLookup');
-  xmlXPathRegisterFuncNS       := GetProcAddress(Handle, 'xmlXPathRegisterFuncNS');
-  xmlXPathRegisterNs           := GetProcAddress(Handle, 'xmlXPathRegisterNs');
-  xmlXPathRegisterNs           := GetProcAddress(Handle, 'xmlXPathRegisterNs');
-  xmlXPathRegisterVariable     := GetProcAddress(Handle, 'xmlXPathRegisterVariable');
-  xmlXPathRegisterVariableLookup:=GetProcAddress(Handle, 'xmlXPathRegisterVariableLookup');
-  xmlXPathRegisterVariableNS   := GetProcAddress(Handle, 'xmlXPathRegisterVariableNS');
-  xmlXPathRoot                 := GetProcAddress(Handle, 'xmlXPathRoot');
-  xmlXPathRoundFunction        := GetProcAddress(Handle, 'xmlXPathRoundFunction');
-  xmlXPathSetContextNode       := GetProcAddress(Handle, 'xmlXPathSetContextNode');
-  xmlXPathSetErrorHandler      := GetProcAddress(Handle, 'xmlXPathSetErrorHandler');
-  xmlXPathStartsWithFunction   := GetProcAddress(Handle, 'xmlXPathStartsWithFunction');
-  xmlXPathStringEvalNumber     := GetProcAddress(Handle, 'xmlXPathStringEvalNumber');
-  xmlXPathStringFunction       := GetProcAddress(Handle, 'xmlXPathStringFunction');
-  xmlXPathStringLengthFunction := GetProcAddress(Handle, 'xmlXPathStringLengthFunction');
-  xmlXPathSubstringAfterFunction:=GetProcAddress(Handle, 'xmlXPathSubstringAfterFunction');
-  xmlXPathSubstringBeforeFunction:=GetProcAddress(Handle,'xmlXPathSubstringBeforeFunction');
-  xmlXPathSubstringFunction    := GetProcAddress(Handle, 'xmlXPathSubstringFunction');
-  xmlXPathSubValues            := GetProcAddress(Handle, 'xmlXPathSubValues');
-  xmlXPathSumFunction          := GetProcAddress(Handle, 'xmlXPathSumFunction');
-  xmlXPathTrailing             := GetProcAddress(Handle, 'xmlXPathTrailing');
-  xmlXPathTrailingSorted       := GetProcAddress(Handle, 'xmlXPathTrailingSorted');
-  xmlXPathTranslateFunction    := GetProcAddress(Handle, 'xmlXPathTranslateFunction');
-  xmlXPathTrueFunction         := GetProcAddress(Handle, 'xmlXPathTrueFunction');
-  xmlXPathValueFlipSign        := GetProcAddress(Handle, 'xmlXPathValueFlipSign');
-  xmlXPathValuePop             := GetProcAddress(Handle, 'xmlXPathValuePop');
-  xmlXPathValuePush            := GetProcAddress(Handle, 'xmlXPathValuePush');
-  xmlXPathVariableLookup       := GetProcAddress(Handle, 'xmlXPathVariableLookup');
-  xmlXPathVariableLookupNS     := GetProcAddress(Handle, 'xmlXPathVariableLookupNS');
-  xmlXPathWrapCString          := GetProcAddress(Handle, 'xmlXPathWrapCString');
-  xmlXPathWrapExternal         := GetProcAddress(Handle, 'xmlXPathWrapExternal');
-  xmlXPathWrapNodeSet          := GetProcAddress(Handle, 'xmlXPathWrapNodeSet');
-  xmlXPathWrapString           := GetProcAddress(Handle, 'xmlXPathWrapString');
-  xmlSAX2EndDocument           := GetProcAddress(Handle, 'xmlSAX2EndDocument');
-  xmlSAXDefaultVersion         := GetProcAddress(Handle, 'xmlSAXDefaultVersion');
-  xmlSAXVersion                := GetProcAddress(Handle, 'xmlSAXVersion');
-  xmlSAX2InitDefaultSAXHandler := GetProcAddress(Handle, 'xmlSAX2InitDefaultSAXHandler');
-  xmlSAX2InitHtmlDefaultSAXHandler := GetProcAddress(Handle, 'xmlSAX2InitHtmlDefaultSAXHandler');
-  xmlCreateURI                 := GetProcAddress(Handle, 'xmlCreateURI');
-  xmlBuildURISafe              := GetProcAddress(Handle, 'xmlBuildURISafe');
-  xmlBuildURI                  := GetProcAddress(Handle, 'xmlBuildURI');
-  xmlBuildRelativeURISafe      := GetProcAddress(Handle, 'xmlBuildRelativeURISafe');
-  xmlBuildRelativeURI          := GetProcAddress(Handle, 'xmlBuildRelativeURI');
-  xmlParseURI                  := GetProcAddress(Handle, 'xmlParseURI');
-  xmlParseURISafe              := GetProcAddress(Handle, 'xmlParseURISafe');
-  xmlParseURIRaw               := GetProcAddress(Handle, 'xmlParseURIRaw');
-  xmlParseURIReference         := GetProcAddress(Handle, 'xmlParseURIReference');
-  xmlSaveUri                   := GetProcAddress(Handle, 'xmlSaveUri');
-  xmlURIEscapeStr              := GetProcAddress(Handle, 'xmlURIEscapeStr');
-  xmlURIUnescapeString         := GetProcAddress(Handle, 'xmlURIUnescapeString');
-  xmlNormalizeURIPath          := GetProcAddress(Handle, 'xmlNormalizeURIPath');
-  xmlURIEscape                 := GetProcAddress(Handle, 'xmlURIEscape');
-  xmlFreeURI                   := GetProcAddress(Handle, 'xmlFreeURI');
-  xmlCanonicPath               := GetProcAddress(Handle, 'xmlCanonicPath');
-  xmlPathToURI                 := GetProcAddress(Handle, 'xmlPathToURI');
-
-
-  xmlNewTextReader             := GetProcAddress(Handle, 'xmlNewTextReader');
-  xmlNewTextReaderFilename     := GetProcAddress(Handle, 'xmlNewTextReaderFilename');
-  xmlFreeTextReader            := GetProcAddress(Handle, 'xmlFreeTextReader');
-  xmlTextReaderSetup           := GetProcAddress(Handle, 'xmlTextReaderSetup');
-  xmlTextReaderSetMaxAmplification:= GetProcAddress(Handle, 'xmlTextReaderSetMaxAmplification');
-  xmlTextReaderGetLastError    := GetProcAddress(Handle, 'xmlTextReaderGetLastError');
-  xmlTextReaderRead            := GetProcAddress(Handle, 'xmlTextReaderRead');
-  xmlTextReaderReadInnerXml    := GetProcAddress(Handle, 'xmlTextReaderReadInnerXml');
-  xmlTextReaderReadOuterXml    := GetProcAddress(Handle, 'xmlTextReaderReadOuterXml');
-  xmlTextReaderReadString      := GetProcAddress(Handle, 'xmlTextReaderReadString');
-  xmlTextReaderReadAttributeValue:= GetProcAddress(Handle, 'xmlTextReaderReadAttributeValue');
-  xmlTextReaderAttributeCount  := GetProcAddress(Handle, 'xmlTextReaderAttributeCount');
-  xmlTextReaderDepth           := GetProcAddress(Handle, 'xmlTextReaderDepth');
-  xmlTextReaderHasAttributes   := GetProcAddress(Handle, 'xmlTextReaderHasAttributes');
-  xmlTextReaderHasValue        := GetProcAddress(Handle, 'xmlTextReaderHasValue');
-  xmlTextReaderIsDefault       := GetProcAddress(Handle, 'xmlTextReaderIsDefault');
-  xmlTextReaderIsEmptyElement  := GetProcAddress(Handle, 'xmlTextReaderIsEmptyElement');
-  xmlTextReaderNodeType        := GetProcAddress(Handle, 'xmlTextReaderNodeType');
-  xmlTextReaderQuoteChar       := GetProcAddress(Handle, 'xmlTextReaderQuoteChar');
-  xmlTextReaderReadState       := GetProcAddress(Handle, 'xmlTextReaderReadState');
-  xmlTextReaderIsNamespaceDecl := GetProcAddress(Handle, 'xmlTextReaderIsNamespaceDecl');
-  xmlTextReaderConstBaseUri    := GetProcAddress(Handle, 'xmlTextReaderConstBaseUri');
-  xmlTextReaderConstLocalName  := GetProcAddress(Handle, 'xmlTextReaderConstLocalName');
-  xmlTextReaderConstName       := GetProcAddress(Handle, 'xmlTextReaderConstName');
-  xmlTextReaderConstNamespaceUri:= GetProcAddress(Handle, 'xmlTextReaderConstNamespaceUri');
-  xmlTextReaderConstPrefix     := GetProcAddress(Handle, 'xmlTextReaderConstPrefix');
-  xmlTextReaderConstXmlLang    := GetProcAddress(Handle, 'xmlTextReaderConstXmlLang');
-  xmlTextReaderConstString     := GetProcAddress(Handle, 'xmlTextReaderConstString');
-  xmlTextReaderConstValue      := GetProcAddress(Handle, 'xmlTextReaderConstValue');
-  xmlTextReaderBaseUri         := GetProcAddress(Handle, 'xmlTextReaderBaseUri');
-  xmlTextReaderLocalName       := GetProcAddress(Handle, 'xmlTextReaderLocalName');
-  xmlTextReaderName            := GetProcAddress(Handle, 'xmlTextReaderName');
-  xmlTextReaderNamespaceUri    := GetProcAddress(Handle, 'xmlTextReaderNamespaceUri');
-  xmlTextReaderPrefix          := GetProcAddress(Handle, 'xmlTextReaderPrefix');
-  xmlTextReaderXmlLang         := GetProcAddress(Handle, 'xmlTextReaderXmlLang');
-  xmlTextReaderValue           := GetProcAddress(Handle, 'xmlTextReaderValue');
-  xmlTextReaderClose           := GetProcAddress(Handle, 'xmlTextReaderClose');
-  xmlTextReaderGetAttributeNo  := GetProcAddress(Handle, 'xmlTextReaderGetAttributeNo');
-  xmlTextReaderGetAttribute    := GetProcAddress(Handle, 'xmlTextReaderGetAttribute');
-  xmlTextReaderGetAttributeNs  := GetProcAddress(Handle, 'xmlTextReaderGetAttributeNs');
-  xmlTextReaderGetRemainder    := GetProcAddress(Handle, 'xmlTextReaderGetRemainder');
-  xmlTextReaderLookupNamespace := GetProcAddress(Handle, 'xmlTextReaderLookupNamespace');
-  xmlTextReaderMoveToAttributeNo:= GetProcAddress(Handle, 'xmlTextReaderMoveToAttributeNo');
-  xmlTextReaderMoveToAttribute := GetProcAddress(Handle, 'xmlTextReaderMoveToAttribute');
-  xmlTextReaderMoveToAttributeNs:= GetProcAddress(Handle, 'xmlTextReaderMoveToAttributeNs');
-  xmlTextReaderMoveToFirstAttribute:= GetProcAddress(Handle, 'xmlTextReaderMoveToFirstAttribute');
-  xmlTextReaderMoveToNextAttribute:= GetProcAddress(Handle, 'xmlTextReaderMoveToNextAttribute');
-  xmlTextReaderMoveToElement   := GetProcAddress(Handle, 'xmlTextReaderMoveToElement');
-  xmlTextReaderNormalization   := GetProcAddress(Handle, 'xmlTextReaderNormalization');
-  xmlTextReaderConstEncoding   := GetProcAddress(Handle, 'xmlTextReaderConstEncoding');
-  xmlTextReaderSetParserProp   := GetProcAddress(Handle, 'xmlTextReaderSetParserProp');
-  xmlTextReaderGetParserProp   := GetProcAddress(Handle, 'xmlTextReaderGetParserProp');
-  xmlTextReaderCurrentNode     := GetProcAddress(Handle, 'xmlTextReaderCurrentNode');
+  xmlSchemaSetResourceLoader      := GetProcAddress(Handle, 'xmlSchemaSetResourceLoader');
+  xmlSchemaSetValidErrors         := GetProcAddress(Handle, 'xmlSchemaSetValidErrors');
+  xmlSchemaSetValidOptions        := GetProcAddress(Handle, 'xmlSchemaSetValidOptions');
+  xmlSchemaSetValidStructuredErrors := GetProcAddress(Handle, 'xmlSchemaSetValidStructuredErrors');
+  xmlSchemaValidateDoc            := GetProcAddress(Handle, 'xmlSchemaValidateDoc');
+  xmlSchemaValidateFile           := GetProcAddress(Handle, 'xmlSchemaValidateFile');
+  xmlSchemaValidateOneElement     := GetProcAddress(Handle, 'xmlSchemaValidateOneElement');
+  xmlSchemaValidateSetFilename    := GetProcAddress(Handle, 'xmlSchemaValidateSetFilename');
+  xmlSchemaValidateSetLocator     := GetProcAddress(Handle, 'xmlSchemaValidateSetLocator');
+  xmlSchemaValidateStream         := GetProcAddress(Handle, 'xmlSchemaValidateStream');
+  xmlSchemaValidCtxtGetOptions    := GetProcAddress(Handle, 'xmlSchemaValidCtxtGetOptions');
+  xmlSchemaValidCtxtGetParserCtxt := GetProcAddress(Handle, 'xmlSchemaValidCtxtGetParserCtxt');
+  xmlSearchNs                     := GetProcAddress(Handle, 'xmlSearchNs');
+  xmlSearchNsByHref               := GetProcAddress(Handle, 'xmlSearchNsByHref');
+  xmlSetDocCompressMode           := GetProcAddress(Handle, 'xmlSetDocCompressMode');
+  xmlSetExternalEntityLoader      := GetProcAddress(Handle, 'xmlSetExternalEntityLoader');
+  xmlSetNs                        := GetProcAddress(Handle, 'xmlSetNs');
+  xmlSetNsProp                    := GetProcAddress(Handle, 'xmlSetNsProp');
+  xmlSetProp                      := GetProcAddress(Handle, 'xmlSetProp');
+  xmlSplitQName                   := GetProcAddress(Handle, 'xmlSplitQName');
+  xmlSplitQName3                  := GetProcAddress(Handle, 'xmlSplitQName3');
+  xmlStopParser                   := GetProcAddress(Handle, 'xmlStopParser');
+  xmlSwitchEncoding               := GetProcAddress(Handle, 'xmlSwitchEncoding');
+  xmlSwitchEncodingName           := GetProcAddress(Handle, 'xmlSwitchEncodingName');
+  xmlSwitchToEncoding             := GetProcAddress(Handle, 'xmlSwitchToEncoding');
+  xmlTextConcat                   := GetProcAddress(Handle, 'xmlTextConcat');
+  xmlTextMerge                    := GetProcAddress(Handle, 'xmlTextMerge');
+  xmlTextReaderAttributeCount     := GetProcAddress(Handle, 'xmlTextReaderAttributeCount');
+  xmlTextReaderBaseUri            := GetProcAddress(Handle, 'xmlTextReaderBaseUri');
+  xmlTextReaderByteConsumed       := GetProcAddress(Handle, 'xmlTextReaderByteConsumed');
+  xmlTextReaderClose              := GetProcAddress(Handle, 'xmlTextReaderClose');
+  xmlTextReaderConstBaseUri       := GetProcAddress(Handle, 'xmlTextReaderConstBaseUri');
+  xmlTextReaderConstEncoding      := GetProcAddress(Handle, 'xmlTextReaderConstEncoding');
+  xmlTextReaderConstLocalName     := GetProcAddress(Handle, 'xmlTextReaderConstLocalName');
+  xmlTextReaderConstName          := GetProcAddress(Handle, 'xmlTextReaderConstName');
+  xmlTextReaderConstNamespaceUri  := GetProcAddress(Handle, 'xmlTextReaderConstNamespaceUri');
+  xmlTextReaderConstPrefix        := GetProcAddress(Handle, 'xmlTextReaderConstPrefix');
+  xmlTextReaderConstString        := GetProcAddress(Handle, 'xmlTextReaderConstString');
+  xmlTextReaderConstValue         := GetProcAddress(Handle, 'xmlTextReaderConstValue');
+  xmlTextReaderConstXmlLang       := GetProcAddress(Handle, 'xmlTextReaderConstXmlLang');
+  xmlTextReaderConstXmlVersion    := GetProcAddress(Handle, 'xmlTextReaderConstXmlVersion');
+  xmlTextReaderCurrentDoc         := GetProcAddress(Handle, 'xmlTextReaderCurrentDoc');
+  xmlTextReaderCurrentNode        := GetProcAddress(Handle, 'xmlTextReaderCurrentNode');
+  xmlTextReaderDepth              := GetProcAddress(Handle, 'xmlTextReaderDepth');
+  xmlTextReaderExpand             := GetProcAddress(Handle, 'xmlTextReaderExpand');
+  xmlTextReaderGetAttribute       := GetProcAddress(Handle, 'xmlTextReaderGetAttribute');
+  xmlTextReaderGetAttributeNo     := GetProcAddress(Handle, 'xmlTextReaderGetAttributeNo');
+  xmlTextReaderGetAttributeNs     := GetProcAddress(Handle, 'xmlTextReaderGetAttributeNs');
+  xmlTextReaderGetErrorHandler    := GetProcAddress(Handle, 'xmlTextReaderGetErrorHandler');
+  xmlTextReaderGetLastError       := GetProcAddress(Handle, 'xmlTextReaderGetLastError');
+  xmlTextReaderGetParserColumnNumber := GetProcAddress(Handle, 'xmlTextReaderGetParserColumnNumber');
   xmlTextReaderGetParserLineNumber:= GetProcAddress(Handle, 'xmlTextReaderGetParserLineNumber');
-  xmlTextReaderGetParserColumnNumber:= GetProcAddress(Handle, 'xmlTextReaderGetParserColumnNumber');
-  xmlTextReaderPreserve        := GetProcAddress(Handle, 'xmlTextReaderPreserve');
-  xmlTextReaderPreservePattern := GetProcAddress(Handle, 'xmlTextReaderPreservePattern');
-  xmlTextReaderCurrentDoc      := GetProcAddress(Handle, 'xmlTextReaderCurrentDoc');
-  xmlTextReaderExpand          := GetProcAddress(Handle, 'xmlTextReaderExpand');
-  xmlTextReaderNext            := GetProcAddress(Handle, 'xmlTextReaderNext');
-  xmlTextReaderNextSibling     := GetProcAddress(Handle, 'xmlTextReaderNextSibling');
-  xmlTextReaderIsValid         := GetProcAddress(Handle, 'xmlTextReaderIsValid');
-  xmlTextReaderRelaxNGValidate := GetProcAddress(Handle, 'xmlTextReaderRelaxNGValidate');
+  xmlTextReaderGetParserProp      := GetProcAddress(Handle, 'xmlTextReaderGetParserProp');
+  xmlTextReaderGetRemainder       := GetProcAddress(Handle, 'xmlTextReaderGetRemainder');
+  xmlTextReaderHasAttributes      := GetProcAddress(Handle, 'xmlTextReaderHasAttributes');
+  xmlTextReaderHasValue           := GetProcAddress(Handle, 'xmlTextReaderHasValue');
+  xmlTextReaderIsDefault          := GetProcAddress(Handle, 'xmlTextReaderIsDefault');
+  xmlTextReaderIsEmptyElement     := GetProcAddress(Handle, 'xmlTextReaderIsEmptyElement');
+  xmlTextReaderIsNamespaceDecl    := GetProcAddress(Handle, 'xmlTextReaderIsNamespaceDecl');
+  xmlTextReaderIsValid            := GetProcAddress(Handle, 'xmlTextReaderIsValid');
+  xmlTextReaderLocalName          := GetProcAddress(Handle, 'xmlTextReaderLocalName');
+  xmlTextReaderLocatorBaseURI     := GetProcAddress(Handle, 'xmlTextReaderLocatorBaseURI');
+  xmlTextReaderLocatorLineNumber  := GetProcAddress(Handle, 'xmlTextReaderLocatorLineNumber');
+  xmlTextReaderLookupNamespace    := GetProcAddress(Handle, 'xmlTextReaderLookupNamespace');
+  xmlTextReaderMoveToAttribute    := GetProcAddress(Handle, 'xmlTextReaderMoveToAttribute');
+  xmlTextReaderMoveToAttributeNo  := GetProcAddress(Handle, 'xmlTextReaderMoveToAttributeNo');
+  xmlTextReaderMoveToAttributeNs  := GetProcAddress(Handle, 'xmlTextReaderMoveToAttributeNs');
+  xmlTextReaderMoveToElement      := GetProcAddress(Handle, 'xmlTextReaderMoveToElement');
+  xmlTextReaderMoveToFirstAttribute := GetProcAddress(Handle, 'xmlTextReaderMoveToFirstAttribute');
+  xmlTextReaderMoveToNextAttribute:= GetProcAddress(Handle, 'xmlTextReaderMoveToNextAttribute');
+  xmlTextReaderName               := GetProcAddress(Handle, 'xmlTextReaderName');
+  xmlTextReaderNamespaceUri       := GetProcAddress(Handle, 'xmlTextReaderNamespaceUri');
+  xmlTextReaderNext               := GetProcAddress(Handle, 'xmlTextReaderNext');
+  xmlTextReaderNextSibling        := GetProcAddress(Handle, 'xmlTextReaderNextSibling');
+  xmlTextReaderNodeType           := GetProcAddress(Handle, 'xmlTextReaderNodeType');
+  xmlTextReaderNormalization      := GetProcAddress(Handle, 'xmlTextReaderNormalization');
+  xmlTextReaderPrefix             := GetProcAddress(Handle, 'xmlTextReaderPrefix');
+  xmlTextReaderPreserve           := GetProcAddress(Handle, 'xmlTextReaderPreserve');
+  xmlTextReaderPreservePattern    := GetProcAddress(Handle, 'xmlTextReaderPreservePattern');
+  xmlTextReaderQuoteChar          := GetProcAddress(Handle, 'xmlTextReaderQuoteChar');
+  xmlTextReaderRead               := GetProcAddress(Handle, 'xmlTextReaderRead');
+  xmlTextReaderReadAttributeValue := GetProcAddress(Handle, 'xmlTextReaderReadAttributeValue');
+  xmlTextReaderReadInnerXml       := GetProcAddress(Handle, 'xmlTextReaderReadInnerXml');
+  xmlTextReaderReadOuterXml       := GetProcAddress(Handle, 'xmlTextReaderReadOuterXml');
+  xmlTextReaderReadState          := GetProcAddress(Handle, 'xmlTextReaderReadState');
+  xmlTextReaderReadString         := GetProcAddress(Handle, 'xmlTextReaderReadString');
+  xmlTextReaderRelaxNGSetSchema   := GetProcAddress(Handle, 'xmlTextReaderRelaxNGSetSchema');
+  xmlTextReaderRelaxNGValidate    := GetProcAddress(Handle, 'xmlTextReaderRelaxNGValidate');
   xmlTextReaderRelaxNGValidateCtxt:= GetProcAddress(Handle, 'xmlTextReaderRelaxNGValidateCtxt');
-  xmlTextReaderRelaxNGSetSchema:= GetProcAddress(Handle, 'xmlTextReaderRelaxNGSetSchema');
-  xmlTextReaderSchemaValidate  := GetProcAddress(Handle, 'xmlTextReaderSchemaValidate');
-  xmlTextReaderSchemaValidateCtxt:= GetProcAddress(Handle, 'xmlTextReaderSchemaValidateCtxt');
-  xmlTextReaderSetSchema       := GetProcAddress(Handle, 'xmlTextReaderSetSchema');
-  xmlTextReaderConstXmlVersion := GetProcAddress(Handle, 'xmlTextReaderConstXmlVersion');
-  xmlTextReaderStandalone      := GetProcAddress(Handle, 'xmlTextReaderStandalone');
-  xmlTextReaderByteConsumed    := GetProcAddress(Handle, 'xmlTextReaderByteConsumed');
-  xmlReaderWalker              := GetProcAddress(Handle, 'xmlReaderWalker');
-  xmlReaderForDoc              := GetProcAddress(Handle, 'xmlReaderForDoc');
-  xmlReaderForFile             := GetProcAddress(Handle, 'xmlReaderForFile');
-  xmlReaderForMemory           := GetProcAddress(Handle, 'xmlReaderForMemory');
-  xmlReaderForFd               := GetProcAddress(Handle, 'xmlReaderForFd');
-  xmlReaderForIO               := GetProcAddress(Handle, 'xmlReaderForIO');
-  xmlReaderNewWalker           := GetProcAddress(Handle, 'xmlReaderNewWalker');
-  xmlReaderNewDoc              := GetProcAddress(Handle, 'xmlReaderNewDoc');
-  xmlReaderNewFile             := GetProcAddress(Handle, 'xmlReaderNewFile');
-  xmlReaderNewMemory           := GetProcAddress(Handle, 'xmlReaderNewMemory');
-  xmlReaderNewFd               := GetProcAddress(Handle, 'xmlReaderNewFd');
-  xmlReaderNewIO               := GetProcAddress(Handle, 'xmlReaderNewIO');
-  xmlTextReaderLocatorLineNumber:= GetProcAddress(Handle, 'xmlTextReaderLocatorLineNumber');
-  xmlTextReaderLocatorBaseURI  := GetProcAddress(Handle, 'xmlTextReaderLocatorBaseURI');
-  xmlTextReaderSetErrorHandler := GetProcAddress(Handle, 'xmlTextReaderSetErrorHandler');
-  xmlTextReaderSetStructuredErrorHandler:= GetProcAddress(Handle, 'xmlTextReaderSetStructuredErrorHandler');
-  xmlTextReaderGetErrorHandler := GetProcAddress(Handle, 'xmlTextReaderGetErrorHandler');
-  xmlTextReaderSetResourceLoader:= GetProcAddress(Handle, 'xmlTextReaderSetResourceLoader');
+  xmlTextReaderSchemaValidate     := GetProcAddress(Handle, 'xmlTextReaderSchemaValidate');
+  xmlTextReaderSchemaValidateCtxt := GetProcAddress(Handle, 'xmlTextReaderSchemaValidateCtxt');
+  xmlTextReaderSetErrorHandler    := GetProcAddress(Handle, 'xmlTextReaderSetErrorHandler');
+  xmlTextReaderSetMaxAmplification:= GetProcAddress(Handle, 'xmlTextReaderSetMaxAmplification');
+  xmlTextReaderSetParserProp      := GetProcAddress(Handle, 'xmlTextReaderSetParserProp');
+  xmlTextReaderSetResourceLoader  := GetProcAddress(Handle, 'xmlTextReaderSetResourceLoader');
+  xmlTextReaderSetSchema          := GetProcAddress(Handle, 'xmlTextReaderSetSchema');
+  xmlTextReaderSetStructuredErrorHandler := GetProcAddress(Handle, 'xmlTextReaderSetStructuredErrorHandler');
+  xmlTextReaderSetup              := GetProcAddress(Handle, 'xmlTextReaderSetup');
+  xmlTextReaderStandalone         := GetProcAddress(Handle, 'xmlTextReaderStandalone');
+  xmlTextReaderValue              := GetProcAddress(Handle, 'xmlTextReaderValue');
+  xmlTextReaderXmlLang            := GetProcAddress(Handle, 'xmlTextReaderXmlLang');
+  xmlUnlinkNode                   := GetProcAddress(Handle, 'xmlUnlinkNode');
+  xmlUnsetNsProp                  := GetProcAddress(Handle, 'xmlUnsetNsProp');
+  xmlUnsetProp                    := GetProcAddress(Handle, 'xmlUnsetProp');
+  xmlURIEscape                    := GetProcAddress(Handle, 'xmlURIEscape');
+  xmlURIEscapeStr                 := GetProcAddress(Handle, 'xmlURIEscapeStr');
+  xmlURIUnescapeString            := GetProcAddress(Handle, 'xmlURIUnescapeString');
+  xmlUTF8ToIsolat1                := GetProcAddress(Handle, 'xmlUTF8ToIsolat1');
+  xmlValidateDtd                  := GetProcAddress(Handle, 'xmlValidateDtd');
+  xmlValidateElement              := GetProcAddress(Handle, 'xmlValidateElement');
+  xmlValidateName                 := GetProcAddress(Handle, 'xmlValidateName');
+  xmlValidateNamesValue           := GetProcAddress(Handle, 'xmlValidateNamesValue');
+  xmlValidateNameValue            := GetProcAddress(Handle, 'xmlValidateNameValue');
+  xmlValidateNCName               := GetProcAddress(Handle, 'xmlValidateNCName');
+  xmlValidateNMToken              := GetProcAddress(Handle, 'xmlValidateNMToken');
+  xmlValidateNmtokensValue        := GetProcAddress(Handle, 'xmlValidateNmtokensValue');
+  xmlValidateNmtokenValue         := GetProcAddress(Handle, 'xmlValidateNmtokenValue');
+  xmlValidateQName                := GetProcAddress(Handle, 'xmlValidateQName');
+  xmlValidGetPotentialChildren    := GetProcAddress(Handle, 'xmlValidGetPotentialChildren');
+  xmlValidGetValidElements        := GetProcAddress(Handle, 'xmlValidGetValidElements');
+  xmlXPathAddValues               := GetProcAddress(Handle, 'xmlXPathAddValues');
+  xmlXPathBooleanFunction         := GetProcAddress(Handle, 'xmlXPathBooleanFunction');
+  xmlXPathCastBooleanToNumber     := GetProcAddress(Handle, 'xmlXPathCastBooleanToNumber');
+  xmlXPathCastBooleanToString     := GetProcAddress(Handle, 'xmlXPathCastBooleanToString');
+  xmlXPathCastNodeSetToBoolean    := GetProcAddress(Handle, 'xmlXPathCastNodeSetToBoolean');
+  xmlXPathCastNodeSetToNumber     := GetProcAddress(Handle, 'xmlXPathCastNodeSetToNumber');
+  xmlXPathCastNodeSetToString     := GetProcAddress(Handle, 'xmlXPathCastNodeSetToString');
+  xmlXPathCastNodeToNumber        := GetProcAddress(Handle, 'xmlXPathCastNodeToNumber');
+  xmlXPathCastNodeToString        := GetProcAddress(Handle, 'xmlXPathCastNodeToString');
+  xmlXPathCastNumberToBoolean     := GetProcAddress(Handle, 'xmlXPathCastNumberToBoolean');
+  xmlXPathCastNumberToString      := GetProcAddress(Handle, 'xmlXPathCastNumberToString');
+  xmlXPathCastStringToBoolean     := GetProcAddress(Handle, 'xmlXPathCastStringToBoolean');
+  xmlXPathCastStringToNumber      := GetProcAddress(Handle, 'xmlXPathCastStringToNumber');
+  xmlXPathCastToBoolean           := GetProcAddress(Handle, 'xmlXPathCastToBoolean');
+  xmlXPathCastToNumber            := GetProcAddress(Handle, 'xmlXPathCastToNumber');
+  xmlXPathCastToString            := GetProcAddress(Handle, 'xmlXPathCastToString');
+  xmlXPathCeilingFunction         := GetProcAddress(Handle, 'xmlXPathCeilingFunction');
+  xmlXPathCmpNodes                := GetProcAddress(Handle, 'xmlXPathCmpNodes');
+  xmlXPathCompareValues           := GetProcAddress(Handle, 'xmlXPathCompareValues');
+  xmlXPathCompile                 := GetProcAddress(Handle, 'xmlXPathCompile');
+  xmlXPathCompiledEval            := GetProcAddress(Handle, 'xmlXPathCompiledEval');
+  xmlXPathCompiledEvalToBoolean   := GetProcAddress(Handle, 'xmlXPathCompiledEvalToBoolean');
+  xmlXPathConcatFunction          := GetProcAddress(Handle, 'xmlXPathConcatFunction');
+  xmlXPathContainsFunction        := GetProcAddress(Handle, 'xmlXPathContainsFunction');
+  xmlXPathContextSetCache         := GetProcAddress(Handle, 'xmlXPathContextSetCache');
+  xmlXPathConvertBoolean          := GetProcAddress(Handle, 'xmlXPathConvertBoolean');
+  xmlXPathConvertNumber           := GetProcAddress(Handle, 'xmlXPathConvertNumber');
+  xmlXPathConvertString           := GetProcAddress(Handle, 'xmlXPathConvertString');
+  xmlXPathCountFunction           := GetProcAddress(Handle, 'xmlXPathCountFunction');
+  xmlXPathCtxtCompile             := GetProcAddress(Handle, 'xmlXPathCtxtCompile');
+  xmlXPathDifference              := GetProcAddress(Handle, 'xmlXPathDifference');
+  xmlXPathDistinct                := GetProcAddress(Handle, 'xmlXPathDistinct');
+  xmlXPathDistinctSorted          := GetProcAddress(Handle, 'xmlXPathDistinctSorted');
+  xmlXPathDivValues               := GetProcAddress(Handle, 'xmlXPathDivValues');
+  xmlXPathEqualValues             := GetProcAddress(Handle, 'xmlXPathEqualValues');
+  xmlXPathErr                     := GetProcAddress(Handle, 'xmlXPathErr');
+  xmlXPathError                   := GetProcAddress(Handle, 'xmlXPatherror');
+  xmlXPathEval                    := GetProcAddress(Handle, 'xmlXPathEval');
+  xmlXPathEvalExpr                := GetProcAddress(Handle, 'xmlXPathEvalExpr');
+  xmlXPathEvalExpression          := GetProcAddress(Handle, 'xmlXPathEvalExpression');
+  xmlXPathEvalPredicate           := GetProcAddress(Handle, 'xmlXPathEvalPredicate');
+  xmlXPathEvaluatePredicateResult :=GetProcAddress(Handle,'xmlXPathEvaluatePredicateResult');
+  xmlXPathFalseFunction           := GetProcAddress(Handle, 'xmlXPathFalseFunction');
+  xmlXPathFloorFunction           := GetProcAddress(Handle, 'xmlXPathFloorFunction');
+  xmlXPathFreeCompExpr            := GetProcAddress(Handle, 'xmlXPathFreeCompExpr');
+  xmlXPathFreeContext             := GetProcAddress(Handle, 'xmlXPathFreeContext');
+  xmlXPathFreeNodeSet             := GetProcAddress(Handle, 'xmlXPathFreeNodeSet');
+  xmlXPathFreeNodeSetList         := GetProcAddress(Handle, 'xmlXPathNodeSetCreate');
+  xmlXPathFreeObject              := GetProcAddress(Handle, 'xmlXPathFreeObject');
+  xmlXPathFreeParserContext       := GetProcAddress(Handle, 'xmlXPathFreeParserContext');
+  xmlXPathFunctionLookup          := GetProcAddress(Handle, 'xmlXPathFunctionLookup');
+  xmlXPathFunctionLookupNS        := GetProcAddress(Handle, 'xmlXPathFunctionLookupNS');
+  xmlXPathHasSameNodes            := GetProcAddress(Handle, 'xmlXPathHasSameNodes');
+  xmlXPathIdFunction              := GetProcAddress(Handle, 'xmlXPathIdFunction');
+  xmlXPathIntersection            := GetProcAddress(Handle, 'xmlXPathIntersection');
+  xmlXPathIsInf                   := GetProcAddress(Handle, 'xmlXPathIsInf');
+  xmlXPathIsNaN                   := GetProcAddress(Handle, 'xmlXPathIsNaN');
+  xmlXPathIsNodeType              := GetProcAddress(Handle, 'xmlXPathIsNodeType');
+  xmlXPathLangFunction            := GetProcAddress(Handle, 'xmlXPathLangFunction');
+  xmlXPathLastFunction            := GetProcAddress(Handle, 'xmlXPathLastFunction');
+  xmlXPathLeading                 := GetProcAddress(Handle, 'xmlXPathLeading');
+  xmlXPathLeadingSorted           := GetProcAddress(Handle, 'xmlXPathLeadingSorted');
+  xmlXPathLocalNameFunction       := GetProcAddress(Handle, 'xmlXPathLocalNameFunction');
+  xmlXPathModValues               := GetProcAddress(Handle, 'xmlXPathModValues');
+  xmlXPathMultValues              := GetProcAddress(Handle, 'xmlXPathMultValues');
+  xmlXPathNamespaceURIFunction    := GetProcAddress(Handle, 'xmlXPathNamespaceURIFunction');
+  xmlXPathNewBoolean              := GetProcAddress(Handle, 'xmlXPathNewBoolean');
+  xmlXPathNewContext              := GetProcAddress(Handle, 'xmlXPathNewContext');
+  xmlXPathNewCString              := GetProcAddress(Handle, 'xmlXPathNewCString');
+  xmlXPathNewFloat                := GetProcAddress(Handle, 'xmlXPathNewFloat');
+  xmlXPathNewNodeSet              := GetProcAddress(Handle, 'xmlXPathNewNodeSet');
+  xmlXPathNewNodeSetList          := GetProcAddress(Handle, 'xmlXPathNewNodeSetList');
+  xmlXPathNewParserContext        := GetProcAddress(Handle, 'xmlXPathNewParserContext');
+  xmlXPathNewString               := GetProcAddress(Handle, 'xmlXPathNewString');
+  xmlXPathNewValueTree            := GetProcAddress(Handle, 'xmlXPathNewValueTree');
+  xmlXPathNextAncestor            := GetProcAddress(Handle, 'xmlXPathNextAncestor');
+  xmlXPathNextAncestorOrSelf      := GetProcAddress(Handle, 'xmlXPathNextAncestorOrSelf');
+  xmlXPathNextAttribute           := GetProcAddress(Handle, 'xmlXPathNextAttribute');
+  xmlXPathNextChild               := GetProcAddress(Handle, 'xmlXPathNextChild');
+  xmlXPathNextDescendant          := GetProcAddress(Handle, 'xmlXPathNextDescendant');
+  xmlXPathNextDescendantOrSelf    := GetProcAddress(Handle, 'xmlXPathNextDescendantOrSelf');
+  xmlXPathNextFollowing           := GetProcAddress(Handle, 'xmlXPathNextFollowing');
+  xmlXPathNextFollowingSibling    := GetProcAddress(Handle, 'xmlXPathNextFollowingSibling');
+  xmlXPathNextNamespace           := GetProcAddress(Handle, 'xmlXPathNextNamespace');
+  xmlXPathNextParent              := GetProcAddress(Handle, 'xmlXPathNextParent');
+  xmlXPathNextPreceding           := GetProcAddress(Handle, 'xmlXPathNextPreceding');
+  xmlXPathNextPrecedingSibling    := GetProcAddress(Handle, 'xmlXPathNextPrecedingSibling');
+  xmlXPathNextSelf                := GetProcAddress(Handle, 'xmlXPathNextSelf');
+  xmlXPathNodeEval                := GetProcAddress(Handle, 'xmlXPathNodeEval');
+  xmlXPathNodeLeading             := GetProcAddress(Handle, 'xmlXPathNodeLeading');
+  xmlXPathNodeLeadingSorted       := GetProcAddress(Handle, 'xmlXPathNodeLeadingSorted');
+  xmlXPathNodeSetAdd              := GetProcAddress(Handle, 'xmlXPathNodeSetAdd');
+  xmlXPathNodeSetAddNs            := GetProcAddress(Handle, 'xmlXPathNodeSetAddNs');
+  xmlXPathNodeSetAddUnique        := GetProcAddress(Handle, 'xmlXPathNodeSetAddUnique');
+  xmlXPathNodeSetContains         := GetProcAddress(Handle, 'xmlXPathNodeSetContains');
+  xmlXPathNodeSetCreate           := GetProcAddress(Handle, 'xmlXPathNodeSetCreate');
+  xmlXPathNodeSetDel              := GetProcAddress(Handle, 'xmlXPathNodeSetDel');
+  xmlXPathNodeSetFreeNs           := GetProcAddress(Handle, 'xmlXPathNodeSetFreeNs');
+  xmlXPathNodeSetMerge            := GetProcAddress(Handle, 'xmlXPathNodeSetMerge');
+  xmlXPathNodeSetRemove           := GetProcAddress(Handle, 'xmlXPathNodeSetRemove');
+  xmlXPathNodeSetSort             := GetProcAddress(Handle, 'xmlXPathNodeSetSort');
+  xmlXPathNodeTrailing            := GetProcAddress(Handle, 'xmlXPathNodeTrailing');
+  xmlXPathNodeTrailingSorted      := GetProcAddress(Handle, 'xmlXPathNodeTrailingSorted');
+  xmlXPathNormalizeFunction       := GetProcAddress(Handle, 'xmlXPathNormalizeFunction');
+  xmlXPathNotEqualValues          := GetProcAddress(Handle, 'xmlXPathNotEqualValues');
+  xmlXPathNotFunction             := GetProcAddress(Handle, 'xmlXPathNotFunction');
+  xmlXPathNsLookup                := GetProcAddress(Handle,'xmlXPathNsLookup');
+  xmlXPathNumberFunction          := GetProcAddress(Handle, 'xmlXPathNumberFunction');
+  xmlXPathObjectCopy              := GetProcAddress(Handle, 'xmlXPathObjectCopy');
+  xmlXPathOrderDocElems           := GetProcAddress(Handle, 'xmlXPathOrderDocElems');
+  xmlXPathParseName               := GetProcAddress(Handle, 'xmlXPathParseName');
+  xmlXPathParseNCName             := GetProcAddress(Handle, 'xmlXPathParseNCName');
+  xmlXPathPopBoolean              := GetProcAddress(Handle, 'xmlXPathPopBoolean');
+  xmlXPathPopExternal             := GetProcAddress(Handle, 'xmlXPathPopExternal');
+  xmlXPathPopNodeSet              := GetProcAddress(Handle, 'xmlXPathPopNodeSet');
+  xmlXPathPopNumber               := GetProcAddress(Handle, 'xmlXPathPopNumber');
+  xmlXPathPopString               := GetProcAddress(Handle, 'xmlXPathPopString');
+  xmlXPathPositionFunction        := GetProcAddress(Handle, 'xmlXPathPositionFunction');
+  xmlXPathRegisterAllFunctions    := GetProcAddress(Handle, 'xmlXPathRegisterAllFunctions');
+  xmlXPathRegisteredFuncsCleanup  := GetProcAddress(Handle, 'xmlXPathRegisteredFuncsCleanup');
+  xmlXPathRegisteredNsCleanup     := GetProcAddress(Handle, 'xmlXPathRegisteredNsCleanup');
+  xmlXPathRegisteredVariablesCleanup := GetProcAddress(Handle, 'xmlXPathRegisteredVariablesCleanup');
+  xmlXPathRegisterFunc            := GetProcAddress(Handle, 'xmlXPathRegisterFunc');
+  xmlXPathRegisterFuncLookup      := GetProcAddress(Handle, 'xmlXPathRegisterFuncLookup');
+  xmlXPathRegisterFuncNS          := GetProcAddress(Handle, 'xmlXPathRegisterFuncNS');
+  xmlXPathRegisterNs              := GetProcAddress(Handle, 'xmlXPathRegisterNs');
+  xmlXPathRegisterNs              := GetProcAddress(Handle, 'xmlXPathRegisterNs');
+  xmlXPathRegisterVariable        := GetProcAddress(Handle, 'xmlXPathRegisterVariable');
+  xmlXPathRegisterVariableLookup  :=GetProcAddress(Handle, 'xmlXPathRegisterVariableLookup');
+  xmlXPathRegisterVariableNS      := GetProcAddress(Handle, 'xmlXPathRegisterVariableNS');
+  xmlXPathRoot                    := GetProcAddress(Handle, 'xmlXPathRoot');
+  xmlXPathRoundFunction           := GetProcAddress(Handle, 'xmlXPathRoundFunction');
+  xmlXPathSetContextNode          := GetProcAddress(Handle, 'xmlXPathSetContextNode');
+  xmlXPathSetErrorHandler         := GetProcAddress(Handle, 'xmlXPathSetErrorHandler');
+  xmlXPathStartsWithFunction      := GetProcAddress(Handle, 'xmlXPathStartsWithFunction');
+  xmlXPathStringEvalNumber        := GetProcAddress(Handle, 'xmlXPathStringEvalNumber');
+  xmlXPathStringFunction          := GetProcAddress(Handle, 'xmlXPathStringFunction');
+  xmlXPathStringLengthFunction    := GetProcAddress(Handle, 'xmlXPathStringLengthFunction');
+  xmlXPathSubstringAfterFunction  := GetProcAddress(Handle, 'xmlXPathSubstringAfterFunction');
+  xmlXPathSubstringBeforeFunction := GetProcAddress(Handle,'xmlXPathSubstringBeforeFunction');
+  xmlXPathSubstringFunction       := GetProcAddress(Handle, 'xmlXPathSubstringFunction');
+  xmlXPathSubValues               := GetProcAddress(Handle, 'xmlXPathSubValues');
+  xmlXPathSumFunction             := GetProcAddress(Handle, 'xmlXPathSumFunction');
+  xmlXPathTrailing                := GetProcAddress(Handle, 'xmlXPathTrailing');
+  xmlXPathTrailingSorted          := GetProcAddress(Handle, 'xmlXPathTrailingSorted');
+  xmlXPathTranslateFunction       := GetProcAddress(Handle, 'xmlXPathTranslateFunction');
+  xmlXPathTrueFunction            := GetProcAddress(Handle, 'xmlXPathTrueFunction');
+  xmlXPathValueFlipSign           := GetProcAddress(Handle, 'xmlXPathValueFlipSign');
+  xmlXPathValuePop                := GetProcAddress(Handle, 'xmlXPathValuePop');
+  xmlXPathValuePush               := GetProcAddress(Handle, 'xmlXPathValuePush');
+  xmlXPathVariableLookup          := GetProcAddress(Handle, 'xmlXPathVariableLookup');
+  xmlXPathVariableLookupNS        := GetProcAddress(Handle, 'xmlXPathVariableLookupNS');
+  xmlXPathWrapCString             := GetProcAddress(Handle, 'xmlXPathWrapCString');
+  xmlXPathWrapExternal            := GetProcAddress(Handle, 'xmlXPathWrapExternal');
+  xmlXPathWrapNodeSet             := GetProcAddress(Handle, 'xmlXPathWrapNodeSet');
+  xmlXPathWrapString              := GetProcAddress(Handle, 'xmlXPathWrapString');
 
 {$endregion}
 
