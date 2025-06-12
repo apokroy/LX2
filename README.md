@@ -20,7 +20,7 @@ Contains:
 ## TODOs
 - Cover near to full sources by DUnit tests;
 - XML Doc all significant sources;
-- Bring LX2.DOM even closer to the W3C DOM & MSXML DOM 6.0 model;
+- Bring LX2.DOM closer to the W3C DOM & MSXML DOM 6.0 model;
 - Reader API wrappers;
 - Sample project like xmllint, mostly to test library itself.
 
