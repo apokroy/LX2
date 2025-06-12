@@ -62,7 +62,6 @@ begin
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);
     if not TestEnd(Doc <> nil) then
     begin
-      Doc.Free;
       ReadLn;
       Exit;
     end;

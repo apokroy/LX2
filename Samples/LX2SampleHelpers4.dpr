@@ -19,7 +19,7 @@ const
 var
   node: xmlNodePtr;
 begin
-   try
+  try
     StartTests;
 
     TestStart('Create doc');
