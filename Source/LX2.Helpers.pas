@@ -295,7 +295,8 @@ end;
 function xmlNodeHelper.AppendChild(const NewChild: xmlNodePtr): xmlNodePtr;
 begin
   Result := xmlAddChild(@Self, newChild);
-  xmlReconciliateNs(doc, Result);
+  if Result <> nil then
+    xmlReconciliateNs(doc, Result);
 end;
 
 function xmlNodeHelper.ChildElementCount: NativeInt;
