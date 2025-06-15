@@ -619,6 +619,12 @@ procedure TSAXCustomParser.StartElement(const localname, prefix, URI: xmlCharPtr
 var
   AttrList: TSAXAttributes;
   NsList: TSAXNamespaces;
+
+  {function xmlCharToStr(P: xmlCharPtr): string;
+  begin
+    Result := UTF8ToUnicodeString(P);
+  end;}
+
 begin
   if attributes <> nil then
   begin

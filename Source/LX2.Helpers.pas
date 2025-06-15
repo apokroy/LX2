@@ -233,7 +233,6 @@ type
 
 procedure xmlDocErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 
-
 implementation
 
 uses
@@ -710,10 +709,7 @@ procedure xmlNodeHelper.RemoveAttribute(const name: RawByteString);
 begin
   var prop := xmlHasProp(@Self, xmlStrPtr(name));
   if prop <> nil then
-  begin
     xmlRemoveProp(prop);
-    xmlReconciliateNs(doc, @Self);
-  end;
 end;
 
 procedure xmlNodeHelper.RemoveAttributeNode(const Attr: xmlAttrPtr);
@@ -809,11 +805,26 @@ begin
 end;
 
 procedure xmlNodeHelper.SetAttribute(const Name, Value: RawByteString);
+var
+  Prefix, LocalName: RawByteString;
 begin
   if Name = 'xmlns' then
     xmlSetNs(@Self, xmlNewNs(@Self, xmlCharPtr(Value), nil))
   else
-    xmlSetProp(@Self, xmlStrPtr(Name), xmlStrPtr(Value));
+  begin
+    if SplitXMLName(Name, Prefix, LocalName) then
+    begin
+      if Prefix = 'xmlns' then
+        xmlNewNs(@Self, xmlCharPtr(Value), xmlCharPtr(LocalName))
+      else
+      begin
+        var Ns := xmlSearchNs(doc, @Self, xmlCharPtr(Prefix));
+        xmlSetNsProp(@Self, Ns, xmlStrPtr(LocalName), xmlStrPtr(Value));
+      end;
+    end
+    else
+      xmlSetProp(@Self, xmlStrPtr(Name), xmlStrPtr(Value));
+  end;
 end;
 
 procedure xmlNodeHelper.SetBaseURI(const Value: RawByteString);
@@ -843,8 +854,9 @@ end;
 
 procedure xmlNodeHelper.SetText(const Value: RawByteString);
 begin
-  xmlNodeSetContent(@Self, nil);
-  xmlNodeAddContent(@Self, XmlCharPtr(UTF8Encode(Value)));
+  var Escaped := xmlEncodeSpecialChars(doc, Pointer(Value));
+  xmlNodeSetContent(@Self, Escaped);
+  XmlFree(Escaped);
 end;
 
 { xmlAttrHelper }

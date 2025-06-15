@@ -5,14 +5,16 @@ program LX2SampleHelpers3;
 {$R *.res}
 
 uses
+{$IFDEF MSWINDOWS}
+  FastMM4,
+{$ENDIF}
   System.SysUtils,
-{  msxmlIntf,
-  Winapi.msxml,
-  Comobj,}
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
   LX2.Types in '..\Source\LX2.Types.pas',
+  LX2.DOM in '..\Source\LX2.DOM.pas',
+  LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas',
   LX2SampleXML in 'LX2SampleXML.pas',
   LXSample.Common in 'LXSample.Common.pas';
 
@@ -37,26 +39,9 @@ var
     Dec(Indent);
   end;
 
-const x =
-'''
-<comm:business id="soda_shop" type="brick_n_mortar" xmlns:comm="http://example.com/comm">
-  <comm:partners>
-    <comm:partner id="1001">Tony's Syrup Warehouse
-    </comm:partner>
-  </comm:partners>
-</comm:business>
-''';
-
 begin
-{  CoInitializeEx(nil, 0);
-  var d := CoDOMDocument60.Create;
-  d.loadXML(x);
-  WriteLn(d.parseError.reason);
-  WriteLn(d.documentElement.firstChild.nodeName);
-  WriteLn(d.documentElement.firstChild.baseName);}
-
   try
-    StartTests;;
+    StartTests;
 
     TestStart('LOAD FROM STRING');
     var Doc := xmlDoc.Create(TestXml1, DefaultParserOptions);

@@ -64,6 +64,9 @@ type
     constructor Create(const URI: string);
   end;
 
+  EXmlUnsupported = class(EXmlError)
+  end;
+
   TXmlCompatibility = (
     xmlDefault,
     xmlMsXml3,
@@ -186,6 +189,8 @@ function  SplitXMLName(const Name: string; out Prefix, LocalName: string): Boole
 function  SplitXMLName(const Name: RawByteString; out Prefix, LocalName: RawByteString): Boolean; overload;
 function  xmlNormalizeString(const S: string): string;
 
+function  NodeTypeName(nodeType: xmlElementType): string;
+
 function  Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt; overload;
 function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 
@@ -195,28 +200,14 @@ function  XmlSaveOptions(Options: TxmlSaveOptions): Integer;
 function  LX2CheckNodeExists(const node: xmlNodePtr): xmlNodePtr; inline;
 procedure LX2InternalError;
 procedure LX2LocalAllocError;
-procedure LX2NodeTypeError(nodeType: xmlElementType);
 procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);
 
 resourcestring
-  SXmlNsHrefNotFound  = 'Namespace with URI "%s" not found';
+  SXmlNsHrefNotFound     = 'Namespace with URI "%s" not found';
+  SUnsupportedByAttrDecl = 'Operation unsupported by namespace declarations';
+  SUnsupportedBy         = 'Operation unsupported by %s';
 
 implementation
-
-type
-  PStrRec = ^StrRec;
-  StrRec = packed record
-  {$IF defined(CPU64BITS)}
-    _Padding: Integer; // Make 16 byte align for payload..
-  {$ENDIF}
-    codePage: Word;
-    elemSize: Word;
-    refCnt: Integer;
-    length: Integer;
-  end;
-
-const
-  CP_UTF16 = 1200;
 
 function xmlStrPtr(const S: RawByteString): xmlCharPtr;
 begin
@@ -297,38 +288,22 @@ end;
 
 function xmlCharToStr(const S: xmlCharPtr; Len: NativeUInt): string;
 begin
+  Result := UTF8ToUnicodeString(S);
   if Len = 0 then
     Exit('');
 
   var L := Utf8toUtf16Count(S, Len);
-  var Size := SizeOf(StrRec) + (L + 1) shl 1;
-  var P: PStrRec;
-  GetMem(P, Size);
-  P.length := L;
-  P.refCnt := 1;
-  P.elemSize := SizeOf(WideChar);
-  P.codePage := CP_UTF16;
-
-  Pointer(Result) := Pointer(PByte(P) + SizeOf(StrRec));
+  SetString(Result, nil, L);
   UnicodeFromLocaleChars(CP_UTF8, 0, S, Len, Pointer(Result), L);
-end;
+ end;
 
 function xmlCharToRaw(const S: xmlCharPtr; Len: NativeUInt): RawByteString;
-var
-  P: PStrRec;
 begin
   if Len = 0 then
     Exit('');
 
-  var L := NativeUInt(Len) + SizeOf(StrRec) + 1 + ((NativeUInt(Len) + 1) and 1);
-  GetMem(P, L);
-  Pointer(Result) := Pointer(PByte(P) + SizeOf(StrRec));
-  P.length := Len;
-  P.refcnt := 1;
-  P.codePage := CP_UTF8;
-  P.elemSize := 1;
-  PWideChar(Pointer(Result))[Len shr 1] := #0;
-  Move(S^, Pointer(Result)^, Len);
+  SetString(Result, S, Len);
+  SetCodePage(Result, CP_UTF8, False);
 end;
 
 function xmlCharToRaw(const S: xmlCharPtr): RawByteString;
@@ -481,11 +456,6 @@ end;
 procedure LX2InternalError;
 begin
   raise EXmlError.Create('libxml2 internal error') at ReturnAddress;
-end;
-
-procedure LX2NodeTypeError(nodeType: xmlElementType);
-begin
-  raise EXmlError.Create('operation with node with type "' + NodeTypeName(nodeType) + '" unsupported') at ReturnAddress;
 end;
 
 procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);

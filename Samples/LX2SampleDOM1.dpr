@@ -5,6 +5,9 @@
 {$R *.res}
 
 uses
+{$IFDEF MSWINDOWS}
+  FastMM4,
+{$ENDIF}
   System.SysUtils,
   libxml2.API,
   libxslt.API,

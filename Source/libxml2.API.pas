@@ -2635,8 +2635,6 @@ var
   /// Note that, since prefixes of already existent ns-decls can be
   /// shadowed by this process, it could break QNames in attribute
   /// values or element content.
-  /// TODO:
-  ///   1) What to do with XInclude? Currently this returns an error for XInclude.
   /// </summary>
   /// <param name="ctxt">the optional context for custom processing</param>
   /// <param name="srcDoc">the optional sourceDoc</param>
@@ -3299,7 +3297,7 @@ var
   xmlGetDtdEntity         : function (doc: xmlDocPtr; const name: xmlCharPtr): xmlEntityPtr; cdecl;
   xmlGetParameterEntity   : function (doc: xmlDocPtr; const name: xmlCharPtr): xmlEntityPtr; cdecl;
   xmlEncodeEntitiesReentrant: function (doc: xmlDocPtr; const input: xmlCharPtr): xmlEntityPtr; cdecl;
-  xmlEncodeSpecialChars   : function (doc: xmlDocPtr; const input: xmlCharPtr): xmlEntityPtr; cdecl;
+  xmlEncodeSpecialChars   : function (doc: xmlDocPtr; const input: xmlCharPtr): xmlCharPtr; cdecl;
 
   xmlCreateEntitiesTable  : function: xmlEntitiesTablePtr; cdecl;
   xmlCopyEntitiesTable    : function(table: xmlEntitiesTablePtr): xmlEntitiesTablePtr; cdecl;

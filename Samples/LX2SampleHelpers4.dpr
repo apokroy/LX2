@@ -5,6 +5,9 @@ program LX2SampleHelpers4;
 {$R *.res}
 
 uses
+{$IFDEF MSWINDOWS}
+  FastMM4,
+{$ENDIF}
   System.SysUtils,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
@@ -40,7 +43,7 @@ begin
 
     TestStart('Set namespace via attribute');
     root.SetAttribute('xmlns:tst', tstNs);
-    TestEnd(root.ns.href = defNs);
+    TestEnd(root.nsDef.next.href = tstNs);
 
     TestStart('Add child with prefix');
     node := root.AddChild('tst:prefix_child');

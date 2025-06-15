@@ -27,6 +27,8 @@ begin
   XSLTLib.Initialize;
   TestEnd(True);
 
+
+
   MemUsedBefore := xmlMemUsed;
 end;
 

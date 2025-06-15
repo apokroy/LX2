@@ -5,10 +5,10 @@ program LX2SampleDOM2;
 {$R *.res}
 
 uses
+{$IFDEF MSWINDOWS}
+  FastMM4,
+{$ENDIF}
   System.SysUtils,
-{  msxmlIntf,
-  Winapi.msxml,
-  Comobj,}
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
@@ -20,12 +20,6 @@ uses
 
 procedure Test;
 begin
-{  CoInitializeEx(nil, 0);
-  var d := CoDOMDocument60.Create;
-  d.loadXML(TestXml1);
-  WriteLn(d.parseError.reason);
-  WriteLn(d.DocumentElement.SelectNodes('//Tests/Test').length);}
-
   var Doc := CoCreateXMLDocument;
 
   Doc.LoadXML(TestXml1);
@@ -44,11 +38,17 @@ begin
 
   TestStart('Attributes (NamedNodeMap)');
   var Attrs := Doc.DocumentElement.Attributes;
-  TestEnd(Attrs.Length = 1);
+  TestEnd(Attrs.Length = 2);
+
+  TestStart('Add namespace');
+  var Ns := Doc.CreateAttribute('xmlns:sample');
+  Ns.NodeValue := 'http://sample.com/attrs';
+  Attrs.SetNamedItem(Ns);
+  TestEnd(Attrs.GetNamedItem('xmlns:sample').NodeValue = 'http://sample.com/attrs');
 
   TestStart('Is NamedNodeMap Live?');
-  Attrs.SetNamedItem(Doc.CreateAttribute('NewAttr')).NodeValue := 'New Attr Added';
-  TestEnd(Attrs.Length = 2);
+  Attrs.SetNamedItem(Doc.CreateAttribute('NewAttr')).NodeValue := '<Escaped value>';
+  TestEnd(Attrs.Length = 4);
 
   WriteLn(Doc.ToString(True));
 

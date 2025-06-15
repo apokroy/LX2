@@ -214,38 +214,65 @@ type
     property  Parent: xmlNodePtr read FParent;
   end;
 
-  TXMLAttributes = class(TXMLNodeNamedNodeMap, IXMLAttributes)
-  private type
-    TEnumerator = class(TXMLNodeEnumerator, IXMLAttributesEnumerator)
+  /// <summary>
+  /// Node.NsDef & Node.properites enumeration <see cref="TXMLNsNode"/>
+  /// </summary>
+  TXMLAttributeList = class(TInterfacedObject, IXMLNodeList, IXMLNamedNodeMap)
+  protected type
+    TEnumState = (esStart, esNs, esAttr);
+
+    TEnumerator = class(TInterfacedObject, IXMLEnumerator)
     private
       FParent: xmlNodePtr;
-      FCurrent: xmlAttrPtr;
-      FIsFirst: Boolean;
-    protected
-      function  DoGetCurrent: xmlNodePtr; override;
-      function  DoMoveNext: Boolean; override;
+      FCurrent: Pointer;
+      FState: TEnumState;
     public
       constructor Create(Parent: xmlNodePtr);
-      function  GetCurrent: IXMLAttribute;
-      procedure Reset; override;
+      function  GetCurrent: IXMLNode;
+      procedure Reset;
+      function  MoveNext: Boolean;
     end;
+
   private
     FEnum: TEnumerator;
+    FParent: xmlNodePtr;
   protected
-    function  DoNextNode: xmlNodePtr; override;
-    function  CreateEnumerator: TXMLNodeEnumerator; override;
-    function  Get_Attr(Index: NativeInt): IXmlAttribute;
-    function  Get_Item(Index: NativeInt): IXMLNode; override;
-    function  Get_Length: NativeInt; override;
-    function  FindItem(const Name: string): xmlNodePtr; override;
-    function  FindQualifiedItem(const BaseName: string; const NamespaceURI: string): xmlNodePtr; override;
+    function  Get_Item(Index: NativeInt): IXMLNode;
+    function  Get_Length: NativeInt;
+  protected
+    function  FindAttr(const Name: string): xmlAttrPtr;
+    function  FindNs(const Name: string): xmlNsPtr;
+    function  FindQAttr(const BaseName, NamespaceURI: string): xmlAttrPtr;
+    function  FindQNs(const BaseName, NamespaceURI: string): xmlNsPtr;
+    property  Parent: xmlNodePtr read FParent;
   public
     constructor Create(const Parent: xmlNodePtr);
     destructor Destroy; override;
-    procedure Reset; override;
+    procedure Reset;
+    { IXMLNodeList }
+    function  NextNode: IXMLNode;
+    function  GetEnumerator: IXMLEnumerator;
+    function  ToArray: TArray<IXMLNode>;
+    { IXMLNamedNodeMap }
+    function  GetNamedItem(const Name: string): IXMLNode;
+    function  SetNamedItem(const NewItem: IXMLNode): IXMLNode;
+    function  RemoveNamedItem(const Name: string): IXMLNode;
+    function  GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function  RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+  end;
+
+  TXMLAttributes = class(TXMLAttributeList, IXMLAttributes)
+  protected type
+    TEnumerator = class(TXMLAttributeList.TEnumerator, IXMLAttributesEnumerator)
+    public
+      function  GetCurrent: IXMLAttribute;
+    end;
+  protected
+    function  Get_Attr(Index: NativeInt): IXmlAttribute;
+  protected
+  public
     { IXMLAttributes }
     function  NextNode: IXMLAttribute;
-    property  Item[index: NativeInt]: IXmlAttribute read Get_Attr; default;
     { Delphi enumerable }
     function  GetEnumerator: IXMLAttributesEnumerator;
     function  ToArray: TArray<IXmlAttribute>; reintroduce; overload;
@@ -347,6 +374,72 @@ type
     property  NamespaceURI: string read Get_namespaceURI;
     property  Prefix: string read Get_prefix;
     property  BaseName: string read Get_baseName;
+  end;
+
+  /// <summary>
+  /// MS XML threats NS declartion as Node, while libxml2 does not so wee need handle this scpecial case
+  /// </summary>
+  TXMLNsNode = class(TInterfacedObject, IXMLNode)
+  protected
+    { IXMLNode }
+    function  AppendChild(const NewChild: IXMLNode): IXMLNode;
+    function  CloneNode(Deep: WordBool): IXMLNode;
+    function  Get_Attributes: IXMLAttributes;
+    function  Get_BaseName: string;
+    function  Get_ChildNodes: IXMLNodeList;
+    function  Get_FirstChild: IXMLNode;
+    function  Get_LastChild: IXMLNode;
+    function  Get_NamespaceURI: string;
+    function  Get_NextSibling: IXMLNode;
+    function  Get_NodeName: string;
+    function  Get_NodeType: DOMNodeType;
+    function  Get_NodeValue: string;
+    function  Get_OwnerDocument: IXMLDocument;
+    function  Get_ParentNode: IXMLNode;
+    function  Get_Prefix: string;
+    function  Get_PreviousSibling: IXMLNode;
+    function  Get_Text: string;
+    function  Get_Xml: string;
+    function  HasChildNodes: Boolean;
+    function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
+    function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
+    function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
+    function  SelectNodes(const QueryString: string): IXMLNodeList;
+    function  SelectSingleNode(const QueryString: string): IXMLNode;
+    procedure Set_NodeValue(const Value: string);
+    procedure Set_Text(const Text: string);
+  protected
+    NsPtr: xmlNsPtr;
+    Parent: xmlNodePtr;
+    constructor Create(Ns: xmlNsPtr; Parent: xmlNodePtr);
+  public
+    destructor Destroy; override;
+    procedure ReconciliateNs; virtual;
+    property  NodeName: string read Get_NodeName;
+    property  NodeValue: string read Get_NodeValue write Set_NodeValue;
+    property  NodeType: DOMNodeType read Get_NodeType;
+    property  ParentNode: IXMLNode read Get_ParentNode;
+    property  ChildNodes: IXMLNodeList read Get_ChildNodes;
+    property  FirstChild: IXMLNode read Get_FirstChild;
+    property  LastChild: IXMLNode read Get_LastChild;
+    property  PreviousSibling: IXMLNode read Get_PreviousSibling;
+    property  NextSibling: IXMLNode read Get_NextSibling;
+    property  Attributes: IXMLAttributes read Get_Attributes;
+    property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
+    property  Text: string read Get_Text write Set_Text;
+    property  Xml: string read Get_Xml;
+    property  NamespaceURI: string read Get_namespaceURI;
+    property  Prefix: string read Get_prefix;
+    property  BaseName: string read Get_baseName;
+  end;
+
+  TXMLNsAttribute = class(TXMLNsNode, IXMLAttribute)
+  protected
+    function  Get_Name: string;
+    function  Get_Value: string;
+    procedure Set_Value(const Value: string);
+    property  Name: string read Get_Name;
+    property  Value: string read Get_Value write Set_value;
   end;
 
   TXMLAttribute = class(TXMLNode, IXMLAttribute)
@@ -562,6 +655,13 @@ procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
 begin
   if Node._private <> nil then
   begin
+    var Ns := TXMLNode(Node._private).NodePtr.nsDef;
+    while Ns <> nil do
+    begin
+      if Ns._private <> nil then
+        TXMLNsNode(Ns._private).NsPtr := nil;
+      Ns := Ns.next;
+    end;
     TXMLNode(Node._private).NodePtr := nil;
   end;
 end;
@@ -570,6 +670,12 @@ end;
  begin
    TXMLDocument(Context).XSLTError(Msg);
  end;
+
+procedure CheckNotNode(const Node: IXMLNode);
+begin
+  if (Node <> nil) and not (TObject(Node) is TXMLNode) then
+    raise EXmlUnsupported.CreateResFmt(@SUnsupportedBy, [NodeTypeName(xmlElementType(Node.NodeType))]);
+end;
 
 function Cast(const Node: xmlNodePtr): TXMLNode; overload;
 begin
@@ -601,8 +707,80 @@ begin
   else if Attr._private = nil then
     Result := TXMLAttribute.Create(Attr)
   else
-    Result := TXMLAttribute(Attr._private)
+    Result := TXMLAttribute(Attr._private);
 
+end;
+
+function Cast(const Ns: xmlNsPtr; Parent: xmlNodePtr): TXMLNsAttribute; overload;
+begin
+  if Ns = nil then
+    Result := nil
+  else if Ns._private = nil then
+    Result := TXMLNsAttribute.Create(Ns, Parent)
+  else
+    Result := TXMLNsAttribute(Ns._private);
+end;
+
+function xmlUnlinkNs(var List: xmlNsPtr; Ns: xmlNsPtr): Boolean;
+begin
+  if Ns = nil then
+    Exit(False);
+
+  if List = Ns then
+  begin
+    List := Ns.next;
+    Ns.next := nil;
+    Exit(True);
+  end
+  else
+  begin
+    var Cur := List;
+    while Cur.next <> Ns do
+      Cur := Cur.next;
+
+    if Cur <> nil then
+    begin
+      Cur.next := Ns.next;
+      Ns.next := nil;
+      Exit(True);
+    end;
+  end;
+  Result := False;
+end;
+
+procedure xmlRemoveNsDef(Node: xmlNodePtr; Ns: xmlNsPtr);
+begin
+  if not xmlUnlinkNs(Node.nsDef, Ns) then
+    Exit;
+
+  Ns.next := nil;
+  Ns.context := nil;
+
+  var Child := Node;
+  while Child <> nil do
+  begin
+    xmlUnlinkNs(Child.ns, Ns);
+    Child := Child.GetNext(Node);
+  end;
+end;
+
+procedure xmlAppendNsDef(Node: xmlNodePtr; Ns: xmlNsPtr);
+begin
+  if Node.nsDef = nil then
+  begin
+    Node.nsDef := Ns;
+  end
+  else
+  begin
+    var Cur := Node.nsDef;
+    while Cur.next <> nil do
+      Cur := Cur.next;
+    Cur.next := Ns;
+  end;
+  Ns.context := Node.doc;
+
+  if (Ns._private <> nil) then
+    TXMLNsNode(Ns._private).Parent := Node;
 end;
 
 { TXMLNodeEnumerator }
@@ -871,6 +1049,8 @@ begin
   if NewItem = nil then
     Exit(nil);
 
+  CheckNotNode(NewItem);
+
   Result := NewItem;
 
   var NewNode := TXmlNode(NewItem).NodePtr;
@@ -926,81 +1106,146 @@ begin
     xmlAddNextSibling(NewNode, AfterNode);
 end;
 
-{ TXMLAttributes.TEnumerator }
+{ TXMLAttributeList.TEnumerator }
 
-constructor TXMLAttributes.TEnumerator.Create(Parent: xmlNodePtr);
+constructor TXMLAttributeList.TEnumerator.Create(Parent: xmlNodePtr);
 begin
   inherited Create;
   FParent := Parent;
-  FIsFirst := True;
+  FState := esStart;
+  FCurrent := nil;
 end;
 
-function TXMLAttributes.TEnumerator.GetCurrent: IXMLAttribute;
+function TXMLAttributeList.TEnumerator.GetCurrent: IXMLNode;
 begin
-  Result := Cast(FCurrent);
+  case FState of
+    esStart: Result := nil;
+    esNs:    Result := Cast(xmlNsPtr(FCurrent), FParent);
+    esAttr:  Result := Cast(xmlAttrPtr(FCurrent));
+  end;
 end;
 
-function TXMLAttributes.TEnumerator.DoGetCurrent: xmlNodePtr;
+function TXMLAttributeList.TEnumerator.MoveNext: Boolean;
 begin
-  Result := xmlNodePtr(FCurrent);
-end;
-
-function TXMLAttributes.TEnumerator.DoMoveNext: Boolean;
-begin
-  if FIsFirst then
+  if FState = esStart then
   begin
-    FCurrent := FParent.properties;
-    FIsFirst := False;
+    if FParent.nsDef <> nil then
+    begin
+      FCurrent := FParent.nsDef;
+      FState := esNs;
+    end
+    else
+    begin
+      FCurrent := FParent.properties;
+      FState := esAttr;
+    end;
   end
+  else if FState = esAttr then
+    FCurrent := xmlAttrPtr(FCurrent).next
   else
-    FCurrent := FCurrent.next;
+    FCurrent := xmlNsPtr(FCurrent).next;
 
   Result := FCurrent <> nil;
 end;
 
-procedure TXMLAttributes.TEnumerator.Reset;
+procedure TXMLAttributeList.TEnumerator.Reset;
 begin
-  FIsFirst := True;
+  FState := esStart;
 end;
 
-{ TXMLAttributes }
+{ TXMLAttributeList }
 
-constructor TXMLAttributes.Create(const Parent: xmlNodePtr);
+constructor TXMLAttributeList.Create(const Parent: xmlNodePtr);
 begin
-  inherited Create(Parent);
+  inherited Create;
+  FParent := Parent;
   FEnum := TEnumerator.Create(Parent);
 end;
 
-destructor TXMLAttributes.Destroy;
+destructor TXMLAttributeList.Destroy;
 begin
   FreeAndNil(FEnum);
   inherited;
 end;
 
-function TXMLAttributes.CreateEnumerator: TXMLNodeEnumerator;
+function TXMLAttributeList.GetEnumerator: IXMLEnumerator;
 begin
-  Result := TXMLAttributes.TEnumerator.Create(Parent);
+  Result := TXMLAttributeList.TEnumerator.Create(Parent);
 end;
 
-function TXMLAttributes.DoNextNode: xmlNodePtr;
-begin
-  if FEnum.MoveNext then
-    Result := xmlNodePtr(FEnum.FCurrent)
-  else
-    Result := nil;
-end;
-
-function TXMLAttributes.FindItem(const Name: string): xmlNodePtr;
+function TXMLAttributeList.FindNs(const Name: string): xmlNsPtr;
 var
   Prefix, LocalName: RawByteString;
 begin
-  if SplitXMLName(UTF8Encode(Name), Prefix, LocalName) then
+  if SplitXMLName(Utf8Encode(Name), Prefix, LocalName) then
+  begin
+    if Prefix = 'xmlns' then
+    begin
+      var Ns := Parent.nsDef;
+      while Ns <> nil do
+      begin
+        if xmlStrSame(Pointer(LocalName), Ns.prefix) then
+          Exit(Ns);
+
+        Ns := Ns.next;
+      end;
+    end;
+  end
+  else if LocalName = 'xmlns' then
+  begin
+    var Ns := Parent.nsDef;
+    while Ns <> nil do
+    begin
+      if Ns.prefix = nil then
+        Exit(Ns);
+
+      Ns := Ns.next;
+    end;
+  end;
+  Result := nil;
+end;
+
+function TXMLAttributeList.FindQNs(const BaseName, namespaceURI: string): xmlNsPtr;
+begin
+  var Name := UTF8Encode(BaseName);
+  var URI := UTF8Encode(namespaceURI);
+  if BaseName = 'xmlns' then
+  begin
+    var Ns := Parent.nsDef;
+    while Ns <> nil do
+    begin
+      if (Ns.prefix = nil) and xmlStrSame(Pointer(URI), Ns.href) then
+        Exit(Ns);
+
+      Ns := Ns.next;
+    end;
+    Exit(nil);
+  end;
+
+  var Ns := Parent.nsDef;
+  while Ns <> nil do
+  begin
+    if xmlStrSame(Pointer(Name), Ns.prefix) and xmlStrSame(Pointer(URI), Ns.href) then
+      Exit(Ns);
+
+    Ns := Ns.next;
+  end;
+
+  Result := nil;
+end;
+
+function TXMLAttributeList.FindAttr(const Name: string): xmlAttrPtr;
+var
+  Prefix, LocalName: RawByteString;
+begin
+  if SplitXMLName(Utf8Encode(Name), Prefix, LocalName) then
   begin
     var Attr := Parent.properties;
     while Attr <> nil do
     begin
-      if (Attr.ns <> nil) and xmlStrSame(Attr.ns.prefix, Pointer(Prefix)) and xmlStrSame(Attr.Name, Pointer(LocalName)) then
-        Exit(xmlNodePtr(Attr));
+      if (Attr.ns <> nil) and xmlStrSame(Attr.ns.prefix, Pointer(Prefix)) and xmlStrSame(Attr.name, Pointer(LocalName)) then
+        Exit(Attr);
+
       Attr := Attr.next;
     end;
   end
@@ -1009,100 +1254,267 @@ begin
     var Attr := Parent.properties;
     while Attr <> nil do
     begin
-      if xmlStrSame(Attr.Name, Pointer(LocalName)) then
-        Exit(xmlNodePtr(Attr));
+      if (Attr.ns = nil) and xmlStrSame(Attr.name, Pointer(LocalName)) then
+        Exit(Attr);
+
       Attr := Attr.next;
     end;
   end;
   Result := nil;
 end;
 
-function TXMLAttributes.FindQualifiedItem(const BaseName, NamespaceURI: string): xmlNodePtr;
-var
-  Name, URI: RawByteString;
+function TXMLAttributeList.FindQAttr(const BaseName, namespaceURI: string): xmlAttrPtr;
 begin
-  URI := Utf8Encode(NamespaceURI);
-  Name := Utf8Encode(BaseName);
-  var Attr := Parent.properties;
-  while Attr <> nil do
+  var Name := UTF8Encode(BaseName);
+  var URI := UTF8Encode(namespaceURI);
+
+  var Prop := Parent.properties;
+  while Prop <> nil do
   begin
-    if (Attr.ns <> nil) and xmlStrSame(Attr.ns.href, Pointer(URI)) and xmlStrSame(Attr.Name, Pointer(Name)) then
-      Exit(xmlNodePtr(Attr));
-    Attr := Attr.next;
+    if (Prop.ns <> nil) and xmlStrSame(Pointer(Name), Prop.name) and xmlStrSame(Pointer(URI), Prop.ns.href) then
+      Exit(Prop);
+
+    Prop := Prop.next;
   end;
+
   Result := nil;
 end;
+
+function TXMLAttributeList.GetNamedItem(const Name: string): IXMLNode;
+begin
+  var Ns := FindNs(Name);
+  if Ns <> nil then
+    Exit(Cast(Ns, Parent));
+
+  var Attr := FindAttr(Name);
+  if Attr <> nil then
+    Exit(Cast(Attr));
+
+  Result := nil;
+end;
+
+function TXMLAttributeList.GetQualifiedItem(const BaseName, namespaceURI: string): IXMLNode;
+begin
+  var Ns := FindQNs(BaseName, namespaceURI);
+  if Ns <> nil then
+    Exit(Cast(Ns, Parent));
+
+  var Attr := FindQAttr(BaseName, namespaceURI);
+  if Attr <> nil then
+    Exit(Cast(Attr));
+
+  Result := nil;
+end;
+
+function TXMLAttributeList.Get_Item(Index: NativeInt): IXMLNode;
+begin
+  var I := 0;
+  var Ns := Parent.nsDef;
+  while Ns <> nil do
+  begin
+    if I = Index then
+      Exit(Cast(Ns, Parent));
+
+    Inc(I);
+    Ns := Ns.next;
+  end;
+
+  var Prop := Parent.properties;
+  while Prop <> nil do
+  begin
+    if I = Index then
+      Exit(Cast(Prop));
+
+    Inc(I);
+    Prop := Prop.next;
+  end;
+end;
+
+function TXMLAttributeList.Get_Length: NativeInt;
+begin
+  Result := 0;
+  var Ns := Parent.nsDef;
+  while Ns <> nil do
+  begin
+    Inc(Result);
+    Ns := Ns.next;
+  end;
+
+  var Prop := Parent.properties;
+  while Prop <> nil do
+  begin
+    Inc(Result);
+    Prop := Prop.next;
+  end;
+end;
+
+function TXMLAttributeList.NextNode: IXMLNode;
+begin
+  if FEnum.MoveNext then
+    Result := FEnum.GetCurrent
+  else
+    Result := nil;
+end;
+
+function TXMLAttributeList.RemoveNamedItem(const Name: string): IXMLNode;
+begin
+  var Ns := FindNs(Name);
+  if Ns <> nil then
+  begin
+    xmlRemoveNsDef(Parent, ns);
+    Exit(Cast(ns, Parent));
+  end;
+
+  var Attr := FindAttr(Name);
+  if Attr <> nil then
+  begin
+    xmlUnlinkNode(xmlNodePtr(Attr));
+    Exit(Cast(Attr));
+  end;
+
+  Result := nil;
+end;
+
+function TXMLAttributeList.RemoveQualifiedItem(const BaseName, namespaceURI: string): IXMLNode;
+begin
+  var Ns := FindQNs(BaseName, namespaceURI);
+  if Ns <> nil then
+  begin
+    xmlRemoveNsDef(Parent, ns);
+    Exit(Cast(ns, Parent));
+  end;
+
+  var Attr := FindQAttr(BaseName, namespaceURI);
+  if Attr <> nil then
+  begin
+    xmlUnlinkNode(xmlNodePtr(Attr));
+    Exit(Cast(Attr));
+  end;
+
+  Result := nil;
+end;
+
+procedure TXMLAttributeList.Reset;
+begin
+  FEnum.Reset;
+end;
+
+function TXMLAttributeList.SetNamedItem(const NewItem: IXMLNode): IXMLNode;
+begin
+  var Obj := TObject(NewItem);
+
+  if Obj is TXMLNsNode then
+  begin
+    xmlAppendNsDef(Parent, TXMLNsNode(Obj).NsPtr);
+    Result := Cast(TXMLNsNode(Obj).NsPtr, Parent);
+  end
+  else if Obj is TXMLAttribute then
+  begin
+    Result := Cast(xmlAddChild(Parent, xmlNodePtr(TXMLAttribute(Obj).AttrPtr)));
+  end
+  else
+    Result := nil;
+end;
+
+function TXMLAttributeList.ToArray: TArray<IXmlNode>;
+begin
+  var Capacity := 16;
+  SetLength(Result, Capacity);
+
+  var Count := 0;
+  var Ns := Parent.nsDef;
+  while Ns <> nil do
+  begin
+    if Count = Capacity then
+    begin
+      Capacity := Capacity shl 1;
+      SetLength(Result, Capacity);
+    end;
+    Result[Count] := Cast(Ns, Parent);
+
+    Inc(Count);
+
+    Ns := Ns.next;
+  end;
+
+  var Prop := Parent.properties;
+  while Prop <> nil do
+  begin
+    if Count = Capacity then
+    begin
+      Capacity := Capacity shl 1;
+      SetLength(Result, Capacity);
+    end;
+    Result[Count] := Cast(Prop);
+
+    Inc(Count);
+
+    Prop := Prop.next;
+  end;
+
+  SetLength(Result, Count);
+end;
+
+{ TXMLAttributes.TEnumerator }
+
+function TXMLAttributes.TEnumerator.GetCurrent: IXMLAttribute;
+begin
+  Result := inherited GetCurrent as IXMLAttribute;
+end;
+
+{ TXMLAttributes }
 
 function TXMLAttributes.GetEnumerator: IXMLAttributesEnumerator;
 begin
   Result := TEnumerator.Create(Parent);
 end;
 
-function TXMLAttributes.Get_Item(Index: NativeInt): IXmlNode;
-begin
-  Result := Get_Attr(Index);
-end;
-
-function TXMLAttributes.Get_Length: NativeInt;
-begin
-  Result := 0;
-  var Attr := Parent.properties;
-  while Attr <> nil do
-  begin
-    Inc(Result);
-    Attr := Attr.next;
-  end;
-end;
-
 function TXMLAttributes.Get_Attr(Index: NativeInt): IXmlAttribute;
 begin
-  var Attr := Parent.properties;
-  for var I := 0 to Index do
-  begin
-    if Attr = nil then
-      Exit(nil);
-
-    if I = Index then
-      Exit(Cast(Attr))
-    else
-      Attr := Attr.next;
-  end;
+  Result := Get_Item(Index) as IXmlAttribute;
 end;
 
 function TXMLAttributes.NextNode: IXMLAttribute;
 begin
-  Result := Cast(xmlAttrPtr(DoNextNode));
-end;
-
-procedure TXMLAttributes.Reset;
-begin
-  FEnum.Reset;
+  Result := NextNode as IXmlAttribute;
 end;
 
 function TXMLAttributes.ToArray: TArray<IXmlAttribute>;
-var
-  Capacity, Count: NativeInt;
 begin
-  if Parent.properties = nil then
-    Exit(nil);
-
-  Capacity := 16;
-  Count := 0;
-
+  var Capacity := 16;
   SetLength(Result, Capacity);
-  var Attr := Parent.properties;
-  while Attr <> nil do
+
+  var Count := 0;
+  var Ns := Parent.nsDef;
+  while Ns <> nil do
   begin
     if Count = Capacity then
     begin
-      Inc(Capacity, Capacity shr 1);
+      Capacity := Capacity shl 1;
       SetLength(Result, Capacity);
     end;
-    Result[Count] := Cast(Attr);
+    Result[Count] := Cast(Ns, Parent);
+
     Inc(Count);
 
-    Attr := Attr.next;
+    Ns := Ns.next;
   end;
+
+  var Prop := Parent.properties;
+  while Prop <> nil do
+  begin
+    if Count = Capacity then
+    begin
+      Capacity := Capacity shl 1;
+      SetLength(Result, Capacity);
+    end;
+    Result[Count] := Cast(Prop);
+
+    Inc(Count);
+
+    Prop := Prop.next;
+  end;
+
   SetLength(Result, Count);
 end;
 
@@ -1375,14 +1787,30 @@ end;
 function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
 begin
   // xmlAddChild can merge nodes, then Old can be freed
-  var NewNode := NodePtr.AppendChild(TXMLNode(NewChild).NodePtr);
-  Result := Cast(LX2CheckNodeExists(NewNode));
+  if TObject(NewChild) is TXMLNsNode then
+  begin
+    xmlSetNs(NodePtr, TXMLNsNode(NewChild).NsPtr);
+    Result := NewChild;
+  end
+  else
+  begin
+    var NewNode := NodePtr.AppendChild(TXMLNode(NewChild).NodePtr);
+    Result := Cast(LX2CheckNodeExists(NewNode));
+  end;
 end;
 
 function TXMLNode.InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
 begin
-  var NewNode := NodePtr.InsertBefore(TXMLNode(NewChild).NodePtr, TXMLNode(RefChild).NodePtr);
-  Result := Cast(LX2CheckNodeExists(NewNode));
+  if TObject(NewChild) is TXMLNsNode then
+  begin
+    xmlSetNs(NodePtr, TXMLNsNode(NewChild).NsPtr);
+    Result := NewChild;
+  end
+  else
+  begin
+    var NewNode := NodePtr.InsertBefore(TXMLNode(NewChild).NodePtr, TXMLNode(RefChild).NodePtr);
+    Result := Cast(LX2CheckNodeExists(NewNode));
+  end;
 end;
 
 function TXMLNode.CloneNode(Deep: WordBool): IXMLNode;
@@ -1553,7 +1981,7 @@ begin
     XML_TEXT_NODE,
     XML_PI_NODE:            NodePtr.text := Utf8Encode(Value);
   else
-    LX2NodeTypeError(NodePtr.&type);
+    raise EXmlUnsupported.CreateResFmt(@SUnsupportedBy, [NodeTypeName(NodePtr.&type)]);
   end;
 end;
 
@@ -1733,7 +2161,7 @@ end;
 
 procedure TXMLElement.SetAttribute(const Name: string; Value: string);
 begin
-  xmlSetProp(NodePtr, xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Value)));
+  NodePtr.SetAttribute(Utf8Encode(Name), Utf8Encode(Value));
 end;
 
 { TXMLCharacterData }
@@ -2064,8 +2492,20 @@ begin
 end;
 
 function TXMLDocument.CreateAttribute(const Name: string): IXMLAttribute;
+var
+ Prefix, LocalName: RawByteString;
 begin
-  Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Name)), nil));
+  if SplitXMLName(UTF8Encode(Name), Prefix, LocalName) then
+  begin
+    if Prefix = 'xmlns' then
+      Result := Cast(xmlNewNs(nil, nil, xmlCharPtr(LocalName)), nil)
+    else
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Name)), nil));
+  end
+  else if Name = 'xmlns' then
+    Result := Cast(xmlNewNs(nil, 'http://', nil), nil) // Need to add something
+  else
+    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Name)), nil));
 end;
 
 function TXMLDocument.CreateCDATASection(const Data: string): IXMLCDATASection;
@@ -2104,6 +2544,7 @@ end;
 
 function TXMLDocument.CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
 begin
+  CheckNotNode(Parent);
   Result := Cast(xmlDocPtr(NodePtr).CreateChild(TXMLNode(Parent).NodePtr, Utf8Encode(Name), Utf8Encode(NamespaceURI), ResolveNamespace, Utf8Encode(Content))) as IXMLElement;
 end;
 
@@ -2117,7 +2558,10 @@ begin
     HRef := Utf8Encode(NamespaceURI);
   end
   else
+  begin
     SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
+    HRef := '';
+  end;
 
   case NodeType of
     NODE_ATTRIBUTE:
@@ -2428,6 +2872,8 @@ end;
 
 function TXMLDocument.ValidateNode(const Node: IXMLNode): IXMLParseError;
 begin
+  CheckNotNode(Node);
+
   Errors.FList.Clear;
 
   xmlDocPtr(NodePtr).ValidateNode(TXMLNode(Node).NodePtr, ErrorCallback);
@@ -2612,6 +3058,194 @@ begin
     if Result then
       Break;
   end;
+end;
+
+{ TXMLNsNode }
+
+constructor TXMLNsNode.Create(Ns: xmlNsPtr; Parent: xmlNodePtr);
+begin
+  inherited Create;
+  Self.NsPtr := Ns;
+  Self.NsPtr._private := Self;
+  Self.Parent := Parent;
+end;
+
+destructor TXMLNsNode.Destroy;
+begin
+  if NsPtr <> nil then
+  begin
+    NsPtr._private := nil;
+    if NsPtr.context = nil then
+      xmlFreeNs(NsPtr);
+  end;
+  inherited;
+end;
+
+function TXMLNsNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+function TXMLNsNode.CloneNode(Deep: WordBool): IXMLNode;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+function TXMLNsNode.Get_Attributes: IXMLAttributes;
+begin
+  Result := nil;
+end;
+
+function TXMLNsNode.Get_BaseName: string;
+begin
+  Result := xmlCharToStr(NsPtr.prefix);
+end;
+
+function TXMLNsNode.Get_ChildNodes: IXMLNodeList;
+begin
+  Result := nil;
+end;
+
+function TXMLNsNode.Get_FirstChild: IXMLNode;
+begin
+  Result := nil;
+end;
+
+function TXMLNsNode.Get_LastChild: IXMLNode;
+begin
+  Result := nil;
+end;
+
+function TXMLNsNode.Get_NamespaceURI: string;
+begin
+  Result := xmlCharToStr(NsPtr.href);
+end;
+
+function TXMLNsNode.Get_NextSibling: IXMLNode;
+begin
+  if NsPtr.next <> nil then
+    Result := Cast(NsPtr.next, Parent)
+  else if Parent.properties <> nil then
+    Result := Cast(Parent.properties)
+  else
+    Result := nil;
+end;
+
+function TXMLNsNode.Get_NodeName: string;
+begin
+  Result := 'xmlns:' + xmlCharToStr(NsPtr.prefix);
+end;
+
+function TXMLNsNode.Get_NodeType: DOMNodeType;
+begin
+  Result := NODE_ATTRIBUTE;
+end;
+
+function TXMLNsNode.Get_NodeValue: string;
+begin
+  Result := xmlCharToStr(NsPtr.href);
+end;
+
+function TXMLNsNode.Get_OwnerDocument: IXMLDocument;
+begin
+  if (NsPtr.context <> nil) and (NsPtr.context._private <> nil) then
+    Result := TXMLDocument(NsPtr.context._private)
+  else
+    Result := nil;
+end;
+
+function TXMLNsNode.Get_ParentNode: IXMLNode;
+begin
+  Result := Cast(Parent);
+end;
+
+function TXMLNsNode.Get_Prefix: string;
+begin
+  Result := 'xmlns';
+end;
+
+function TXMLNsNode.Get_PreviousSibling: IXMLNode;
+begin
+  var Prop := Parent.nsDef;
+  while Prop <> nil do
+  begin
+    if Prop.next = NsPtr then
+      Exit(Cast(Prop, Parent));
+  end;
+  Result := nil;
+end;
+
+function TXMLNsNode.Get_Text: string;
+begin
+  Result := xmlCharToStr(NsPtr.href);
+end;
+
+function TXMLNsNode.Get_Xml: string;
+begin
+  Result := '';
+end;
+
+function TXMLNsNode.HasChildNodes: Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+procedure TXMLNsNode.ReconciliateNs;
+begin
+
+end;
+
+function TXMLNsNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+function TXMLNsNode.ReplaceChild(const NewChild, OldChild: IXMLNode): IXMLNode;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+function TXMLNsNode.SelectNodes(const QueryString: string): IXMLNodeList;
+begin
+  Result := nil;
+end;
+
+function TXMLNsNode.SelectSingleNode(const QueryString: string): IXMLNode;
+begin
+  Result := nil;
+end;
+
+procedure TXMLNsNode.Set_NodeValue(const Value: string);
+begin
+  Set_Text(Value)
+end;
+
+procedure TXMLNsNode.Set_Text(const Text: string);
+begin
+  xmlFree(NsPtr.href);
+  NsPtr.href := xmlStrdup(xmlCharPtr(Utf8Encode(Text)));
+end;
+
+{ TXMLNsAttribute }
+
+function TXMLNsAttribute.Get_Name: string;
+begin
+  Result := NodeName;
+end;
+
+function TXMLNsAttribute.Get_Value: string;
+begin
+  Result := NodeValue;
+end;
+
+procedure TXMLNsAttribute.Set_Value(const Value: string);
+begin
+  NodeValue := Value;
 end;
 
 initialization

@@ -5,6 +5,9 @@ program LX2SampleSAX1;
 {$R *.res}
 
 uses
+{$IFDEF MSWINDOWS}
+  FastMM4,
+{$ENDIF}
   System.SysUtils,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
@@ -156,37 +159,42 @@ begin
   Write(string.Create(#32, Indent * 2));
 end;
 
+procedure Test;
+begin
+  TestStart('SAX Parser');
+
+  var Parser := TSAXParser.Create;
+  try
+    Parser.Handler := TSAXConsoleHandler.Create;
+    Parser.PreserveWhitespaces := False;
+
+    if not TestEnd(Parser.Parse(TestXml1)) then
+    begin
+      for var Error in Parser.Errors do
+      begin
+        Write(Error.Code);
+        Write('  ');
+        Write(Error.Text);
+        Write('  ');
+        Write(Error.Url);
+        Write('  ');
+        Write(Error.Line);
+        Write('  ');
+        Write(Error.Col);
+        WriteLn;
+      end;
+    end;
+    WriteLn;
+  finally
+    Parser.Free;
+  end;
+end;
+
 begin
   try
     StartTests;
 
-    TestStart('SAX Parser');
-
-    var Parser := TSAXParser.Create;
-    try
-      Parser.Handler := TSAXConsoleHandler.Create;
-      Parser.PreserveWhitespaces := False;
-
-      if not TestEnd(Parser.Parse(TestXml1)) then
-      begin
-        for var Error in Parser.Errors do
-        begin
-          Write(Error.Code);
-          Write('  ');
-          Write(Error.Text);
-          Write('  ');
-          Write(Error.Url);
-          Write('  ');
-          Write(Error.Line);
-          Write('  ');
-          Write(Error.Col);
-          WriteLn;
-        end;
-      end;
-      WriteLn;
-    finally
-      Parser.Free;
-    end;
+    Test;
 
     EndTests;
   except
