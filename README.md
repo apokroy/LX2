@@ -25,7 +25,7 @@ Contains:
 - Sample project like xmllint, mostly to test library itself.
 
 ## Samples
-All provided sample projects uses simple test API, that tracking libxml2 memory leaks and DOM interfaces refcounting errors. In the near future, FastMM memory leaks detection has been added.
+All provided sample projects uses simple test API, that tracking libxml2 memory leaks and DOM interfaces refcounting errors, FastMM4 memory leaks detection also used.
 
 ## Initialize library
 Before using the library, it must be initialized. You can specify which files will be used or use default settings.
@@ -115,6 +115,7 @@ end;
 ## LX2.DOM
 #### Sample
 - [Sample 1](/Samples/LX2SampleDOM1.dpr) Load XML from string, modify tree, formatted output.
+- [Sample 2](/Samples/LX2SampleDOM2.dpr) DOM Collections.
 ### Interface list
 #### IXMLEnumerator
 #### IXMLError
