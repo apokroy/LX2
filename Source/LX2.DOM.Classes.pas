@@ -194,7 +194,7 @@ type
     function  FindItem(const Name: string): xmlNodePtr; virtual; abstract;
     function  FindQualifiedItem(const BaseName: string; const NamespaceURI: string): xmlNodePtr; virtual; abstract;
     procedure RemoveNode(Node: xmlNodePtr); virtual;
-    procedure InsertNode(NewNode, AfterNode: xmlNodePtr); virtual; abstract;
+    function  InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr; virtual; abstract;
   public
     { IXMLNamedNodeMap }
     function  GetNamedItem(const Name: string): IXMLNode;
@@ -202,13 +202,16 @@ type
     function  RemoveNamedItem(const Name: string): IXMLNode;
     function  GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
     function  RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function  getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    function  setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+    function  removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
   end;
 
   TXMLNodeNamedNodeMap = class(TXMLCustomNamedNodeMap)
   private
     FParent: xmlNodePtr;
   protected
-    procedure InsertNode(NewNode, AfterNode: xmlNodePtr); override;
+    function  InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr; override;
   public
     constructor Create(const Parent: xmlNodePtr);
     property  Parent: xmlNodePtr read FParent;
@@ -259,6 +262,9 @@ type
     function  RemoveNamedItem(const Name: string): IXMLNode;
     function  GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
     function  RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function  getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    function  setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+    function  removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
   end;
 
   TXMLAttributes = class(TXMLAttributeList, IXMLAttributes)
@@ -304,6 +310,7 @@ type
     FRecursive: Boolean;
     FMask: string;
     FUseMask: Boolean;
+    FNamespaceURI: string;
     FEnum: TEnumerator;
   protected
     function  DoNextNode: xmlNodePtr; override;
@@ -314,11 +321,12 @@ type
     function  FindQualifiedItem(const BaseName: string; const NamespaceURI: string): xmlNodePtr; override;
     property  UseMask: Boolean read FUseMask;
   public
-    constructor Create(Parent: xmlNodePtr; Recursive: Boolean; Mask: string = '*');
+    constructor Create(Parent: xmlNodePtr; Recursive: Boolean; const Mask: string = '*'; const NamespaceURI: string = '');
     destructor Destroy; override;
     procedure Reset; override;
     property  Recursive: Boolean read FRecursive;
     property  Mask: string read FMask;
+    property  NamespaceURI: string read FNamespaceURI;
   end;
 
   TXMLNode = class(TInterfacedObject, IXMLNode)
@@ -344,8 +352,10 @@ type
     function  Get_PreviousSibling: IXMLNode;
     function  Get_Text: string;
     function  Get_Xml: string;
+    function  HasAttributes: Boolean;
     function  HasChildNodes: Boolean;
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
+    procedure Normalize;
     function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
     function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
     function  SelectNodes(const QueryString: string): IXMLNodeList;
@@ -400,8 +410,10 @@ type
     function  Get_PreviousSibling: IXMLNode;
     function  Get_Text: string;
     function  Get_Xml: string;
+    function  HasAttributes: Boolean;
     function  HasChildNodes: Boolean;
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
+    procedure Normalize;
     function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
     function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
     function  SelectNodes(const QueryString: string): IXMLNodeList;
@@ -435,6 +447,7 @@ type
 
   TXMLNsAttribute = class(TXMLNsNode, IXMLAttribute)
   protected
+    function  Get_OwnerElement: IXMLElement;
     function  Get_Name: string;
     function  Get_Value: string;
     procedure Set_Value(const Value: string);
@@ -446,10 +459,14 @@ type
   private
     function  GetAttrPtr: xmlAttrPtr; inline;
   protected
+    Unlinked: Boolean;
+    UnlinkedPrefix: RawByteString;
+    UnlinkedURI: RawByteString;
     constructor Create(AttrPtr: xmlAttrPtr);
     property  AttrPtr: xmlAttrPtr read GetAttrPtr;
   protected
     function  Get_Name: string;
+    function  Get_OwnerElement: IXMLElement;
     function  Get_Value: string;
     procedure Set_Value(const attrValue: string);
     property  Name: string read Get_Name;
@@ -475,7 +492,6 @@ type
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
     function  Get_TagName: string;
-    procedure Normalize;
     property  TagName: string read Get_TagName;
   end;
 
@@ -507,6 +523,7 @@ type
   end;
 
   TXMLDocType = class(TXMLNode, IXMLDocumentType)
+  protected
   end;
 
   TXMLProcessingInstruction = class(TXMLNode, IXMLProcessingInstruction)
@@ -572,6 +589,7 @@ type
   protected
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
+    function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
     function  CreateCDATASection(const data: string): IXMLCDATASection;
     function  CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
     function  CreateComment(const data: string): IXMLComment;
@@ -590,9 +608,12 @@ type
     function  Get_ResolveExternals: Boolean;
     function  Get_Url: string;
     function  Get_ValidateOnParse: Boolean;
+    function  getElementById(const elementId: string): IXMLElement;
     function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    function  getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
     function  GetErrors: IXMLErrors;
     function  GetXSLTErrors: IXSLTErrors;
+    function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
     function  NodeFromID(const IdString: string): IXMLNode;
     procedure Normalize;
     procedure Save(const Url: string); overload;
@@ -677,6 +698,36 @@ begin
     raise EXmlUnsupported.CreateResFmt(@SUnsupportedBy, [NodeTypeName(xmlElementType(Node.NodeType))]);
 end;
 
+procedure ResolveUnlinked(Parent: xmlNodePtr; Node: TXMLNode);
+var
+  Ns: xmlNsPtr;
+begin
+  if not (Node is TXMLAttribute) then
+    Exit;
+
+  var Attr := TXMLAttribute(Node);
+
+  if Attr.Unlinked then
+  begin
+    if (Attr.UnlinkedPrefix <> '') or (Attr.UnlinkedURI = '') then
+      Ns := xmlSearchNs(Parent.doc, Parent, xmlCharPtr(Attr.UnlinkedPrefix))
+    else if (Attr.UnlinkedPrefix = '') or (Attr.UnlinkedURI <> '') then
+      Ns := xmlSearchNsByHref(Parent.doc, Parent, xmlCharPtr(Attr.UnlinkedURI))
+    else
+    begin
+      Ns := xmlSearchNs(Parent.doc, Parent, xmlCharPtr(Attr.UnlinkedPrefix));
+      if (Ns <> nil) and not xmlStrSame(xmlCharPtr(Attr.UnlinkedURI), xmlCharPtr(ns.href)) then
+        Ns := nil;
+    end;
+    if Ns = nil then
+      Ns := xmlNewNs(Parent, xmlCharPtr(Attr.UnlinkedURI), xmlCharPtr(Attr.UnlinkedPrefix));
+
+    xmlSetNs(Node.NodePtr, ns);
+
+    Attr.Unlinked := False;
+  end;
+end;
+
 function Cast(const Node: xmlNodePtr): TXMLNode; overload;
 begin
   if Node = nil then
@@ -709,6 +760,19 @@ begin
   else
     Result := TXMLAttribute(Attr._private);
 
+end;
+
+function Cast(const Attr: xmlAttrPtr; const Prefix, NamespaceURI: RawByteString): TXMLAttribute; overload;
+begin
+  if Attr = nil then
+    Result := nil
+  else if Attr._private = nil then
+    Result := TXMLAttribute.Create(Attr)
+  else
+    Result := TXMLAttribute(Attr._private);
+  Result.Unlinked := (Prefix <> '') or (NamespaceURI <> '');
+  Result.UnlinkedPrefix := Prefix;
+  Result.UnlinkedURI := NamespaceURI;
 end;
 
 function Cast(const Ns: xmlNsPtr; Parent: xmlNodePtr): TXMLNsAttribute; overload;
@@ -1014,6 +1078,11 @@ begin
   Result := Cast(FindItem(Name));
 end;
 
+function TXMLCustomNamedNodeMap.getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+begin
+  Result := Cast(FindQualifiedItem(localName, namespaceURI));
+end;
+
 function TXMLCustomNamedNodeMap.getQualifiedItem(const BaseName, NamespaceURI: string): IXMLNode;
 begin
   Result := Cast(FindQualifiedItem(BaseName, NamespaceURI));
@@ -1027,6 +1096,11 @@ begin
 
   RemoveNode(Node);
   Result := Cast(Node);
+end;
+
+function TXMLCustomNamedNodeMap.removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+begin
+  RemoveQualifiedItem(localName, namespaceURI);
 end;
 
 procedure TXMLCustomNamedNodeMap.RemoveNode(Node: xmlNodePtr);
@@ -1070,6 +1144,7 @@ begin
   end;
 
   // If has ns - insert before first node without xmlns
+  Result := nil;
   if NewNode.ns <> nil then
   begin
     var Enum := CreateEnumerator;
@@ -1078,16 +1153,21 @@ begin
       var Current := Enum.DoGetCurrent;
       if Current.ns = nil then
       begin
-        InsertNode(NewNode, Current);
-        Exit;
+        Result := Cast(InsertNode(NewNode, Current));
+        Break;
       end;
     end;
   end;
-
   // Else, append last
-  InsertNode(NewNode, nil);
+  if Result <> nil then
+    Result := Cast(InsertNode(NewNode, nil));
 
-  NewNode.ReconciliateNs;
+  TXMLNode(Result).NodePtr.ReconciliateNs;
+end;
+
+function TXMLCustomNamedNodeMap.setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+begin
+  Result := setNamedItem(NewItem);
 end;
 
 { TXMLNodeNamedNodeMap }
@@ -1098,12 +1178,16 @@ begin
   FParent := Parent;
 end;
 
-procedure TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr);
+function TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr;
 begin
+  // ResolveUnlinked - not needed, attributes uses own node map
   if AfterNode = nil then
-    xmlAddChild(Parent, NewNode)
+    Result := xmlAddChild(Parent, NewNode)
   else
-    xmlAddNextSibling(NewNode, AfterNode);
+    Result := xmlAddNextSibling(NewNode, AfterNode);
+
+  if Result <> nil then
+    xmlReconciliateNs(Result.doc, Result);
 end;
 
 { TXMLAttributeList.TEnumerator }
@@ -1293,6 +1377,11 @@ begin
   Result := nil;
 end;
 
+function TXMLAttributeList.getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+begin
+  Result := GetQualifiedItem(localName, namespaceURI);
+end;
+
 function TXMLAttributeList.GetQualifiedItem(const BaseName, namespaceURI: string): IXMLNode;
 begin
   var Ns := FindQNs(BaseName, namespaceURI);
@@ -1375,6 +1464,11 @@ begin
   Result := nil;
 end;
 
+function TXMLAttributeList.removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+begin
+  Result := RemoveQualifiedItem(localName, namespaceURI);
+end;
+
 function TXMLAttributeList.RemoveQualifiedItem(const BaseName, namespaceURI: string): IXMLNode;
 begin
   var Ns := FindQNs(BaseName, namespaceURI);
@@ -1410,10 +1504,20 @@ begin
   end
   else if Obj is TXMLAttribute then
   begin
-    Result := Cast(xmlAddChild(Parent, xmlNodePtr(TXMLAttribute(Obj).AttrPtr)));
+    var Attr := TXMLAttribute(Obj);
+    ResolveUnlinked(Parent, Attr);
+    var Child := xmlAddChild(Parent, xmlNodePtr(Attr.AttrPtr));
+    if Child <> nil then
+      xmlReconciliateNs(Child.doc, Child);
+    Result := Cast(Child);
   end
   else
     Result := nil;
+end;
+
+function TXMLAttributeList.setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+begin
+  Result := SetNamedItem(NewItem);
 end;
 
 function TXMLAttributeList.ToArray: TArray<IXmlNode>;
@@ -1636,12 +1740,13 @@ end;
 
 { TXMLElementList }
 
-constructor TXMLElementList.Create(Parent: xmlNodePtr; Recursive: Boolean; Mask: string);
+constructor TXMLElementList.Create(Parent: xmlNodePtr; Recursive: Boolean; const Mask, NamespaceURI: string);
 begin
   inherited Create(Parent);
   FRecursive := Recursive;
   FMask := Mask;
   FUseMask := not ((Mask = '*') or (Mask = ''));
+  FNamespaceURI := NamespaceURI;
   FEnum := TEnumerator.Create(Self);
   {$IFDEF DEBUG}
   Inc(DebugObjectCount);
@@ -1672,16 +1777,19 @@ end;
 
 function TXMLElementList.FindItem(const Name: string): xmlNodePtr;
 var
-  Prefix, LocalName: RawByteString;
+  Prefix, LocalName, URI: RawByteString;
 begin
   Result := nil;
+  URI := UTF8Encode(NamespaceURI);
   if SplitXMLName(UTF8Encode(Name), Prefix, LocalName) then
   begin
     var Enum := TEnumerator.Create(Self);
     while Enum.MoveNext do
     begin
       var Node := Enum.FCurrent;
-      if (Node.ns <> nil) and xmlStrSame(Node.ns.prefix, Pointer(Prefix)) and xmlStrSame(Node.Name, Pointer(LocalName)) then
+      if ((Node.ns <> nil) and xmlStrSame(Node.ns.prefix, Pointer(Prefix)))
+        and ((URI = '') or xmlStrSame(Node.ns.href, Pointer(URI)))
+        and xmlStrSame(Node.Name, Pointer(LocalName)) then
       begin
         Result := Node;
         Break;
@@ -1695,7 +1803,7 @@ begin
     while Enum.MoveNext do
     begin
       var Node := Enum.FCurrent;
-      if xmlStrSame(Node.Name, Pointer(LocalName)) then
+      if xmlStrSame(Node.Name, Pointer(LocalName)) and ((URI = '') or xmlStrSame(Node.ns.href, Pointer(URI))) then
       begin
         Result := Node;
         Break;
@@ -1786,7 +1894,6 @@ end;
 
 function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
 begin
-  // xmlAddChild can merge nodes, then Old can be freed
   if TObject(NewChild) is TXMLNsNode then
   begin
     xmlSetNs(NodePtr, TXMLNsNode(NewChild).NsPtr);
@@ -1794,6 +1901,8 @@ begin
   end
   else
   begin
+    ResolveUnlinked(NodePtr, TXMLNode(NewChild));
+    // xmlAddChild can merge nodes, then Old can be freed
     var NewNode := NodePtr.AppendChild(TXMLNode(NewChild).NodePtr);
     Result := Cast(LX2CheckNodeExists(NewNode));
   end;
@@ -1808,9 +1917,15 @@ begin
   end
   else
   begin
+    ResolveUnlinked(NodePtr, TXMLNode(NewChild));
     var NewNode := NodePtr.InsertBefore(TXMLNode(NewChild).NodePtr, TXMLNode(RefChild).NodePtr);
     Result := Cast(LX2CheckNodeExists(NewNode));
   end;
+end;
+
+procedure TXMLNode.Normalize;
+begin
+
 end;
 
 function TXMLNode.CloneNode(Deep: WordBool): IXMLNode;
@@ -1933,6 +2048,11 @@ begin
   xmlOutputBufferClose(Buf);
 end;
 
+function TXMLNode.HasAttributes: Boolean;
+begin
+  Result := (NodePtr.nsDef <> nil) or (NodePtr.properties <> nil);
+end;
+
 function TXMLNode.HasChildNodes: Boolean;
 begin
   Result := NodePtr.HasChildNodes;
@@ -2016,6 +2136,15 @@ begin
   Result := UTF8ToUnicodeString(AttrPtr.Name);
 end;
 
+function TXMLAttribute.Get_OwnerElement: IXMLElement;
+begin
+  var Parent := AttrPtr.parent;
+  while (Parent <> nil) and (Parent.&type <> XML_ELEMENT_NODE) do
+    Parent := Parent.parent;
+
+  Result := Cast(Parent) as IXMLElement;
+end;
+
 function TXMLAttribute.Get_Value: string;
 begin
   Result := xmlCharToStrAndFree(xmlNodeGetContent(NodePtr));
@@ -2092,11 +2221,6 @@ end;
 function TXMLElement.HasAttributeNs(const NamespaceURI, Name: string): Boolean;
 begin
   Result := NodePtr.HasAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)));
-end;
-
-procedure TXMLElement.Normalize;
-begin
-
 end;
 
 function TXMLElement.AddChild(const Name: string; const Content: string = ''): IXMLElement;
@@ -2500,12 +2624,29 @@ begin
     if Prefix = 'xmlns' then
       Result := Cast(xmlNewNs(nil, nil, xmlCharPtr(LocalName)), nil)
     else
-      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Name)), nil));
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(Utf8Encode(LocalName)), nil), Prefix, '');
   end
   else if Name = 'xmlns' then
-    Result := Cast(xmlNewNs(nil, 'http://', nil), nil) // Need to add something
+    Result := Cast(xmlNewNs(nil, '', nil), nil)
   else
-    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Name)), nil));
+    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(LocalName), nil));
+end;
+
+function TXMLDocument.createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
+var
+ Prefix, LocalName: RawByteString;
+begin
+  if SplitXMLName(UTF8Encode(qualifiedName), Prefix, LocalName) then
+  begin
+    if Prefix = 'xmlns' then
+      Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), xmlStrPtr(Utf8Encode(LocalName))), nil)
+    else
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Utf8Encode(Prefix), Utf8Encode(namespaceURI));
+  end
+  else if LocalName = 'xmlns' then
+    Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), nil), nil)
+  else
+    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Utf8Encode(Prefix), Utf8Encode(namespaceURI));
 end;
 
 function TXMLDocument.CreateCDATASection(const Data: string): IXMLCDATASection;
@@ -2513,7 +2654,7 @@ begin
   var S := Utf8Encode(Data);
   var L := Length(Data);
 
-  Result := Cast(xmlNewCDataBlock(xmlDocPtr(NodePtr), xmlCharPtr(S), L)) as IXMLCDATASection;
+  Result := Cast(xmlNewCDataBlock(xmlDocPtr(NodePtr), xmlStrPtr(S), L)) as IXMLCDATASection;
 end;
 
 function TXMLDocument.CreateComment(const Data: string): IXMLComment;
@@ -2609,12 +2750,29 @@ begin
   Errors.FList.Add(Err);
 end;
 
+function TXMLDocument.getElementById(const elementId: string): IXMLElement;
+begin
+  var Attr := xmlGetID(xmlDocPtr(NodePtr), xmlStrPtr(Utf8Encode(elementId)));
+  if (Attr = nil) or (Attr.parent = nil) then
+    Exit(nil);
+
+  Result := Cast(Attr.parent) as IXMLElement;
+end;
+
 function TXMLDocument.getElementsByTagName(const TagName: string): IXMLNodeList;
 begin
   if xmlDocPtr(NodePtr).documentElement = nil  then
     Exit(nil);
 
   Result := TXMLElementList.Create(xmlDocPtr(NodePtr).documentElement, True, TagName);
+end;
+
+function TXMLDocument.getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
+begin
+  if xmlDocPtr(NodePtr).documentElement = nil  then
+    Exit(nil);
+
+  Result := TXMLElementList.Create(xmlDocPtr(NodePtr).documentElement, True, localName, namespaceURI);
 end;
 
 function TXMLDocument.getErrors: IXMLErrors;
@@ -2674,6 +2832,11 @@ end;
 function TXMLDocument.Get_ValidateOnParse: Boolean;
 begin
   Result := FValidateOnParse;
+end;
+
+function TXMLDocument.importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
+begin
+  Result := node.cloneNode(deep);
 end;
 
 function TXMLDocument.SetNewDoc(Doc: xmlDocPtr): xmlDocPtr;
@@ -3185,6 +3348,11 @@ begin
   Result := '';
 end;
 
+function TXMLNsNode.HasAttributes: Boolean;
+begin
+  Result := False;
+end;
+
 function TXMLNsNode.HasChildNodes: Boolean;
 begin
   Result := False;
@@ -3193,6 +3361,11 @@ end;
 function TXMLNsNode.InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
 begin
   raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
+end;
+
+procedure TXMLNsNode.Normalize;
+begin
+
 end;
 
 procedure TXMLNsNode.ReconciliateNs;
@@ -3236,6 +3409,11 @@ end;
 function TXMLNsAttribute.Get_Name: string;
 begin
   Result := NodeName;
+end;
+
+function TXMLNsAttribute.Get_OwnerElement: IXMLElement;
+begin
+  Result := Cast(Parent) as IXMLElement;
 end;
 
 function TXMLNsAttribute.Get_Value: string;

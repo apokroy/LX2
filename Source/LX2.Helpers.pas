@@ -153,7 +153,6 @@ type
     function  GetNextSibling: xmlAttrPtr; inline;
     function  GetValue: RawByteString;
     function  GetOwnerDocument: xmlDocPtr; inline;
-    function  GetParent: xmlNodePtr; inline;
     function  GetPrefix: RawByteString; inline;
     function  GetPreviousSibling: xmlAttrPtr; inline;
     procedure SetValue(const Value: RawByteString); inline;
@@ -172,7 +171,6 @@ type
     property  Prefix: RawByteString read GetPrefix;
     property  PreviousSibling: xmlAttrPtr read GetPreviousSibling;
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
-    property  Parent: xmlNodePtr read GetParent;
   end;
 
   xmlDocHelper = record helper for xmlDoc
@@ -665,6 +663,8 @@ begin
     Result := xmlAddChild(@Self, NewChild)
   else
     Result := xmlAddPrevSibling(RefChild, children);
+  if Result <> nil then
+    xmlReconciliateNs(doc, Result);
 end;
 
 function xmlNodeHelper.IsBlank: Boolean;
@@ -892,11 +892,6 @@ end;
 function xmlAttrHelper.GetOwnerDocument: xmlDocPtr;
 begin
   Result := doc;
-end;
-
-function xmlAttrHelper.GetParent: xmlNodePtr;
-begin
-  Result := parent;
 end;
 
 function xmlAttrHelper.GetPrefix: RawByteString;

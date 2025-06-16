@@ -51,9 +51,10 @@ const
 type
   DOMNodeType = Cardinal;
 
-  IXMLNode = interface;
+  IXMLNode      = interface;
+  IXMLElement   = interface;
   IXMLAttribute = interface;
-  IXMLDocument = interface;
+  IXMLDocument  = interface;
 
   /// <summary>
   /// Base interface for all xml enumerators
@@ -203,6 +204,9 @@ type
     function RemoveNamedItem(const Name: string): IXMLNode;
     function GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
     function RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
+    function getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    function setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+    function removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
   end;
 
   ///<summary>
@@ -230,8 +234,6 @@ type
   /// Base interface for all node types.
   ///</summary>
   /// <remarks>
-  /// Near to be MS IXMLDOMNode compatible
-  /// Near to be W3C DOM compatible
   /// </remarks>
   IXMLNode = interface
     ['{D5029FB0-0282-4476-A439-99677C23434A}']
@@ -276,6 +278,11 @@ type
     function  Get_Xml: string;
 
     /// <summary>
+    /// Checks that node has any attributtes
+    /// </summary>
+    function hasAttributes: Boolean;
+
+    /// <summary>
     /// Checks that node has children
     /// </summary>
     /// <returns>
@@ -296,6 +303,17 @@ type
     /// Returns inserted node or nil in case of error
     /// </returns>
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode) : IXMLNode;
+
+    /// <summary>
+    /// Puts all Text nodes in the full depth of the sub-tree underneath this Node,
+    /// including attribute nodes, into a "normal" form where only structure (e.g., elements, comments, processing instructions, CDATA sections, and entity references) separates Text nodes,
+    /// i.e., there are neither adjacent Text nodes nor empty Text nodes.
+    /// This can be used to ensure that the DOM view of a document is the same as if it were saved and re-loaded, and is useful when operations (such as XPointer [XPointer] lookups) that depend on a particular document tree structure are to be used.
+    /// </summary>
+    /// <remarks>
+    ///  In cases where the document contains CDATASections, the normalize operation alone may not be sufficient, since XPointers do not differentiate between Text nodes and CDATASection nodes.
+    /// <remarks>
+    procedure normalize;
 
     /// <summary>
     /// Removes ChildNode from child nodes list
@@ -373,6 +391,11 @@ type
     /// <summary>
     ///
     /// </summary>
+    property  LocalName: string read Get_BaseName;
+
+    /// <summary>
+    ///
+    /// </summary>
     property  NamespaceURI: string read Get_NamespaceURI;
 
     /// <summary>
@@ -431,6 +454,8 @@ type
     function  Get_Name: string;
     function  Get_Value: string;
     procedure Set_Value(const Value: string);
+    function  Get_OwnerElement: IXMLElement;
+    property  OwnerElement: IXMLElement read Get_OwnerElement;
     property  Name: string read Get_name;
     property  Value: string read Get_value write Set_value;
   end;
@@ -447,7 +472,6 @@ type
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
     function  HasAttribute(const Name: string): Boolean;
     function  HasAttributeNs(const NamespaceURI, Name: string): Boolean;
-    procedure Normalize;
     function  RemoveAttribute(const Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
@@ -462,6 +486,17 @@ type
 
   IXMLDocumentType = interface(IXMLNode)
     ['{46C5C8FE-5C20-48D0-82F6-BDC83A575163}']
+{    function  get_entities: IXMLNamedNodeMap;
+    function  get_notations: IXMLNamedNodeMap;
+    function  get_publicId: string;
+    function  get_systemId: string;
+    function  get_internalSubset: string;
+
+    property  entities: IXMLNamedNodeMap read get_Entities;
+    property  notations: IXMLNamedNodeMap read get_Notations;
+    property  publicId: string read get_publicId;
+    property  systemId: string read get_systemId;
+    property  internalSubset: string read get_internalSubset;}
   end;
 
   IXMLCharacterData = interface(IXMLNode)
@@ -541,12 +576,17 @@ type
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     property  Errors: IXMLErrors read GetErrors;
     property  XSLTErrors: IXSLTErrors read GetXSLTErrors;
-    { MS XML Like }
     function  Get_Doctype: IXMLDocumentType;
     function  Get_DocumentElement: IXMLElement;
     procedure Set_DocumentElement(const Element: IXMLElement);
     function  CreateElement(const tagName: string): IXMLElement;
     function  CreateElementNs(const NamespaceURI, Name: string): IXMLElement;
+
+    function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
+    function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
+    function  getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
+    function  getElementById(const elementId: string): IXMLElement;
+
     function  CreateDocumentFragment: IXMLDocumentFragment;
     function  CreateTextNode(const data: string): IXMLText;
     function  CreateComment(const data: string): IXMLComment;
