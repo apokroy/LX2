@@ -182,7 +182,7 @@ type
     function  GetXml: RawByteString;
     procedure SetDocumentElement(const Value: xmlNodePtr);
   public
-    class function Create(const Version: RawByteString = ''): xmlDocPtr; overload; static; inline;
+    class function Create(const Version: RawByteString = '1.0'): xmlDocPtr; overload; static; inline;
     class function Create(const XML: RawByteString; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
     class function Create(const XML: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
     class function Create(const Data: TBytes; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
@@ -845,10 +845,7 @@ begin
     XML_TEXT_NODE,
     XML_CDATA_SECTION_NODE,
     XML_COMMENT_NODE:
-    begin
-      xmlNodeSetContent(@Self, nil);
-      xmlNodeAddContent(@Self, XmlCharPtr(UTF8Encode(Value)));
-    end;
+      SetText(Value);
   end;
 end;
 
@@ -1054,7 +1051,7 @@ begin
   if ctx = nil then
     Exit(nil);
 
-if Assigned(ErrorHandler) then
+  if Assigned(ErrorHandler) then
   begin
     ecb.Handler := ErrorHandler;
     xmlCtxtSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);

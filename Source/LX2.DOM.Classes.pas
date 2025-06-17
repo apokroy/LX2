@@ -615,7 +615,6 @@ type
     function  GetXSLTErrors: IXSLTErrors;
     function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
     function  NodeFromID(const IdString: string): IXMLNode;
-    procedure Normalize;
     procedure Save(const Url: string); overload;
     procedure Set_documentElement(const Element: IXMLElement);
     procedure Set_PreserveWhiteSpace(IsPreserving: Boolean);
@@ -1140,29 +1139,10 @@ begin
   begin
     var OldNode := FindItem(xmlCharToStr(NewNode.name));
     if OldNode <> nil then
-     RemoveNode(OldNode);
+      RemoveNode(OldNode);
   end;
 
-  // If has ns - insert before first node without xmlns
-  Result := nil;
-  if NewNode.ns <> nil then
-  begin
-    var Enum := CreateEnumerator;
-    while Enum.MoveNext do
-    begin
-      var Current := Enum.DoGetCurrent;
-      if Current.ns = nil then
-      begin
-        Result := Cast(InsertNode(NewNode, Current));
-        Break;
-      end;
-    end;
-  end;
-  // Else, append last
-  if Result <> nil then
-    Result := Cast(InsertNode(NewNode, nil));
-
-  TXMLNode(Result).NodePtr.ReconciliateNs;
+  Result := Cast(InsertNode(NewNode, nil));
 end;
 
 function TXMLCustomNamedNodeMap.setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
@@ -1180,7 +1160,6 @@ end;
 
 function TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr;
 begin
-  // ResolveUnlinked - not needed, attributes uses own node map
   if AfterNode = nil then
     Result := xmlAddChild(Parent, NewNode)
   else
@@ -1904,7 +1883,7 @@ begin
     ResolveUnlinked(NodePtr, TXMLNode(NewChild));
     // xmlAddChild can merge nodes, then Old can be freed
     var NewNode := NodePtr.AppendChild(TXMLNode(NewChild).NodePtr);
-    Result := Cast(LX2CheckNodeExists(NewNode));
+    Result := Cast(NewNode);
   end;
 end;
 
@@ -1919,13 +1898,13 @@ begin
   begin
     ResolveUnlinked(NodePtr, TXMLNode(NewChild));
     var NewNode := NodePtr.InsertBefore(TXMLNode(NewChild).NodePtr, TXMLNode(RefChild).NodePtr);
-    Result := Cast(LX2CheckNodeExists(NewNode));
+    Result := Cast(NewNode);
   end;
 end;
 
 procedure TXMLNode.Normalize;
 begin
-
+  //TODO: We always normalized?
 end;
 
 function TXMLNode.CloneNode(Deep: WordBool): IXMLNode;
@@ -2905,11 +2884,6 @@ begin
     Exit(nil);
 
   Result := Cast(Attr.Parent);
-end;
-
-procedure TXMLDocument.Normalize;
-begin
-
 end;
 
 procedure TXMLDocument.ReconciliateNs;

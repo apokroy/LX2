@@ -4726,7 +4726,7 @@ begin
   if Handle <> 0 then
     Unload;
 
-  Handle := SafeLoadLibrary(LibraryFileName);
+  Handle := SafeLoadLibrary(ExpandFileName(LibraryFileName));
 
   if Handle = 0 then
     RaiseLastOSError;

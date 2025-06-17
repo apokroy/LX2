@@ -43,6 +43,9 @@ type
   EXmlError = class(Exception)
   end;
 
+  EXmlInternalError = class(EXmlError)
+  end;
+
   EXmlParserError = class(EXmlError)
   private
     FUrl: string;
@@ -175,6 +178,8 @@ type
     property  Items[const Index: NativeInt]: TXmlParseError read GetItem; default;
   end;
 
+function  xmlEscapeString(const Value: RawByteString): RawByteString;
+function  xmlNormalizeString(const S: string): string;
 function  xmlStrSame(P1, P2: xmlCharPtr): Boolean;
 function  xmlStrPtr(const S: RawByteString): xmlCharPtr; inline;
 
@@ -187,7 +192,6 @@ function  xmlCharToRawAndFree(const S: xmlCharPtr): RawByteString; inline;
 function  xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
 function  SplitXMLName(const Name: string; out Prefix, LocalName: string): Boolean; overload;
 function  SplitXMLName(const Name: RawByteString; out Prefix, LocalName: RawByteString): Boolean; overload;
-function  xmlNormalizeString(const S: string): string;
 
 function  NodeTypeName(nodeType: xmlElementType): string;
 
@@ -197,10 +201,7 @@ function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 function  XmlParserOptions(Options: TXmlParserOptions): Integer;
 function  XmlSaveOptions(Options: TxmlSaveOptions): Integer;
 
-function  LX2CheckNodeExists(const node: xmlNodePtr): xmlNodePtr; inline;
 procedure LX2InternalError;
-procedure LX2LocalAllocError;
-procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);
 
 resourcestring
   SXmlNsHrefNotFound     = 'Namespace with URI "%s" not found';
@@ -379,6 +380,13 @@ begin
   Result := False;
 end;
 
+function xmlEscapeString(const Value: RawByteString): RawByteString;
+begin
+  var Escaped := xmlEncodeSpecialChars(nil, Pointer(Value));
+  SetString(Result, Escaped, Length(Escaped));
+  XmlFree(Escaped);
+end;
+
 function xmlNormalizeString(const S: string): string;
 label
   HasSpaces;
@@ -441,26 +449,9 @@ begin
     Result := 'unknown';
 end;
 
-function LX2CheckNodeExists(const node: xmlNodePtr): xmlNodePtr;
-begin
-  if node = nil then
-    LX2InternalError;
-  Result := node;
-end;
-
-procedure LX2LocalAllocError;
-begin
-   raise EXmlError.Create('Could''t allocate local buffer') at ReturnAddress;
-end;
-
 procedure LX2InternalError;
 begin
-  raise EXmlError.Create('libxml2 internal error') at ReturnAddress;
-end;
-
-procedure LX2NsPrefixNotFoundError(prefix: xmlCharPtr);
-begin
-  raise EXmlError.Create('Namespace with prefix "' + xmlCharToStr(prefix) + '" not found');
+  raise EXmlInternalError.Create('libxml2 internal error') at ReturnAddress;
 end;
 
 function xmlStrSame(P1, P2: xmlCharPtr): Boolean;
