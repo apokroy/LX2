@@ -542,6 +542,7 @@ type
   TXMLSchemaCollection = class(TInterfacedObject, IXMLSchemaCollection)
   private const
     cImport: UTF8String = 'import';
+    cInclude: UTF8String = 'include';
     cSchemaNs: UTF8String = 'http://www.w3.org/2001/XMLSchema';
   private type
     PSchema = ^TSchema;
@@ -565,7 +566,8 @@ type
     procedure Remove(const NamespaceURI: string);
     function  Get_Length: NativeInt;
     function  Get_NamespaceURI(index: NativeInt): string;
-    function  GetSchema(const NamespaceURI: string): IXMLDocument;
+    function  Get(const NamespaceURI: string): IXMLDocument;
+    procedure AddCollection(const otherCollection: IXMLSchemaCollection);
     property  Errors: TXMLErrors read FErrors;
     property  Length: NativeInt read Get_Length;
     property  NamespaceURI[index: NativeInt]: string read Get_NamespaceURI; default;
@@ -581,6 +583,7 @@ type
     FPreserveWhiteSpace: Boolean;
     FOptions: TXmlParserOptions;
     FSuccessError: IXMLParseError;
+    FSchemas: IXMLSchemaCollection;
   protected
     procedure ErrorCallback(const error: xmlError); virtual;
     procedure XSLTError(const Msg: string); virtual;
@@ -606,6 +609,7 @@ type
     function  Get_PreserveWhiteSpace: Boolean;
     function  Get_ReadyState: Integer;
     function  Get_ResolveExternals: Boolean;
+    function  Get_Schemas: IXMLSchemaCollection;
     function  Get_Url: string;
     function  Get_ValidateOnParse: Boolean;
     function  getElementById(const elementId: string): IXMLElement;
@@ -619,6 +623,7 @@ type
     procedure Set_documentElement(const Element: IXMLElement);
     procedure Set_PreserveWhiteSpace(IsPreserving: Boolean);
     procedure Set_ResolveExternals(IsResolving: Boolean);
+    procedure Set_Schemas(const Value: IXMLSchemaCollection);
     procedure Set_ValidateOnParse(IsValidating: Boolean);
     function  Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean; overload;
     function  Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
@@ -2803,6 +2808,11 @@ begin
   Result := FResolveExternals;
 end;
 
+function TXMLDocument.Get_Schemas: IXMLSchemaCollection;
+begin
+  Result := FSchemas;
+end;
+
 function TXMLDocument.Get_Url: string;
 begin
   Result := Utf8ToUnicodeString(xmlDocPtr(NodePtr).URL);
@@ -2850,31 +2860,43 @@ end;
 function TXMLDocument.Load(const URL: string): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.CreateFromFile(URL, Options, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.Load(const Data: TBytes): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Data, Options, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.Load(const Data: Pointer; Size: NativeUInt): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Data, Size, Options, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.Load(Stream: TStream; const Encoding: Utf8String): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Stream, Options, Encoding, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.LoadXML(const XML: string; const Options: TXmlParserOptions): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(XML, Options, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(XML, Options, ErrorCallback)) <> nil;
+  if Result and FValidateOnParse and (FSchemas <> nil) then
+    Result := FSchemas.Validate(Self);
 end;
 
 function TXMLDocument.NodeFromID(const IdString: string): IXMLNode;
@@ -2922,6 +2944,11 @@ end;
 procedure TXMLDocument.Set_resolveExternals(IsResolving: Boolean);
 begin
   FResolveExternals := IsResolving;
+end;
+
+procedure TXMLDocument.Set_Schemas(const Value: IXMLSchemaCollection);
+begin
+  FSchemas := Value;
 end;
 
 procedure TXMLDocument.Set_validateOnParse(IsValidating: Boolean);
@@ -3048,6 +3075,16 @@ begin
   TXMLDocument(userData).Errors.FList.Add(Err as IXMLParseError);
 end;
 
+procedure TXMLSchemaCollection.AddCollection(const otherCollection: IXMLSchemaCollection);
+begin
+  var Src := TXMLSchemaCollection(otherCollection);
+  for var I := Low(Src.FList) to High(Src.FList) do
+  begin
+    var Item := Src.FList[I];
+    Add(Item.NamespaceURI, Item.Doc);
+  end;
+end;
+
 constructor TXMLSchemaCollection.Create;
 begin
   inherited Create;
@@ -3067,7 +3104,7 @@ procedure TXMLSchemaCollection.Parse;
     var Node := parent.FirstElementChild;
     while Node <> nil do
     begin
-      if xmlStrSame(Node.name, Pointer(cImport)) and (Node.ns = ns) then
+      if (xmlStrSame(Node.name, Pointer(cImport)) or xmlStrSame(Node.name, Pointer(cInclude))) and (Node.ns = ns) then
       begin
         var location := xmlGetProp(Node, 'schemaLocation');
         if location <> nil then
@@ -3118,7 +3155,7 @@ begin
     FList[Index] := Item;
 end;
 
-function TXMLSchemaCollection.GetSchema(const NamespaceURI: string): IXMLDocument;
+function TXMLSchemaCollection.Get(const NamespaceURI: string): IXMLDocument;
 begin
   var Index := IndexOf(xmlNormalizeString(NamespaceURI));
   if Index < 0 then
