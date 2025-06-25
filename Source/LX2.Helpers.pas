@@ -38,6 +38,7 @@ type
   xmlAttrArray  = TArray<xmlAttrPtr>;
 
   xmlDocErrorHandler  = procedure(const error: xmlError) of object;
+  xmlResourceLoader   = function(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer of object;
 
   xmlNamespace = record
     Prefix: RawByteString;
@@ -217,7 +218,7 @@ type
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString): Boolean; overload;
-    function  Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
+    function  Validate(ErrorHandler: xmlDocErrorHandler = nil; ResourceLoader: xmlResourceLoader = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
     property  URL: RawByteString read GetURL;
@@ -229,7 +230,13 @@ type
     Handler: xmlDocErrorHandler;
   end;
 
+  PXmlResourceCallback = ^TXmlResourceCallback;
+  TXmlResourceCallback = record
+    Handler: xmlResourceLoader;
+  end;
+
 procedure xmlDocErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
+function  xmlResourceLoaderCallback(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;
 
 implementation
 
@@ -248,6 +255,15 @@ end;
 
 procedure IOCloseStream(context: Pointer); cdecl;
 begin
+end;
+
+function xmlResourceLoaderCallback(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;
+begin
+  try
+    Result := PXmlResourceCallback(ctxt).Handler(url, publicId, &type, flags, output);
+  except
+    Result := Ord(XML_ERR_INTERNAL_ERROR);
+  end;
 end;
 
 { xmlNamespacesHelper }
@@ -1035,7 +1051,7 @@ begin
 
   xmlCtxtUseOptions(ctx, XmlParserOptions(Options) or XML_PARSE_UNZIP or XML_PARSE_NONET);
 
-  if xmlNewInputFromUrl(xmlCharPtr(Utf8Encode(filename)), XML_INPUT_BUF_STATIC, input) = XML_ERR_OK then
+  if xmlNewInputFromUrl(xmlCharPtr(Utf8Encode(filename)), 0, input) = XML_ERR_OK then
     Result := xmlCtxtParseDocument(ctx, input)
   else
     Result := nil;
@@ -1402,16 +1418,25 @@ begin
   Result := xmlSaveFinish(ctx) = XML_ERR_OK;
 end;
 
-function xmlDocHelper.Validate(ErrorHandler: xmlDocErrorHandler = nil): Boolean;
+function xmlDocHelper.Validate(ErrorHandler: xmlDocErrorHandler; ResourceLoader: xmlResourceLoader): Boolean;
 var
   ecb: TXmlErrorCallback;
+  rcb: TXmlResourceCallback;
 begin
   var ctx := xmlNewParserCtxt;
+
   if Assigned(ErrorHandler) then
   begin
     ecb.Handler := ErrorHandler;
     xmlCtxtSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);
   end;
+
+  if Assigned(ResourceLoader) then
+  begin
+    rcb.Handler := ResourceLoader;
+    xmlCtxtSetResourceLoader(ctx, xmlResourceLoaderCallback, @rcb);
+  end;
+
   Result := xmlCtxtValidateDocument(ctx, @Self) = 1;
   xmlFreeParserCtxt(ctx);
 end;

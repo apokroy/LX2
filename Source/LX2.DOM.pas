@@ -259,7 +259,6 @@ type
     ///  New cloned node
     /// </returns>
     function  CloneNode(Deep: WordBool): IXMLNode;
-
     function  Get_Attributes: IXMLAttributes;
     function  Get_BaseName: string;
     function  Get_ChildNodes: IXMLNodeList;
@@ -477,6 +476,12 @@ type
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     procedure SetAttribute(const Name: string; Value: string);
     function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
+
+    function  NextSiblingElement: IXMLElement;
+    function  FirstChildElement: IXMLElement;
+    function  LastChildElement: IXMLElement;
+    function  PreviousSiblingElement: IXMLElement;
+
     property  TagName: string read Get_TagName;
   end;
 
@@ -538,9 +543,14 @@ type
     ['{E15B0DD9-82E1-44BF-9DC5-73213AC492EC}']
   end;
 
+  IXMLResolver = interface
+    ['{7962DA56-2770-4AFD-86A6-1527D0A1D50E}']
+    function  Resolve(const url: string): TBytes;
+  end;
+
   IXMLSchemaCollection = interface
     ['{EA6126A1-514A-4C6D-A026-C369452ECB42}']
-    procedure Add(const namespaceURI: string; Doc: IXMLDocument);
+    procedure Add(const namespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver = nil);
     procedure Remove(const namespaceURI: string);
     function  Get_length: NativeInt;
     function  Get_namespaceURI(index: NativeInt): string;
