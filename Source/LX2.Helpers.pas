@@ -193,8 +193,8 @@ type
     function  CreateRoot(const RootName: RawByteString; const NamespaceURI: RawByteString = ''; const Content: RawByteString = ''): xmlNodePtr;
     function  CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString = ''; ResolveNamespace: Boolean = False; Content: RawByteString = ''): xmlNodePtr;
     procedure Free; inline;
-    function  Canonicalize(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): xmlDocPtr; overload;
     function  Clone(Recursive: Boolean = True): xmlDocPtr; inline;
     function  CreateAttribute(const Name: RawByteString; const Value: RawByteString = ''): xmlAttrPtr; inline;
@@ -213,7 +213,7 @@ type
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
-    function  ToString(const Format: Boolean = False): string; overload;
+    function  ToString(const Encoding: string = 'UTF-8'; const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
@@ -399,8 +399,54 @@ begin
 end;
 
 function xmlNodeHelper.GetAttribute(const Name: RawByteString): RawByteString;
+var
+  Prefix, LocalName: RawByteString;
 begin
-  Result := xmlCharToRawAndFree(xmlGetProp(@Self, xmlStrPtr(name)));
+  //TODO: Test
+  if Name = 'xmlns' then
+  begin
+    var Ns := nsDef;
+    while Ns <> nil do
+    begin
+      if Ns.prefix = nil then
+      begin
+        Result := xmlCharToRaw(ns.href);
+        Exit;
+      end;
+      Ns := Ns.next;
+    end;
+    Result := '';
+  end
+  else if SplitXMLName(Name, Prefix, LocalName) then
+  begin
+    if Prefix = 'xmlns' then
+    begin
+      var Ns := nsDef;
+      while Ns <> nil do
+      begin
+        if xmlStrSame(Ns.prefix, Pointer(LocalName)) then
+        begin
+          Result := xmlCharToRaw(ns.href);
+          Exit;
+        end;
+        Ns := Ns.next;
+      end;
+      Result := '';
+    end
+    else
+    begin
+      var Attr := properties;
+      while Attr <> nil do
+      begin
+        if (Attr.ns <> nil) and xmlStrSame(Attr.ns.prefix, Pointer(Prefix)) then
+          Exit(xmlCharToRaw(Attr.ns.href));
+        Attr := Attr.next;
+      end;
+      Result := '';
+    end;
+  end
+  else
+    Result := xmlCharToRawAndFree(xmlGetProp(@Self, xmlStrPtr(name)));
 end;
 
 function xmlNodeHelper.GetAttributeNs(const NamespaceURI, Name: RawByteString): RawByteString;
@@ -1120,7 +1166,7 @@ begin
   Parent.AppendChild(Result);
 end;
 
-function xmlDocHelper.Canonicalize(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+function xmlDocHelper.CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 var
   Buffer: xmlOutputBufferPtr;
 begin
@@ -1135,7 +1181,7 @@ begin
   end;
 end;
 
-function xmlDocHelper.Canonicalize(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+function xmlDocHelper.CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 begin
   Result := xmlC14NDocSave(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), xmlCharPtr(Utf8Encode(FileName)), 0) = 0;
 end;
@@ -1286,12 +1332,12 @@ begin
   xmlFree(Data);
 end;
 
-function xmlDocHelper.ToString(const Format: Boolean): string;
+function xmlDocHelper.ToString(const Encoding: string; const Format: Boolean): string;
 var
   Data: Pointer;
   Size: Integer;
 begin
-  xmlDocDumpFormatMemoryEnc(doc, Data, Size, 'UTF-8', Ord(Format));
+  xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
 
   if (Data = nil) or (Size = 0) then
     Exit('');
