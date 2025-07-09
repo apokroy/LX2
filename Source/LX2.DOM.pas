@@ -565,7 +565,7 @@ type
     ['{8CE71137-BDB3-4A71-A505-EFB6D1181A5F}']
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): IXMLDocument; overload;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
     function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
@@ -612,8 +612,8 @@ type
     procedure Set_ValidateOnParse(isValidating: Boolean);
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
-    function  ToString(const Encoding: string = 'UTF-8'; const Format: Boolean = False): string; overload;
-    function  ToString: string; overload;
+    function  ToString(const Encoding: string; const Format: Boolean = False): string; overload;
+    function  ToString(const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
     function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
@@ -634,6 +634,7 @@ type
   end;
 
   function CoCreateXMLDocument: IXMLDocument;
+  function CoCreateSchemaCollection: IXMLSchemaCollection;
 
 implementation
 
@@ -643,6 +644,11 @@ uses
 function CoCreateXMLDocument: IXMLDocument;
 begin
   Result := TXMLDocument.Create;
+end;
+
+function CoCreateSchemaCollection: IXMLSchemaCollection;
+begin
+  Result := TXMLSchemaCollection.Create;
 end;
 
 end.

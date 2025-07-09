@@ -195,7 +195,7 @@ type
     procedure Free; inline;
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): xmlDocPtr; overload;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
     function  Clone(Recursive: Boolean = True): xmlDocPtr; inline;
     function  CreateAttribute(const Name: RawByteString; const Value: RawByteString = ''): xmlAttrPtr; inline;
     function  CreateCDATASection(const Data: RawByteString): xmlNodePtr; inline;
@@ -1186,7 +1186,7 @@ begin
   Result := xmlC14NDocSave(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), xmlCharPtr(Utf8Encode(FileName)), 0) = 0;
 end;
 
-function xmlDocHelper.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): xmlDocPtr;
+function xmlDocHelper.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
 var
   Data: Pointer;
 begin
@@ -1194,7 +1194,7 @@ begin
   if Size < 0 then
     LX2InternalError;
 
-  Result := xmlDoc.Create(Data, Size, DefaultParserOptions, nil);
+  SetString(Result, PAnsiChar(Data), Size);
 
   xmlFree(Data);
 end;
@@ -1337,7 +1337,10 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
+  if Encoding = '' then
+    xmlDocDumpFormatMemoryEnc(doc, Data, Size, nil, Ord(Format))
+  else
+    xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
 
   if (Data = nil) or (Size = 0) then
     Exit('');

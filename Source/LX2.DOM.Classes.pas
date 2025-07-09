@@ -620,7 +620,7 @@ type
   protected
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): IXMLDocument; overload;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
     function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
@@ -684,7 +684,8 @@ type
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
-    function  ToString(const Encoding: string = 'UTF-8'; const Format: Boolean = False): string; reintroduce; overload;
+    function  ToString(const Encoding: string; const Format: Boolean = False): string; reintroduce; overload;
+    function  ToString(const Format: Boolean): string; reintroduce; overload;
     function  ToString: string; overload; override;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
@@ -2655,9 +2656,9 @@ begin
   FreeAndNil(FXSLTErrors);
 end;
 
-function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): IXMLDocument;
+function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
 begin
-  Result := TXMLDocument.Create(xmlDocPtr(NodePtr).Canonicalize(Mode, Comments), True);
+  Result := xmlDocPtr(NodePtr).Canonicalize(Mode, Comments);
 end;
 
 function TXMLDocument.CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
@@ -2778,15 +2779,17 @@ begin
     NODE_TEXT:
       Result := Cast(xmlNewDocText(xmlDocPtr(NodePtr), nil));
     NODE_ELEMENT:
-      if href = '' then
       begin
-        if Prefix = '' then
-          Result := Cast(xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlCharPtr(LocalName), nil))
-        else
-          Result := Cast(xmlNewDocNode(xmlDocPtr(NodePtr), xmlNewNs(nil, nil, xmlCharPtr(Prefix)), xmlCharPtr(LocalName), nil))
-      end
-      else
-        Result := Cast(xmlNewDocNode(xmlDocPtr(NodePtr), xmlNewNs(nil, xmlCharPtr(HRef), xmlCharPtr(Prefix)), xmlCharPtr(LocalName), nil));
+        var Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlCharPtr(LocalName), nil);
+        if HRef <> '' then
+        begin
+          if Prefix = '' then
+            xmlNewNs(Node, xmlCharPtr(HRef), nil)
+          else
+            xmlNewNs(Node, xmlCharPtr(HRef), xmlCharPtr(Prefix));
+        end;
+        Result := Cast(Node);
+      end;
     NODE_PROCESSING_INSTRUCTION:
       Result := Cast(xmlNewDocPI(xmlDocPtr(NodePtr), xmlCharPtr(LocalName), nil));
   else
@@ -3042,9 +3045,9 @@ begin
   Result := xmlDocPtr(NodePtr).ToBytes(Encoding, Format);
 end;
 
-function TXMLDocument.ToString: string;
+function TXMLDocument.ToString(const Format: Boolean): string;
 begin
-  Result := xmlDocPtr(NodePtr).ToString();
+  Result := xmlDocPtr(NodePtr).ToString('', Format);
 end;
 
 function TXMLDocument.ToString(const Encoding: string; const Format: Boolean): string;
@@ -3130,6 +3133,11 @@ end;
 procedure TXMLDocument.XSLTError(const Msg: string);
 begin
   FXSLTErrors.FList.Add(TXSLTError.Create(Msg) as IXSLTError);
+end;
+
+function TXMLDocument.ToString: string;
+begin
+  Result := ToString(False);
 end;
 
 { TXMLSchemaCollection.TItems }
