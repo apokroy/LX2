@@ -1235,6 +1235,10 @@ end;
 
 function TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr;
 begin
+  var DocChanged := Parent.doc <> NewNode.doc;
+  if (NewNode.doc <> nil) and (Parent.doc <> NewNode.doc) and (NewNode.doc._private <> nil) then
+    TXmlDocument(NewNode.doc._private)._Release;
+
   if AfterNode = nil then
     Result := xmlAddChild(Parent, NewNode)
   else
@@ -1242,6 +1246,9 @@ begin
 
   if Result <> nil then
     xmlReconciliateNs(Result.doc, Result);
+
+  if DocChanged and (Result.doc <> nil) and (Result.doc._private <> nil) then
+    TXmlDocument(Result.doc._private)._AddRef;
 end;
 
 { TXMLAttributeList.TEnumerator }
@@ -1979,12 +1986,10 @@ begin
     end
     else
     begin
-      var DocChanged := False;
+      var DocChanged := NodePtr.doc <> NewNode.NodePtr.doc;
+
       if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
-      begin
         TXmlDocument(NewNode.NodePtr.doc._private)._Release;
-        DocChanged := True;
-      end;
 
       if xmlDOMWrapAdoptNode(nil, nil, NewNode.NodePtr, NodePtr.doc, NodePtr, 0)  = 0 then
       begin
@@ -2008,13 +2013,12 @@ begin
   end
   else
   begin
-    var DocChanged := False;
     var NewNode := TXMLNode(NewChild);
+
+    var DocChanged := NodePtr.doc <> NewNode.NodePtr.doc;
+
     if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
-    begin
       TXmlDocument(NewNode.NodePtr.doc._private)._Release;
-      DocChanged := True;
-    end;
 
     ResolveUnlinked(NodePtr, NewNode);
     var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, TXMLNode(RefChild).NodePtr);
