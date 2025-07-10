@@ -1916,6 +1916,8 @@ begin
       xmlFreeNode(NodePtr);
   end;
 
+  FreeAndNil(FXSLTErrors);
+
   {$IFDEF DEBUG}
   AtomicDecrement(DebugObjectCount);
   {$ENDIF}
@@ -2737,7 +2739,6 @@ begin
   end;
   inherited;
   FreeAndNil(FErrors);
-  FreeAndNil(FXSLTErrors);
 end;
 
 function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
@@ -3268,8 +3269,8 @@ end;
 procedure SchemaParserErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 begin
   try
-    var Err := TXMLError.Create(TXmlParseError.Create(error^));
-    TXMLDocument(userData).Errors.FList.Add(Err as IXMLParseError);
+    var Err := TXMLError.Create(TXmlParseError.Create(error^)) as IXMLParseError;
+    TXMLDocument(userData).Errors.FList.Add(Err);
   except
     // No exception, becouse libxml2 is plain c, without try catch
   end;
