@@ -18,11 +18,8 @@ Contains:
 > Win32 not tested at all.
 
 ## TODOs
-- Cover near to full sources by DUnit tests;
 - XML Doc all significant sources;
-- Bring LX2.DOM closer to the W3C DOM & MSXML DOM 6.0 model;
 - Reader API wrappers;
-- Sample project like xmllint, mostly to test library itself.
 
 ## Samples
 All provided sample projects uses simple test API, that tracking libxml2 memory leaks and DOM interfaces refcounting errors, FastMM4 memory leaks detection also used.
@@ -58,12 +55,10 @@ var Doc := xmlDoc.CreateFromFile('C:\Test.xml', DefaultParserOptions); //Loads f
 
 WriteLn(Doc.ToString(True));     // Get formatted (True) XML as Delphi string (UTF16)
 
-var C14NDoc := Doc.Canonicalize; // Create new canonicalized document from source document, with defaults to TXmlC14NMode.xmlC14N (1.0 spec)
-WriteLn(C14NDoc.Xml);            // Output XML as non formatted UTF8 string
+WriteLn(Doc.Canonicalized);      // Output canonicalized XML 
 
-C14NDoc.Save(MyStream, 'UTF-8'); // Saves XML to provided TStream object 
+Doc.Save(MyStream, 'UTF-8'); // Saves XML to provided TStream object 
 
-C14NDoc.Free;                    // xmlFreeDoc(C14NDoc);
 Doc.Free;                        // xmlFreeDoc(Doc);
 ```
 For example xmlDoc.CreateFromFile wraps this code:
