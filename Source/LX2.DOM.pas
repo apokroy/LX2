@@ -483,7 +483,10 @@ type
     function  RemoveAttribute(const Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
-    procedure SetAttribute(const Name: string; Value: string);
+    procedure SetAttribute(const Name: string; Value: string); overload;
+    procedure SetAttribute(const Name: string; Value: Int64); overload;
+    procedure SetAttribute(const Name: string; Value: Boolean); overload;
+    procedure SetAttribute(const Name: string; Value: TDateTime); overload;
     function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
 
     function  NextSiblingElement: IXMLElement;

@@ -497,7 +497,10 @@ type
   TXMLElement = class(TXMLNode, IXMLElement)
   public
     function  GetAttribute(const Name: string): string;
-    procedure SetAttribute(const Name: string; Value: string);
+    procedure SetAttribute(const Name: string; Value: string); overload;
+    procedure SetAttribute(const Name: string; Value: Int64); overload;
+    procedure SetAttribute(const Name: string; Value: Boolean); overload;
+    procedure SetAttribute(const Name: string; Value: TDateTime); overload;
     function  GetAttributeNs(const NamespaceURI, Name: string): string;
     function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
     function  GetAttributeNode(const Name: string): IXMLAttribute;
@@ -725,6 +728,28 @@ uses
 var
   GlobalLock: TObject;
   OldDeregisterNodeFunc: xmlDeregisterNodeFunc;
+
+function ISODateTimeToStr(Value: TDateTime): string;
+const
+  TwoDigit: array[0..60] of array[0..1] of Char = (
+    '00', '01', '02', '03', '04', '05', '06', '07', '08', '09',
+    '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+    '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
+    '30', '31', '32', '33', '34', '35', '36', '37', '38', '39',
+    '40', '41', '42', '43', '44', '45', '46', '47', '48', '49',
+    '50', '51', '52', '53', '54', '55', '56', '57', '58', '59',
+    '60');
+var
+  Y, M, D, H, S, MS: Word;
+begin
+  DecodeDate(Value, Y, M, D);
+  Result := Y.ToString + '-' + M.ToString + '-' + D.ToString;
+  if Frac(Value) <> 0 then
+  begin
+    DecodeTime(Value, H, M, S, MS);
+    Result := Result + ' ' + H.ToString + ':' + M.ToString + ':' + S.ToString;
+  end;
+end;
 
 procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
 begin
@@ -1899,6 +1924,8 @@ begin
   inherited Create;
   NodePtr := Node;
   NodePtr._private := Self;
+  if (Node.doc <> nil) and (xmlNodePtr(Node.doc) <> Node) and (Node.doc._private <> nil) then
+    TXMLDocument(Node.doc._private)._AddRef;
 
   FXSLTErrors := TXSLTErrors.Create;
 
@@ -1908,9 +1935,15 @@ begin
 end;
 
 destructor TXMLNode.Destroy;
+var
+  doc: TXMLDocument;
 begin
+  doc := nil;
   if (NodePtr <> nil) and (NodePtr._private = Self) then
   begin
+    if (NodePtr.doc <> nil) and (NodePtr.doc._private <> nil) then
+      doc := TXMLDocument(NodePtr.doc._private);
+
     NodePtr._private := nil;
     if NodePtr.parent = nil then
       xmlFreeNode(NodePtr);
@@ -1923,6 +1956,9 @@ begin
   {$ENDIF}
 
   inherited;
+
+  if doc <> nil then
+    doc._Release;
 end;
 
 function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -2319,6 +2355,23 @@ end;
 function TXMLElement.GetAttributeNs(const NamespaceURI, Name: string): string;
 begin
   Result := xmlCharToStrAndFree(xmlGetNsProp(NodePtr, xmlStrPtr(Utf8Encode(NamespaceURI)), xmlStrPtr(Utf8Encode(Name))));
+end;
+
+procedure TXMLElement.SetAttribute(const Name: string; Value: Int64);
+begin
+  SetAttribute(Name, Value.ToString);
+end;
+
+procedure TXMLElement.SetAttribute(const Name: string; Value: Boolean);
+const
+  cBool: array[Boolean] of string = ('0', '1');
+begin
+  SetAttribute(Name, cBool[Value]);
+end;
+
+procedure TXMLElement.SetAttribute(const Name: string; Value: TDateTime);
+begin
+  SetAttribute(Name, ISODateTimeToStr(Value));
 end;
 
 function TXMLElement.SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
