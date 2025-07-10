@@ -174,6 +174,7 @@ type
   /// MS IXMLDOMNodeList compatible & Delphi enumerable interface
   /// </remarks>
   IXMLNodeList = interface
+    ['{F34F86A7-8AF4-4374-B8E7-EEB9FE193685}']
     { MSXMLDOMNodeList }
     function  Get_Item(index: NativeInt): IXMLNode;
     function  Get_Length: NativeInt;
