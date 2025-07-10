@@ -277,7 +277,7 @@ begin
   end;
 end;
 
-procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
+procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl {$IFDEF CPUX64} varargs{$ENDIF};
 begin
   if ctx <> nil then
   begin
