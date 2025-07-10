@@ -3461,7 +3461,8 @@ begin
 
     xmlSchemaSetValidStructuredErrors(vctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
 
-    Result := xmlSchemaValidateDoc(vctxt, xmlDocPtr(TXMLDocument(Doc).NodePtr)) = 0;
+    var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
+    Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
 
     xmlSchemaFreeValidCtxt(vctxt);
     xmlSchemaFree(schema);

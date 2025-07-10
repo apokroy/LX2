@@ -281,7 +281,7 @@ procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
 begin
   if ctx <> nil then
   begin
-    PXsltErrorCallback(ctx).Handler(msg);
+    PXsltErrorCallback(ctx).Handler(xmlCharToStr(msg));
   end;
 end;
 
@@ -1024,14 +1024,13 @@ function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; e
 var
   style: xsltStylesheetPtr;
   output: xmlDocPtr;
-  buf: xmlOutputBufferPtr;
 begin
   Result := XsltTransform(stylesheet, Self.doc, @Self, style, output, errorHandler);
   if Result then
   begin
     var Buffer := xmlOutputBufferCreateIO(@IOWriteStream, @IOCloseStream, Pointer(Stream), nil);
     if Buffer <> nil then
-      xsltSaveResultTo(buf, output, style)
+      xsltSaveResultTo(Buffer, output, style)
     else
       Result := False;
     xmlFreeDoc(output);
@@ -1219,9 +1218,13 @@ begin
   xmlCtxtUseOptions(ctx, XmlParserOptions(Options) or XML_PARSE_UNZIP or XML_PARSE_NONET);
 
   if xmlNewInputFromUrl(xmlCharPtr(Utf8Encode(filename)), 0, input) = XML_ERR_OK then
-    Result := xmlCtxtParseDocument(ctx, input)
+  begin
+    Result := xmlCtxtParseDocument(ctx, input);
+    //xmlFreeInputStream(input);
+  end
   else
     Result := nil;
+
 
   xmlFreeParserCtxt(ctx);
 end;
@@ -1527,14 +1530,13 @@ function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; er
 var
   style: xsltStylesheetPtr;
   output: xmlDocPtr;
-  buf: xmlOutputBufferPtr;
 begin
   Result := XsltTransform(stylesheet, @Self, @Self, style, output, errorHandler);
   if Result then
   begin
     var Buffer := xmlOutputBufferCreateIO(@IOWriteStream, @IOCloseStream, Pointer(Stream), nil);
     if Buffer <> nil then
-      xsltSaveResultTo(buf, output, style)
+      xsltSaveResultTo(Buffer, output, style)
     else
       Result := False;
     xmlFreeDoc(output);
