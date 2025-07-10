@@ -2093,7 +2093,7 @@ begin
   if NodePtr.OwnerDocument._private = nil then
     Exit(nil);
 
-  Result := TXMLDocument(NodePtr.OwnerDocument);
+  Result := TXMLDocument(NodePtr.OwnerDocument._private);
 end;
 
 function TXMLNode.Get_ParentNode: IXMLNode;
