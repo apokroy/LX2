@@ -18,11 +18,8 @@ Contains:
 > Win32 not tested at all.
 
 ## TODOs
-- Cover near to full sources by DUnit tests;
 - XML Doc all significant sources;
-- Bring LX2.DOM closer to the W3C DOM & MSXML DOM 6.0 model;
 - Reader API wrappers;
-- Sample project like xmllint, mostly to test library itself.
 
 ## Samples
 All provided sample projects uses simple test API, that tracking libxml2 memory leaks and DOM interfaces refcounting errors, FastMM4 memory leaks detection also used.
