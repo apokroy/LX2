@@ -107,13 +107,15 @@ type
    xmlSaveNoEmpty,
    xmlSaveNoXHTML,
    xmlSaveXHTML,
-   xmlSaveAaXML,
+   xmlSaveAsXML,
    xmlSaveAsHTML,
    xmlSaveWSNONSIG,
    xmlSaveEmpty,
    xmlSaveNoIndent,
    xmlSaveIndent
   );
+
+  TXmlSaveOptions = set of TXmlSaveOption;
 
   TXmlC14NMode = (
     ///<summary>Original C14N 1.0 spec.</summary>
@@ -123,8 +125,6 @@ type
     ///<summary>C14N 1.1 spec.</summary>
     xmlC14N11
   );
-
-  TXmlSaveOptions = set of TXmlSaveOption;
 
 const
   DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines];
@@ -500,7 +500,7 @@ begin
       Result := Result or Values[Opt];
 end;
 
-function xmlSaveOptions(Options: TxmlSaveOptions): Integer;
+function xmlSaveOptions(Options: TXmlSaveOptions): Integer;
 const
   Values: array[TXmlSaveOption] of Integer = (
     XML_SAVE_FORMAT,

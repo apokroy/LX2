@@ -97,7 +97,7 @@ type
   xmlEnumSet = UInt32;
 
   xmlCharPtrArrayPtr = ^xmlCharPtrArray;
-  xmlCharPtrArray = array[0..0] of xmlCharPtr;
+  xmlCharPtrArray = array[0..(MaxInt div SizeOf(xmlCharPtr)) - 1] of xmlCharPtr;
 
   { Forward declarations }
 
@@ -1661,7 +1661,7 @@ type
   end;
 
   xmlNsPtrArrayPtr = ^xmlNsPtrArray;
-  xmlNsPtrArray = array[0..0] of xmlNsPtr;
+  xmlNsPtrArray = array[0..(MaxInt div SizeOf(xmlNsPtr)) - 1] of xmlNsPtr;
 
   ///<summary>Signature for the registration callback of a created node.</summary>
   xmlRegisterNodeFunc   = procedure(node: xmlNodePtr); cdecl;
@@ -3738,7 +3738,7 @@ type
   end;
 
   xmlNodeArrayPtr = ^xmlNodeArray;
-  xmlNodeArray = array[0..0] of xmlNodePtr;
+  xmlNodeArray = array[0..(MaxInt div SizeOf(xmlNodePtr)) - 1] of xmlNodePtr;
 
   xmlExternalEntityLoader   = function(const URL, ID: PUTF8Char; context: xmlParserCtxtPtr): xmlParserInputPtr; cdecl;
   xmlResourceLoader         = function(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;

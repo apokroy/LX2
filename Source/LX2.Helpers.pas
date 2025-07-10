@@ -214,7 +214,7 @@ type
     function  DocType: xmlNodePtr; inline;
     function  GetElementsByTagName(const name: RawByteString): xmlNodeArray; inline;
     procedure ReconciliateNs; inline;
-    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
+    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = [xmlSaveNoEmpty]): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;

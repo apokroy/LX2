@@ -1036,7 +1036,7 @@ end;
 function TXMLNodeList.Get_Item(Index: NativeInt): IXMLNode;
 begin
   var Current := Node.children;
-  for var I := 0 to Index do
+  for var I := 0 to Index - 1 do
     if Current = nil then
       Exit(nil)
     else
@@ -1979,8 +1979,20 @@ begin
     end
     else
     begin
+      var DocChanged := False;
+      if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
+      begin
+        TXmlDocument(NewNode.NodePtr.doc._private)._Release;
+        DocChanged := True;
+      end;
+
       if xmlDOMWrapAdoptNode(nil, nil, NewNode.NodePtr, NodePtr.doc, NodePtr, 0)  = 0 then
-        Result := Cast(NodePtr.AppendChild(NewNode.NodePtr))
+      begin
+        var AddedNode := NodePtr.AppendChild(NewNode.NodePtr);
+        Result := Cast(AddedNode);
+        if DocChanged and (AddedNode.doc <> nil) and (AddedNode.doc._private <> nil) then
+          TXmlDocument(AddedNode.doc._private)._AddRef;
+      end
       else
         Result := nil;
     end;
@@ -1996,9 +2008,20 @@ begin
   end
   else
   begin
-    ResolveUnlinked(NodePtr, TXMLNode(NewChild));
-    var NewNode := NodePtr.InsertBefore(TXMLNode(NewChild).NodePtr, TXMLNode(RefChild).NodePtr);
-    Result := Cast(NewNode);
+    var DocChanged := False;
+    var NewNode := TXMLNode(NewChild);
+    if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
+    begin
+      TXmlDocument(NewNode.NodePtr.doc._private)._Release;
+      DocChanged := True;
+    end;
+
+    ResolveUnlinked(NodePtr, NewNode);
+    var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, TXMLNode(RefChild).NodePtr);
+    Result := Cast(AddedNode);
+
+    if DocChanged and (AddedNode.doc <> nil) and (AddedNode.doc._private <> nil) then
+      TXmlDocument(AddedNode.doc._private)._AddRef;
   end;
 end;
 

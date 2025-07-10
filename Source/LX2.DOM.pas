@@ -616,8 +616,8 @@ type
     function  NodeFromID(const idString: string): IXMLNode;
     procedure Normalize;
     procedure ReconciliateNs;
-    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
-    function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
+    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
+    function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
     procedure Set_DocumentElement(const Element: IXMLElement);
     procedure Set_PreserveWhiteSpace(isPreserving: Boolean);
     procedure Set_ResolveExternals(isResolving: Boolean);
