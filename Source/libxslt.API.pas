@@ -243,6 +243,204 @@ type
     principal: xsltStylesheetPtr;
   end;
 
+  xsltTransformState = (
+    XSLT_STATE_OK,
+    XSLT_STATE_ERROR,
+    XSLT_STATE_STOPPED
+  );
+
+  xsltOutputType = (
+    XSLT_OUTPUT_XML,
+    XSLT_OUTPUT_HTML,
+    XSLT_OUTPUT_TEXT
+  );
+
+  xsltTransformContextPtr = ^xsltTransformContext;
+
+  xsltNewLocaleFunc  = procedure(const lang: xmlCharPtr; lowerFirst: Integer); cdecl;
+  xsltFreeLocaleFunc = procedure(locale: Pointer); cdecl;
+  xsltGenSortKeyFunc = function(locale: Pointer; const lang: xmlCharPtr): xmlCharPtr; cdecl;
+  xsltSortFunc       = procedure(ctxt: xsltTransformContextPtr; var sorts: xmlNodePtr; nbsorts: Integer); cdecl;
+
+  xsltRuntimeExtraPtr = ^xsltRuntimeExtra;
+  xsltRuntimeExtra = packed record end;
+
+  xsltTransformCachePtr = ^xsltTransformCache;
+  xsltTransformCache = packed record end;
+
+  xsltTransformContext = packed record
+    /// the stylesheet used
+    style: xsltStylesheetPtr;
+    /// the type of output
+    &type: xsltOutputType;
+
+    /// the current template
+    templ: xsltTemplatePtr;
+    /// Nb of templates in the stack
+    templNr: Integer;
+    /// Size of the templtes stack
+    templMax: Integer;
+    /// the template stack
+    templTab: xsltTemplatePtr;
+
+    /// the current variable list
+    vars: xsltStackElemPtr;
+    /// Nb of variable list in the stack
+    varsNr: Integer;
+    /// Size of the variable list stack
+    varsMax: Integer;
+    /// the variable list stack
+    varsTab: xsltStackElemPtr;
+    /// the var base for current templ
+    varsBase: Integer;
+
+    { Extensions }
+
+    /// the extension functions
+    extFunctions: xmlHashTablePtr;
+    /// the extension elements
+    extElements: xmlHashTablePtr;
+    /// the extension data
+    extInfos: xmlHashTablePtr;
+
+    /// the current mode
+    mode: xmlCharPtr;
+    /// the current mode URI
+    modeURI: xmlCharPtr;
+
+    /// the document list
+    docList: xsltDocumentPtr;
+
+    /// the current source document; can be NULL if an RTF
+    document: xsltDocumentPtr;
+    /// the current node being processed
+    node: xmlNodePtr;
+    /// the current node list
+    nodeList: xmlNodeSetPtr;
+
+    /// the resulting document
+    output: xmlDocPtr;
+    /// the insertion node
+    insert: xmlNodePtr;
+
+    /// the XPath context
+    xpathCtxt: xmlXPathContextPtr;
+    /// the current state
+    state: xsltTransformState;
+
+    { Global variables }
+
+    /// the global variables and params
+    globalVars: xmlHashTablePtr;
+    /// the instruction in the stylesheet
+    inst: xmlNodePtr;
+    /// should XInclude be processed
+    xinclude: Integer;
+
+    /// the output URI if known
+    outputFile: PAnsiChar;
+
+    /// is this run profiled
+    profile: Integer;
+    /// the current profiled value
+    prof: long;
+    /// Nb of templates in the stack
+    profNr: Integer;
+    /// Size of the templtaes stack
+    profMax: Integer;
+    /// the profile template stack
+    profTab: ^long;
+
+    /// user defined data
+    _private: Pointer;
+
+    /// the number of extras used
+    extrasNr: Integer;
+    /// the number of extras allocated
+    extrasMax: Integer;
+    /// extra per runtime information
+    extras: xsltRuntimeExtraPtr;
+
+    /// the stylesheet docs list
+    styleList: xsltDocumentPtr;
+    /// the security preferences if any
+    sec: Pointer;
+    /// a specific error handler
+    error: xmlGenericErrorFunc;
+    /// context for the error handler
+    errctx: Pointer;
+    /// a ctxt specific sort routine
+    sortfunc: xsltSortFunc;
+
+    {
+     handling of temporary Result Value Tree
+     (XSLT 1.0 term: "Result Tree Fragment")
+    }
+    /// list of RVT without persistance
+    tmpRVT: xmlDocPtr;
+    /// list of persistant RVTs
+    persistRVT: xmlDocPtr;
+    /// context processing flags
+    ctxtflags: Integer;
+
+    { Speed optimization when coalescing text nodes }
+
+    /// last text node content
+    lasttext: xmlCharPtr;
+    /// last text node size
+    lasttsize: xmlCharPtr;
+    /// last text node use
+    lasttuse: Integer;
+
+    { Per Context Debugging }
+
+    /// the context level debug status
+    debugStatus: Integer;
+    /// pointer to the variable holding the mask
+    traceCode: ^ulong;
+
+    /// parser options xmlParserOption
+    parserOptions: Integer;
+
+    /// dictionary: shared between stylesheet, context and documents.
+    dict: xmlDictPtr;
+    /// Obsolete; not used in the library.
+    tmpDoc: xmlDocPtr;
+
+    /// all document text strings are internalized
+    internalized: Integer;
+    nbKeys: Integer;
+    hasTemplKeyPatterns: Integer;
+    /// the Current Template Rule
+    currentTemplateRule: xsltTemplatePtr;
+    initialContextNode: xmlNodePtr;
+    initialContextDoc: xmlDocPtr;
+    cache: xsltTransformCachePtr;
+    /// the current variable item
+    contextVariable: Pointer;
+    /// list of local tree fragments; will be freed when
+    /// the instruction which created the fragment  exits
+    localRVT: xmlDocPtr;
+    /// Obsolete
+    localRVTBase: xmlDocPtr ;
+    /// Needed to catch recursive keys issues
+    keyInitLevel: Integer;
+    /// Needed to catch recursions
+    depth: Integer;
+    maxTemplateDepth: Integer;
+    maxTemplateVars: Integer;
+    opLimit: ulong;
+    opCount: ulong;
+    sourceDocDirty: Integer;
+    /// For generate-id()
+    currentId: ulong;
+
+    newLocale: xsltNewLocaleFunc;
+    freeLocale: xsltFreeLocaleFunc;
+    genSortKey: xsltGenSortKeyFunc;
+  end;
+
+
 var
   xsltInit                 : procedure; cdecl;
   xsltInitGlobals          : procedure; cdecl;
@@ -260,6 +458,10 @@ var
   xsltSaveResultToString   : function (var doc_txt_ptr: xmlCharPtr; var doc_txt_len: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl;
   xsltSetXIncludeDefault   : procedure(xinclude: Integer); cdecl;
   xsltGetXIncludeDefault   : function: Integer; cdecl;
+  xsltNewTransformContext  : function (style: xsltStylesheetPtr; doc: xmlDocPtr): xsltTransformContextPtr; cdecl;
+  xsltFreeTransformContext : procedure(ctxt: xsltTransformContextPtr); cdecl;
+  xsltApplyStylesheetUser  : function (style: xsltStylesheetPtr; doc: xmlDocPtr; var params: PAnsiChar; output: PAnsiChar; profile: Pointer; userCtxt: xsltTransformContextPtr): xmlDocPtr; cdecl;
+  xsltSetTransformErrorFunc: procedure(ctxt: xsltTransformContextPtr; ctx: Pointer; handler: xmlGenericErrorFunc); cdecl;
 
 type
   XSLTLib = record
@@ -277,37 +479,7 @@ type
 
   TXLSErrorHandler = procedure(Context: Pointer; const Msg: string);
 
-  TXSLTThreadErrorContext = record
-  public
-    class procedure Start(Context: Pointer; const Handler: TXLSErrorHandler); static;
-    class procedure Stop; static;
-  end;
-
 implementation
-
-threadvar
-  ThreadErrorHandler: TXLSErrorHandler;
-  ThreadErrorContext: Pointer;
-
-procedure XSLTErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl;
-begin
-  if Assigned(ThreadErrorHandler) then
-    ThreadErrorHandler(ThreadErrorContext, xmlCharToStr(msg));
-end;
-
-{ TXSLTThreadErrorContext }
-
-class procedure TXSLTThreadErrorContext.Start(Context: Pointer; const Handler: TXLSErrorHandler);
-begin
-  ThreadErrorHandler := Handler;
-  ThreadErrorContext := Context;
-end;
-
-class procedure TXSLTThreadErrorContext.Stop;
-begin
-  ThreadErrorHandler := nil;
-  ThreadErrorContext := nil;
-end;
 
 { XSLTLib }
 
@@ -315,7 +487,6 @@ class procedure XSLTLib.Initialize;
 begin
   if Handle = 0 then
     Load;
-  xsltSetGenericErrorFunc(nil, XSLTErrorCallback);
 end;
 
 class procedure XSLTLib.Unload;
@@ -343,19 +514,23 @@ begin
   xsltInit                 := GetProcAddress(Handle, 'xsltInit');
   xsltInitGlobals          := GetProcAddress(Handle, 'xsltInitGlobals');
   xsltCleanupGlobals       := GetProcAddress(Handle, 'xsltCleanupGlobals');
+  xsltNewTransformContext  := GetProcAddress(Handle, 'xsltNewTransformContext');
+  xsltFreeTransformContext := GetProcAddress(Handle, 'xsltFreeTransformContext');
+  xsltApplyStylesheetUser  := GetProcAddress(Handle, 'xsltApplyStylesheetUser');
   xsltNewStylesheet        := GetProcAddress(Handle, 'xsltNewStylesheet');
   xsltParseStylesheetFile  := GetProcAddress(Handle, 'xsltParseStylesheetFile');
   xsltParseStylesheetDoc   := GetProcAddress(Handle, 'xsltParseStylesheetDoc');
   xsltParseStylesheetUser  := GetProcAddress(Handle, 'xsltParseStylesheetUser');
   xsltFreeStylesheet       := GetProcAddress(Handle, 'xsltFreeStylesheet');
+  xsltSetGenericErrorFunc  := GetProcAddress(Handle, 'xsltSetGenericErrorFunle');
   xsltApplyStylesheet      := GetProcAddress(Handle, 'xsltApplyStylesheet');
-  xsltSetGenericErrorFunc  := GetProcAddress(Handle, 'xsltSetGenericErrorFunc');
   xsltSaveResultTo         := GetProcAddress(Handle, 'xsltSaveResultTo');
   xsltSaveResultToFilename := GetProcAddress(Handle, 'xsltSaveResultToFilename');
   xsltSaveResultToFd       := GetProcAddress(Handle, 'xsltSaveResultToFd');
   xsltSaveResultToString   := GetProcAddress(Handle, 'xsltSaveResultToString');
   xsltSetXIncludeDefault   := GetProcAddress(Handle, 'xsltSetXIncludeDefault');
   xsltGetXIncludeDefault   := GetProcAddress(Handle, 'xsltGetXIncludeDefault');
+  xsltSetTransformErrorFunc:= GetProcAddress(Handle, 'xsltSetTransformErrorFunc');
 
 {$endregion}
 

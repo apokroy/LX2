@@ -362,6 +362,15 @@ type
     procedure Set_NodeValue(const Value: string);
     procedure Set_Text(const text: string);
 
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload;
+
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload;
+    function  TransformNode(const stylesheet: IXMLDocument): string;
+
     /// <summary>
     ///
     /// </summary>
@@ -615,9 +624,6 @@ type
     function  ToString(const Encoding: string; const Format: Boolean = False): string; overload;
     function  ToString(const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
-    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
-    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
-    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
     property  Doctype: IXMLDocumentType read Get_Doctype;
     property  DocumentElement: IXMLElement read Get_DocumentElement write Set_DocumentElement;
     property  Errors: IXMLErrors read GetErrors;

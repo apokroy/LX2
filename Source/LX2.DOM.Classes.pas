@@ -331,7 +331,9 @@ type
 
   TXMLNode = class(TInterfacedObject, IXMLNode)
   private
+    FXSLTErrors: TXSLTErrors;
     procedure XPathErrorHandler(const error: xmlError);
+    procedure XSLTError(const Msg: string); virtual;
   protected
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -352,6 +354,7 @@ type
     function  Get_PreviousSibling: IXMLNode;
     function  Get_Text: string;
     function  Get_Xml: string;
+    function  GetXSLTErrors: IXSLTErrors;
     function  HasAttributes: Boolean;
     function  HasChildNodes: Boolean;
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
@@ -362,6 +365,13 @@ type
     function  SelectSingleNode(const QueryString: string): IXMLNode;
     procedure Set_NodeValue(const Value: string);
     procedure Set_Text(const Text: string);
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload; virtual;
+    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload; virtual;
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload; virtual;
+    function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; virtual;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload; virtual;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload; virtual;
+    function  TransformNode(const stylesheet: IXMLDocument): string; virtual;
   protected
     NodePtr: xmlNodePtr;
     constructor Create(node: xmlNodePtr);
@@ -384,6 +394,7 @@ type
     property  NamespaceURI: string read Get_namespaceURI;
     property  Prefix: string read Get_prefix;
     property  BaseName: string read Get_baseName;
+    property  XSLTErrors: TXSLTErrors read FXSLTErrors;
   end;
 
   /// <summary>
@@ -421,6 +432,13 @@ type
     function  SelectSingleNode(const QueryString: string): IXMLNode;
     procedure Set_NodeValue(const Value: string);
     procedure Set_Text(const Text: string);
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; virtual;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload;
+    function  TransformNode(const stylesheet: IXMLDocument): string;
   protected
     NsPtr: xmlNsPtr;
     Parent: xmlNodePtr;
@@ -605,7 +623,6 @@ type
   private
     FDocOwner: Boolean;
     FErrors: TXMLErrors;
-    FXSLTErrors: TXSLTErrors;
     FValidateOnParse: Boolean;
     FResolveExternals: Boolean;
     FPreserveWhiteSpace: Boolean;
@@ -614,7 +631,6 @@ type
     FSchemas: IXMLSchemaCollection;
   protected
     procedure ErrorCallback(const error: xmlError); virtual;
-    procedure XSLTError(const Msg: string); virtual;
     function  SetNewDoc(Doc: xmlDocPtr): xmlDocPtr;
     property  DocOwner: Boolean read FDocOwner;
   protected
@@ -647,7 +663,6 @@ type
     function  GetElementsByTagName(const tagName: string): IXMLNodeList;
     function  getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
     function  GetErrors: IXMLErrors;
-    function  GetXSLTErrors: IXSLTErrors;
     function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
     function  NodeFromID(const IdString: string): IXMLNode;
     procedure Save(const Url: string); overload;
@@ -656,9 +671,13 @@ type
     procedure Set_ResolveExternals(IsResolving: Boolean);
     procedure Set_Schemas(const Value: IXMLSchemaCollection);
     procedure Set_ValidateOnParse(IsValidating: Boolean);
-    function  Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean; overload;
-    function  Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
-    function  Transform(const Stylesheet: IXMLDocument; out S: string): Boolean; overload;
+    function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload; override;
+    function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload; override;
+    function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload; override;
+    function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; override;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload; override;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload; override;
+    function  TransformNode(const stylesheet: IXMLDocument): string; override;
     function  Validate: IXMLParseError;
     function  ValidateNode(const node: IXMLNode): IXMLParseError;
     property  Doctype: IXMLDocumentType read Get_Doctype;
@@ -692,7 +711,6 @@ type
 
     procedure ReconciliateNs; override;
     property  Errors: TXMLErrors read FErrors;
-    property  XSLTErrors: IXSLTErrors read GetXSLTErrors;
     property  Options: TXmlParserOptions read FOptions write FOptions;
   end;
 
@@ -722,11 +740,6 @@ begin
     TXMLNode(Node._private).NodePtr := nil;
   end;
 end;
-
- procedure XSLTErrorHandler(Context: Pointer; const Msg: string);
- begin
-   TXMLDocument(Context).XSLTError(Msg);
- end;
 
 procedure CheckNotNode(const Node: IXMLNode);
 begin
@@ -1887,6 +1900,8 @@ begin
   NodePtr := Node;
   NodePtr._private := Self;
 
+  FXSLTErrors := TXSLTErrors.Create;
+
   {$IFDEF DEBUG}
   AtomicIncrement(DebugObjectCount);
   {$ENDIF}
@@ -2074,6 +2089,16 @@ begin
   xmlOutputBufferClose(Buf);
 end;
 
+function TXMLNode.GetXSLTErrors: IXSLTErrors;
+begin
+  Result := FXSLTErrors;
+end;
+
+procedure TXMLNode.XSLTError(const Msg: string);
+begin
+  FXSLTErrors.FList.Add(TXSLTError.Create(Msg) as IXSLTError);
+end;
+
 function TXMLNode.HasAttributes: Boolean;
 begin
   Result := (NodePtr.nsDef <> nil) or (NodePtr.properties <> nil);
@@ -2134,6 +2159,66 @@ end;
 procedure TXMLNode.Set_Text(const text: string);
 begin
   NodePtr.Text := Utf8Encode(text);
+end;
+
+function TXMLNode.Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocument): Boolean;
+var
+  Res: xmlDocPtr;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(stylesheet).NodePtr), Res, XSLTError);
+  if Result then
+    Doc := TXMLDocument.Create(Res, True);
+end;
+
+function TXMLNode.Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
+end;
+
+function TXMLNode.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
+end;
+
+function TXMLNode.Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Stream, XSLTError);
+end;
+
+function TXMLNode.TransformNode(const stylesheet: IXMLDocument): string;
+begin
+  FXSLTErrors.Clear;
+
+  xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
+end;
+
+function TXMLNode.TransformNodeToObject(const stylesheet, output: IXMLDocument): Boolean;
+var
+  Doc: XmlDocPtr;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
+  if Result then
+  begin
+    xmlFreeDoc(xmlDocPtr(NodePtr));
+    TXMLDocument(output).NodePtr := xmlNodePtr(Doc);
+  end;
+end;
+
+function TXMLNode.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), output, XSLTError);
 end;
 
 procedure TXMLNode.XPathErrorHandler(const error: xmlError);
@@ -2638,7 +2723,6 @@ begin
   inherited Create(xmlNodePtr(doc));
   FDocOwner := DocOwner;
   FErrors := TXMLErrors.Create;
-  FXSLTErrors := TXSLTErrors.Create;
   FSuccessError := nil;
   FValidateOnParse := True;
 end;
@@ -2841,11 +2925,6 @@ end;
 function TXMLDocument.getErrors: IXMLErrors;
 begin
   Result := FErrors;
-end;
-
-function TXMLDocument.GetXSLTErrors: IXSLTErrors;
-begin
-  Result := FXSLTErrors;
 end;
 
 function TXMLDocument.Get_DocType: IXMLDocumentType;
@@ -3064,41 +3143,60 @@ function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDoc
 var
   Res: xmlDocPtr;
 begin
-  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
-  try
-    FXSLTErrors.Clear;
+  FXSLTErrors.Clear;
 
-    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(stylesheet).NodePtr), Res);
-    if Result then
-      Doc := TXMLDocument.Create(Res, True);
-  finally
-    TXSLTThreadErrorContext.Stop
-  end;
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(stylesheet).NodePtr), Res, XSLTError);
+  if Result then
+    Doc := TXMLDocument.Create(Res, True);
 end;
 
 function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean;
 begin
-  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
-  try
-    FXSLTErrors.Clear;
+  FXSLTErrors.Clear;
 
-    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S);
-  finally
-    TXSLTThreadErrorContext.Stop
-  end;
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
 end;
 
 function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
 begin
-  TXSLTThreadErrorContext.Start(Self, XSLTErrorHandler);
-  try
-    FXSLTErrors.Clear;
+  FXSLTErrors.Clear;
 
-    Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S);
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
+end;
 
-  finally
-    TXSLTThreadErrorContext.Stop
+function TXMLDocument.Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Stream, XSLTError);
+end;
+
+function TXMLDocument.TransformNode(const stylesheet: IXMLDocument): string;
+begin
+  FXSLTErrors.Clear;
+
+  xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
+end;
+
+function TXMLDocument.TransformNodeToObject(const stylesheet, output: IXMLDocument): Boolean;
+var
+  Doc: XmlDocPtr;
+begin
+  FXSLTErrors.Clear;
+
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
+  if Result then
+  begin
+    xmlFreeDoc(xmlDocPtr(NodePtr));
+    TXMLDocument(output).NodePtr := xmlNodePtr(Doc);
   end;
+end;
+
+function TXMLDocument.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+begin
+  FXSLTErrors.Clear;
+
+  Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), output, XSLTError);
 end;
 
 function TXMLDocument.Validate: IXMLParseError;
@@ -3128,11 +3226,6 @@ begin
     Exit(FSuccessError)
   else
     Result := Errors.MainError;
-end;
-
-procedure TXMLDocument.XSLTError(const Msg: string);
-begin
-  FXSLTErrors.FList.Add(TXSLTError.Create(Msg) as IXSLTError);
 end;
 
 function TXMLDocument.ToString: string;
@@ -3563,6 +3656,41 @@ procedure TXMLNsNode.Set_Text(const Text: string);
 begin
   xmlFree(NsPtr.href);
   NsPtr.href := xmlStrdup(xmlCharPtr(Utf8Encode(Text)));
+end;
+
+function TXMLNsNode.Transform(const stylesheet: IXMLDocument; out S: string): Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.TransformNode(const stylesheet: IXMLDocument): string;
+begin
+  Result := '';
+end;
+
+function TXMLNsNode.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+begin
+  Result := False;
+end;
+
+function TXMLNsNode.TransformNodeToObject(const stylesheet, output: IXMLDocument): Boolean;
+begin
+  Result := False;
 end;
 
 { TXMLNsAttribute }

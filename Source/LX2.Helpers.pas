@@ -39,6 +39,7 @@ type
 
   xmlDocErrorHandler  = procedure(const error: xmlError) of object;
   xmlResourceLoader   = function(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer of object;
+  xsltErrorHandler    = procedure(const Msg: string) of object;
 
   xmlNamespace = record
     Prefix: RawByteString;
@@ -82,47 +83,51 @@ type
     function  GetValue: RawByteString;
     procedure SetNodeName(const Value: RawByteString); inline;
   public
+    function  AddChild(const Name: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
+    function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
+    function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
     function  ChildElementCount: NativeInt; inline;
-    function  NextElementSibling: xmlNodePtr; inline;
+    function  CloneNode(Deep: Boolean): xmlNodePtr; inline;
+    function  Contains(const Node: xmlNodePtr): Boolean; inline;
     function  FirstElementChild: xmlNodePtr; inline;
-    function  LastElementChild: xmlNodePtr; inline;
-    function  PreviousElementSibling: xmlNodePtr; inline;
+    function  GetAttribute(const Name: RawByteString): RawByteString; inline;
+    function  GetAttributeNode(const name: RawByteString): xmlAttrPtr; overload;
+    function  GetAttributeNodeNs(const namespaceURI, name: RawByteString): xmlAttrPtr; overload;
+    function  GetAttributeNs(const NamespaceURI, Name: RawByteString): RawByteString; inline;
+    function  GetElementsByTagName(const Name: RawByteString): xmlNodeArray;
+    function  GetNext(Root: xmlNodePtr): xmlNodePtr;
+    function  GetRootNode: xmlNodePtr; inline;
     function  HasAttribute(const Name: RawByteString): Boolean; inline;
     function  HasAttributeNs(const NamespaceURI, Name: RawByteString): Boolean; inline;
-    function  GetAttributeNs(const NamespaceURI, Name: RawByteString): RawByteString; inline;
-    function  SetAttributeNs(const NamespaceURI, Name: RawByteString; const Value: RawByteString): xmlAttrPtr; inline;
+    function  HasAttributes: Boolean; inline;
+    function  HasChildNodes: Boolean; inline;
+    function  InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
     function  IsBlank: Boolean; inline;
+    function  IsDefaultNamespace(const namespaceURI: RawByteString): Boolean; inline;
     function  IsText: Boolean; inline;
+    function  LastElementChild: xmlNodePtr; inline;
+    function  NextElementSibling: xmlNodePtr; inline;
+    property  Path: RawByteString read GetPath;
+    function  PreviousElementSibling: xmlNodePtr; inline;
+    procedure ReconciliateNs; inline;
+    procedure RemoveAttribute(const name: RawByteString); inline;
+    procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
+    function  RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr; inline;
+    function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr; inline;
     function  SearchNs(const Prefix: RawByteString): xmlNsPtr; overload; inline;
     function  SearchNs(const Prefix: xmlCharPtr): xmlNsPtr; overload; inline;
     function  SearchNsByRef(const href: RawByteString): xmlNsPtr; overload; inline;
     function  SearchNsByRef(const href: xmlCharPtr): xmlNsPtr; overload; inline;
-    function  GetAttributeNode(const name: RawByteString): xmlAttrPtr; overload;
-    function  GetAttributeNodeNs(const namespaceURI, name: RawByteString): xmlAttrPtr; overload;
-    procedure ReconciliateNs; inline;
-    function  XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
-    property  Path: RawByteString read GetPath;
-    property  Value: RawByteString read GetValue;
-    function  AddChild(const Name: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
-    function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
-    function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
-    function  CloneNode(Deep: Boolean): xmlNodePtr; inline;
-    function  GetRootNode: xmlNodePtr; inline;
-    function  HasChildNodes: Boolean; inline;
-    function  InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
-    function  RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr; inline;
-    function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr; inline;
     function  SelectNodes(const QueryString: RawByteString; const Namespaces: xmlNamespaces = nil): xmlNodeArray;
     function  SelectSingleNode(const QueryString: RawByteString): xmlNodePtr;
-    function  GetElementsByTagName(const Name: RawByteString): xmlNodeArray;
-    function  GetAttribute(const Name: RawByteString): RawByteString; inline;
     procedure SetAttribute(const Name: RawByteString; const Value: RawByteString);
-    procedure RemoveAttribute(const name: RawByteString); inline;
-    procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
-    function  Contains(const Node: xmlNodePtr): Boolean; inline;
-    function  HasAttributes: Boolean; inline;
-    function  IsDefaultNamespace(const namespaceURI: RawByteString): Boolean; inline;
-    function  GetNext(Root: xmlNodePtr): xmlNodePtr;
+    function  SetAttributeNs(const NamespaceURI, Name: RawByteString; const Value: RawByteString): xmlAttrPtr; inline;
+    function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    property  Value: RawByteString read GetValue;
+    function  XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
@@ -215,9 +220,10 @@ type
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Encoding: string = 'UTF-8'; const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
-    function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean; overload;
-    function  Transform(const stylesheet: xmlDocPtr; out S: string): Boolean; overload;
-    function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil; ResourceLoader: xmlResourceLoader = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
@@ -228,6 +234,11 @@ type
   PXmlErrorCallback = ^TXmlErrorCallback;
   TXmlErrorCallback = record
     Handler: xmlDocErrorHandler;
+  end;
+
+  PXsltErrorCallback = ^TXsltErrorCallback;
+  TXsltErrorCallback = record
+    Handler: xsltErrorHandler;
   end;
 
   PXmlResourceCallback = ^TXmlResourceCallback;
@@ -264,6 +275,59 @@ begin
   except
     Result := Ord(XML_ERR_INTERNAL_ERROR);
   end;
+end;
+
+procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl varargs;
+begin
+  if ctx <> nil then
+  begin
+    PXsltErrorCallback(ctx).Handler(msg);
+  end;
+end;
+
+function ParseStylesheet(const stylesheet: xmlDocPtr): xsltStylesheetPtr;
+begin
+  XSLTLib.Initialize;
+
+  // Workaround xsltFreeStylesheet frees stylesheet document
+  var clone := xmlCopyDoc(stylesheet, 1);
+  if clone = nil then
+    Exit(nil);
+
+  Result := xsltParseStylesheetDoc(clone);
+
+  if Result = nil then
+    xmlFreeDoc(clone);
+end;
+
+function XsltTransform(const stylesheet: xmlDocPtr; doc: xmlDocPtr; node: xmlNodePtr; var style: xsltStylesheetPtr; var output: xmlDocPtr; errorHandler: xsltErrorHandler): Boolean;
+var
+  params: PAnsiChar;
+  ecb: TXsltErrorCallback;
+begin
+  Result := False;
+
+  style := ParseStylesheet(stylesheet);
+  if style = nil then
+    Exit;
+
+  var ctxt := xsltNewTransformContext(style, doc);
+  if ctxt <> nil then
+  begin
+    ctxt.initialContextDoc := doc;
+    ctxt.initialContextNode := node;
+    if Assigned(errorHandler) then
+    begin
+      ecb.Handler := errorHandler;
+      xsltSetTransformErrorFunc(ctxt, @ecb, xsltErrorCallback);
+    end;
+    output := xsltApplyStylesheetUser(style, doc, params, nil, nil, ctxt);
+    Result := output <> nil;
+  end;
+  xsltFreeTransformContext(ctxt);
+
+  if not Result then
+    xsltFreeStylesheet(style);
 end;
 
 { xmlNamespacesHelper }
@@ -918,6 +982,63 @@ begin
   XmlFree(Escaped);
 end;
 
+function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+begin
+  Result := XsltTransform(stylesheet, Self.doc, @Self, style, doc, errorHandler);
+  xsltFreeStylesheet(style);
+end;
+
+function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+  output: xmlDocPtr;
+  text: xmlCharPtr;
+  len: Integer;
+begin
+  Result := XsltTransform(stylesheet, Self.doc, @Self, style, output, errorHandler);
+  if Result then
+  begin
+    if xsltSaveResultToString(text, len, output, style) = 0 then
+    begin
+      SetString(S, text, len);
+      Result := True;
+      xmlFree(text);
+    end;
+    xmlFreeDoc(output);
+  end;
+  xsltFreeStylesheet(style);
+end;
+
+function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;
+var
+  Text: RawByteString;
+begin
+  Result := Transform(stylesheet, Text, errorHandler);
+  if Result then
+    S := UTF8ToUnicodeString(Text);
+end;
+
+function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+  output: xmlDocPtr;
+  buf: xmlOutputBufferPtr;
+begin
+  Result := XsltTransform(stylesheet, Self.doc, @Self, style, output, errorHandler);
+  if Result then
+  begin
+    var Buffer := xmlOutputBufferCreateIO(@IOWriteStream, @IOCloseStream, Pointer(Stream), nil);
+    if Buffer <> nil then
+      xsltSaveResultTo(buf, output, style)
+    else
+      Result := False;
+    xmlFreeDoc(output);
+  end;
+  xsltFreeStylesheet(style);
+end;
+
 { xmlAttrHelper }
 
 function xmlAttrHelper.GetBaseURI: RawByteString;
@@ -1363,84 +1484,60 @@ begin
   XmlFree(Data);
 end;
 
-function ParseStylesheet(const stylesheet: xmlDocPtr): xsltStylesheetPtr;
-begin
-  XSLTLib.Initialize;
-
-  // Workaround xsltFreeStylesheet frees stylesheet document
-  var clone := xmlCopyDoc(stylesheet, 1);
-  if clone = nil then
-    Exit(nil);
-
-  Result := xsltParseStylesheetDoc(clone);
-
-  if Result = nil then
-    xmlFreeDoc(clone);
-end;
-
-function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr): Boolean;
-begin
-  Result := False;
-
-  var style := ParseStylesheet(stylesheet);
-  if style = nil then
-    Exit;
-
-  doc := xsltApplyStylesheet(style, @Self, nil);
-  Result := doc <> nil;
-
-  xsltFreeStylesheet(style);
-end;
-
-function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: string): Boolean;
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler): Boolean;
 var
-  doc: xmlDocPtr;
+  style: xsltStylesheetPtr;
+begin
+  Result := XsltTransform(stylesheet, @Self, @Self, style, doc, errorHandler);
+  if Result then
+    xsltFreeStylesheet(style);
+end;
+
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+  output: xmlDocPtr;
   text: xmlCharPtr;
   len: Integer;
 begin
-  Result := False;
-
-  var style := ParseStylesheet(stylesheet);
-  if style = nil then
-    Exit;
-
-  doc := xsltApplyStylesheet(style, @Self, nil);
-  if doc <> nil then
+  Result := XsltTransform(stylesheet, @Self, @Self, style, output, errorHandler);
+  if Result then
   begin
-    if xsltSaveResultToString(text, len, doc, style) = 0 then
-    begin
-      S := xmlCharToStr(text, len);
-      Result := True;
-      xmlFree(text);
-    end;
-    xmlFreeDoc(doc);
-  end;
-
-  xsltFreeStylesheet(style);
-end;
-
-function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString): Boolean;
-var
-  doc: xmlDocPtr;
-  text: xmlCharPtr;
-  len: Integer;
-begin
-  Result := False;
-
-  var style := ParseStylesheet(stylesheet);
-  if style = nil then
-    Exit;
-
-  doc := xsltApplyStylesheet(style, @Self, nil);
-  if doc <> nil then
-  begin
-    if xsltSaveResultToString(text, len, doc, style) = 0 then
+    if xsltSaveResultToString(text, len, output, style) = 0 then
     begin
       SetString(S, text, len);
       Result := True;
       xmlFree(text);
     end;
-    xmlFreeDoc(doc);
+    xmlFreeDoc(output);
+  end;
+  xsltFreeStylesheet(style);
+end;
+
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;
+var
+  Text: RawByteString;
+begin
+  Result := Transform(stylesheet, Text, errorHandler);
+  if Result then
+    S := UTF8ToUnicodeString(Text);
+end;
+
+function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+  output: xmlDocPtr;
+  buf: xmlOutputBufferPtr;
+begin
+  Result := XsltTransform(stylesheet, @Self, @Self, style, output, errorHandler);
+  if Result then
+  begin
+    var Buffer := xmlOutputBufferCreateIO(@IOWriteStream, @IOCloseStream, Pointer(Stream), nil);
+    if Buffer <> nil then
+      xsltSaveResultTo(buf, output, style)
+    else
+      Result := False;
+    xmlFreeDoc(output);
   end;
   xsltFreeStylesheet(style);
 end;
