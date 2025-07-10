@@ -33,23 +33,23 @@ begin
 
     TestStart('FORMATTED OUTPUT');
 
-    WriteLn(Doc.ToString(True));
+    WriteLn(Doc.ToString('', True));
 
     TestEnd(True);
 
     TestStart('NON FORMATTED');
 
-    WriteLn(Doc.ToString(False));
+    WriteLn(Doc.ToString('', False));
 
     TestEnd(True);
 
     TestStart('C14N');
 
-    var C14NDoc := Doc.Canonicalize;
+    var C14N := Doc.Canonicalize;
 
-    if TestEnd(C14NDoc <> nil) then
+    if TestEnd(C14N <> '') then
     begin
-      WriteLn(C14NDoc.Xml);
+      WriteLn(C14N);
       TestEnd(True);
     end;
 

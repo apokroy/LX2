@@ -41,7 +41,7 @@ begin
 
     TestStart('TRANSFORM');
     if TestEnd(Doc.Transform(Style, Result)) then
-      WriteLn(Result.ToString(True));
+      WriteLn(Result.ToString('UTF-8', True));
 
     Style.Free;
     Result.Free;
