@@ -57,9 +57,8 @@ WriteLn(Doc.ToString(True));     // Get formatted (True) XML as Delphi string (U
 
 WriteLn(Doc.Canonicalized);      // Output canonicalized XML 
 
-C14NDoc.Save(MyStream, 'UTF-8'); // Saves XML to provided TStream object 
+Doc.Save(MyStream, 'UTF-8'); // Saves XML to provided TStream object 
 
-C14NDoc.Free;                    // xmlFreeDoc(C14NDoc);
 Doc.Free;                        // xmlFreeDoc(Doc);
 ```
 For example xmlDoc.CreateFromFile wraps this code:
