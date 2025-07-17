@@ -362,14 +362,14 @@ begin
       Rtti := Rtti.Next;
     end;
 
-    if Rtti = nil then
-    begin
-      GetMem(Rtti, SizeOf(Rtti^));
-      Initialize(Rtti^);
-      Rtti.ClassType := ClassType;
-      Rtti.Next := RttiList;
-      RttiList := Rtti;
-    end;
+    if Rtti <> nil then
+      Exit;
+
+    GetMem(Rtti, SizeOf(Rtti^));
+    Initialize(Rtti^);
+    Rtti.ClassType := ClassType;
+    Rtti.Next := RttiList;
+    RttiList := Rtti;
 
     var Typ := RttiContext.GetType(ClassType) as TRttiInstanceType;
     var Intrfs := Typ.GetImplementedInterfaces;
