@@ -4,13 +4,21 @@ interface
 
 uses
   System.Types, System.SysUtils, System.Classes, System.Generics.Collections,
+  System.Rtti, RttiDispatch,
   libxml2.API, LX2.Types, LX2.Helpers, LX2.DOM;
 
 type
   TXMLDocument = class;
   TXMLNode = class;
 
-  TXMLError = class(TInterfacedObject, IXMLParseError)
+  {$M+}
+  TXMLBaseClass = class of TXMLBase;
+
+  TXMLBase = class(TDispatchInvokable)
+  end;
+  {$M-}
+
+  TXMLError = class(TXMLBase, IXMLParseError)
   private
     FError: TXmlParseError;
   protected
@@ -34,9 +42,9 @@ type
     property  FilePos: Integer read Get_filepos;
   end;
 
-  TXMLErrors = class(TNoRefCountObject, IXMLErrors)
+  TXMLErrors = class(TDispatchInvokable, IXMLErrors)
   private type
-    TEnumerator = class(TInterfacedObject, IXMLErrorEnumerator)
+    TEnumerator = class(TDispatchInvokable, IXMLErrorEnumerator)
     private
       FOwner: TXMLErrors;
       FIndex: NativeInt;
@@ -64,7 +72,7 @@ type
     property  Items[Index: NativeUInt]: IXMLParseError read Get_Item; default;
   end;
 
-  TXSLTError = class(TInterfacedObject, IXSLTError)
+  TXSLTError = class(TXMLBase, IXSLTError)
   private
     FReason: string;
   protected
@@ -74,9 +82,9 @@ type
     property  Reason: string read FReason;
   end;
 
-  TXSLTErrors = class(TNoRefCountObject, IXSLTErrors)
+  TXSLTErrors = class(TDispatchInvokable, IXSLTErrors)
   private type
-    TEnumerator = class(TInterfacedObject, IXSLTErrorEnumerator)
+    TEnumerator = class(TDispatchInvokable, IXSLTErrorEnumerator)
     private
       FOwner: TXSLTErrors;
       FIndex: NativeInt;
@@ -99,7 +107,7 @@ type
     property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
   end;
 
-  TXMLNodeEnumerator = class(TInterfacedObject, IXMLEnumerator)
+  TXMLNodeEnumerator = class(TXMLBase, IXMLEnumerator)
   private
   protected
     function  DoGetCurrent: xmlNodePtr; virtual; abstract;
@@ -113,7 +121,7 @@ type
     function  MoveNext: Boolean;
   end;
 
-  TXMLCustomNodeList = class(TInterfacedObject, IXMLNodeList)
+  TXMLCustomNodeList = class(TXMLBase, IXMLNodeList)
   protected
     function  DoNextNode: xmlNodePtr; virtual; abstract;
     function  CreateEnumerator: TXMLNodeEnumerator; virtual; abstract;
@@ -220,11 +228,11 @@ type
   /// <summary>
   /// Node.NsDef & Node.properites enumeration <see cref="TXMLNsNode"/>
   /// </summary>
-  TXMLAttributeList = class(TInterfacedObject, IXMLNodeList, IXMLNamedNodeMap)
+  TXMLAttributeList = class(TXMLBase, IXMLNodeList, IXMLNamedNodeMap)
   protected type
     TEnumState = (esStart, esNs, esAttr);
 
-    TEnumerator = class(TInterfacedObject, IXMLEnumerator)
+    TEnumerator = class(TDispatchInvokable, IXMLEnumerator)
     private
       FParent: xmlNodePtr;
       FCurrent: Pointer;
@@ -329,7 +337,7 @@ type
     property  NamespaceURI: string read FNamespaceURI;
   end;
 
-  TXMLNode = class(TInterfacedObject, IXMLNode)
+  TXMLNode = class(TXMLBase, IXMLNode)
   private
     FXSLTErrors: TXSLTErrors;
     procedure XPathErrorHandler(const error: xmlError);
@@ -338,7 +346,7 @@ type
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
     function  CloneNode(Deep: WordBool): IXMLNode;
-    function  Get_Attributes: IXMLAttributes;
+    function  Get_Attributes: IXMLAttributes; virtual;
     function  Get_BaseName: string;
     function  Get_ChildNodes: IXMLNodeList;
     function  Get_FirstChild: IXMLNode;
@@ -400,7 +408,7 @@ type
   /// <summary>
   /// MS XML threats NS declartion as Node, while libxml2 does not so wee need handle this scpecial case
   /// </summary>
-  TXMLNsNode = class(TInterfacedObject, IXMLNode)
+  TXMLNsNode = class(TXMLBase, IXMLNode)
   protected
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -496,6 +504,7 @@ type
 
   TXMLElement = class(TXMLNode, IXMLElement)
   public
+    function  Get_Attributes: IXMLAttributes; override;
     function  GetAttribute(const Name: string): string;
     procedure SetAttribute(const Name: string; Value: string); overload;
     procedure SetAttribute(const Name: string; Value: Int64); overload;
@@ -567,7 +576,7 @@ type
 
   end;
 
-  TXMLSchemaCollection = class(TInterfacedObject, IXMLSchemaCollection)
+  TXMLSchemaCollection = class(TXMLBase, IXMLSchemaCollection)
   private const
     cImport = 'import';
     cInclude = 'include';
@@ -1935,6 +1944,7 @@ begin
     TXMLDocument(Node.doc._private)._AddRef;
 
   FXSLTErrors := TXSLTErrors.Create;
+  FXSLTErrors._AddRef;
 
   {$IFDEF DEBUG}
   AtomicIncrement(DebugObjectCount);
@@ -1956,7 +1966,7 @@ begin
       xmlFreeNode(NodePtr);
   end;
 
-  FreeAndNil(FXSLTErrors);
+  FXSLTErrors._Release;
 
   {$IFDEF DEBUG}
   AtomicDecrement(DebugObjectCount);
@@ -2045,7 +2055,7 @@ end;
 
 function TXMLNode.Get_Attributes: IXMLAttributes;
 begin
-  Result := TXMLAttributes.Create(NodePtr);
+  Result := nil;
 end;
 
 function TXMLNode.Get_BaseName: string;
@@ -2309,7 +2319,10 @@ end;
 
 function TXMLAttribute.Get_Name: string;
 begin
-  Result := UTF8ToUnicodeString(AttrPtr.Name);
+  if xmlAttrPtr(NodePtr).ns = nil then
+    Result := xmlCharToStr(xmlAttrPtr(NodePtr).name)
+  else
+    Result := xmlCharToStr(xmlAttrPtr(NodePtr).ns.prefix) + ':' + xmlCharToStr(xmlAttrPtr(NodePtr).name);
 end;
 
 function TXMLAttribute.Get_OwnerElement: IXMLElement;
@@ -2449,6 +2462,11 @@ end;
 function TXMLElement.GetElementsByTagName(const tagName: string): IXMLNodeList;
 begin
   Result := TXMLElementList.Create(NodePtr, False, tagName);
+end;
+
+function TXMLElement.Get_Attributes: IXMLAttributes;
+begin
+  Result := TXMLAttributes.Create(NodePtr);
 end;
 
 function TXMLElement.Get_TagName: string;
@@ -2798,6 +2816,7 @@ begin
 
   Create(xmlNewDoc(nil), True);
   FSuccessError := TXMLError.Create;
+  FSuccessError._AddRef;
 end;
 
 constructor TXMLDocument.Create(doc: xmlDocPtr; DocOwner: Boolean);
@@ -2805,7 +2824,7 @@ begin
   inherited Create(xmlNodePtr(doc));
   FDocOwner := DocOwner;
   FErrors := TXMLErrors.Create;
-  FSuccessError := nil;
+  FErrors._AddRef;
   FValidateOnParse := True;
 end;
 
@@ -2818,7 +2837,8 @@ begin
     NodePtr := nil;
   end;
   inherited;
-  FreeAndNil(FErrors);
+  FErrors._Release;
+  FSuccessError._Release;
 end;
 
 function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
@@ -3360,6 +3380,7 @@ constructor TXMLSchemaCollection.Create;
 begin
   inherited Create;
   FErrors := TXMLErrors.Create;
+  FErrors._AddRef;
   FItems := TItems.Create(True);
   FSchemas := TSchemas.Create(True);
 end;
@@ -3368,7 +3389,7 @@ destructor TXMLSchemaCollection.Destroy;
 begin
   FreeAndNil(FItems);
   FreeAndNil(FSchemas);
-  FreeAndNil(FErrors);
+  FErrors._Release;
   inherited;
 end;
 
@@ -3796,8 +3817,6 @@ procedure TXMLNsAttribute.Set_Value(const Value: string);
 begin
   NodeValue := Value;
 end;
-
-{ TXMLSchemaCollection.TSchemas }
 
 initialization
   GlobalLock := TObject.Create;

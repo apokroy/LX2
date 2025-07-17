@@ -31,7 +31,7 @@ interface
 
 uses
   System.Types, System.SysUtils, System.Classes,
-  LX2.Types, libxml2.API;
+  RttiDispatch, LX2.Types, libxml2.API;
 
 const
   NODE_INVALID = $00000000;
@@ -51,6 +51,8 @@ const
 type
   DOMNodeType = Cardinal;
 
+  {$M+}
+
   IXMLNode      = interface;
   IXMLElement   = interface;
   IXMLAttribute = interface;
@@ -59,7 +61,7 @@ type
   /// <summary>
   /// Base interface for all xml enumerators
   /// </summary>
-  IXMLEnumerator = interface
+  IXMLEnumerator = interface(IDispatchInvokable)
     ['{D54A75D2-9D6F-4219-A895-469BFD549404}']
     function  GetCurrent: IXMLNode;
     function  MoveNext: Boolean;
@@ -73,7 +75,7 @@ type
   /// <remarks>
   /// MS IXMLDOMParseError compatible
   /// </remarks>
-  IXMLParseError = interface
+  IXMLParseError = interface(IDispatchInvokable)
     ['{AE5CF111-97C1-4FD3-BFB0-559894DA43B4}']
     function Get_errorCode: Integer;
     function Get_url: string;
@@ -96,7 +98,7 @@ type
   /// <summary>
   /// Enumerator for IXMLParseError collections
   /// </summary>
-  IXMLErrorEnumerator = interface
+  IXMLErrorEnumerator = interface(IDispatchInvokable)
     ['{B0B4327A-A186-4697-A830-68B62B3A525E}']
     function GetCurrent: IXMLParseError;
     function MoveNext: Boolean;
@@ -109,7 +111,7 @@ type
   /// <remarks>
   /// MS IXMLDOMParseErrorCollection compatible, except IXMLParseError is like IXMLDOMParseError, not IXMLDOMParseError2
   /// </remarks>
-  IXMLErrors = interface
+  IXMLErrors = interface(IDispatchInvokable)
     ['{C48BAB36-1029-48B6-BC85-79E0FB9C23BC}']
     function  Get_Count: NativeUInt;
     function  Get_Item(Index: NativeUInt): IXMLParseError;
@@ -127,7 +129,7 @@ type
   /// <summary>
   /// Informaion about XSLT transformation error
   /// </summary>
-  IXSLTError = interface
+  IXSLTError = interface(IDispatchInvokable)
     ['{4B2EADC0-4C82-4101-A1E4-BC66F975ABB5}']
     function Get_reason: string;
     property Reason: string read Get_reason;
@@ -136,7 +138,7 @@ type
   /// <summary>
   /// Enumerator for IXSLTError collections
   /// </summary>
-  IXSLTErrorEnumerator = interface
+  IXSLTErrorEnumerator = interface(IDispatchInvokable)
     ['{F23A8251-D36B-41C8-BD01-57578FE1674C}']
     function GetCurrent: IXSLTError;
     property Current: IXSLTError read GetCurrent;
@@ -146,7 +148,7 @@ type
   /// <summary>
   /// Collection of IXSLTError
   /// </summary>
-  IXSLTErrors = interface
+  IXSLTErrors = interface(IDispatchInvokable)
     ['{CD2275A7-3989-4CDE-BF17-5158193EA18C}']
     function  Get_Count: NativeUInt;
     function  Get_Item(Index: NativeUInt): IXSLTError;
@@ -159,7 +161,7 @@ type
   /// <summary>
   /// Enumerator for IXMLAttribute collections
   /// </summary>
-  IXMLAttributesEnumerator = interface
+  IXMLAttributesEnumerator = interface(IDispatchInvokable)
     ['{099A865F-3210-4D18-A318-A6D259E9CE55}']
     function  GetCurrent: IXMLAttribute;
     function  MoveNext: Boolean;
@@ -173,7 +175,7 @@ type
   /// <remarks>
   /// MS IXMLDOMNodeList compatible & Delphi enumerable interface
   /// </remarks>
-  IXMLNodeList = interface
+  IXMLNodeList = interface(IDispatchInvokable)
     ['{F34F86A7-8AF4-4374-B8E7-EEB9FE193685}']
     { MSXMLDOMNodeList }
     function  Get_Item(index: NativeInt): IXMLNode;
@@ -197,17 +199,14 @@ type
   /// </remarks>
   IXMLNamedNodeMap = interface(IXMLNodeList)
     ['{1D8272DD-58C6-4E1D-8327-7E678F30F8D5}']
-    ///<summary>
-    /// Collection of nodes
-    ///</summary>
     function GetNamedItem(const Name: string): IXMLNode;
     function SetNamedItem(const NewItem: IXMLNode): IXMLNode;
     function RemoveNamedItem(const Name: string): IXMLNode;
     function GetQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
     function RemoveQualifiedItem(const BaseName: string; const namespaceURI: string): IXMLNode;
-    function getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
-    function setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
-    function removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    function GetNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    function SetNamedItemNS(const NewItem: IXMLNode): IXMLNode;
+    function RemoveNamedItemNS(const namespaceURI, localName: string): IXMLNode;
   end;
 
   ///<summary>
@@ -221,11 +220,7 @@ type
     ['{86C5ACFD-9460-4B71-91BA-E374A0852073}']
     { MSXMLDOMNodeList }
     function  Get_Attr(Index: NativeInt): IXMLAttribute;
-    function  Get_Length: NativeInt;
-    function  NextNode: IXMLAttribute;
-    procedure Reset;
     property  Item[Index: NativeInt]: IXMLAttribute read Get_Attr; default;
-    property  Length: NativeInt read Get_Length;
     { Delphi enumerable }
     function  GetEnumerator: IXMLAttributesEnumerator;
     function  ToArray: TArray<IXMLAttribute>;
@@ -236,8 +231,29 @@ type
   ///</summary>
   /// <remarks>
   /// </remarks>
-  IXMLNode = interface
+  IXMLNode = interface(IDispatchInvokable)
     ['{D5029FB0-0282-4476-A439-99677C23434A}']
+    {$region 'Getters & Setters'}
+    function  Get_Attributes: IXMLAttributes;
+    function  Get_BaseName: string;
+    function  Get_ChildNodes: IXMLNodeList;
+    function  Get_FirstChild: IXMLNode;
+    function  Get_LastChild: IXMLNode;
+    function  Get_NamespaceURI: string;
+    function  Get_NextSibling: IXMLNode;
+    function  Get_NodeName: string;
+    function  Get_NodeType: DOMNodeType;
+    function  Get_NodeValue: string;
+    function  Get_OwnerDocument: IXMLDocument;
+    function  Get_ParentNode: IXMLNode;
+    function  Get_Prefix: string;
+    function  Get_PreviousSibling: IXMLNode;
+    function  Get_Text: string;
+    function  Get_Xml: string;
+    procedure Set_NodeValue(const Value: string);
+    procedure Set_Text(const text: string);
+    {$endregion}
+
     /// <summary>
     /// Appends NewChild as the end of child nodes ist.
     /// </summary>
@@ -260,27 +276,11 @@ type
     ///  New cloned node
     /// </returns>
     function  CloneNode(Deep: WordBool): IXMLNode;
-    function  Get_Attributes: IXMLAttributes;
-    function  Get_BaseName: string;
-    function  Get_ChildNodes: IXMLNodeList;
-    function  Get_FirstChild: IXMLNode;
-    function  Get_LastChild: IXMLNode;
-    function  Get_NamespaceURI: string;
-    function  Get_NextSibling: IXMLNode;
-    function  Get_NodeName: string;
-    function  Get_NodeType: DOMNodeType;
-    function  Get_NodeValue: string;
-    function  Get_OwnerDocument: IXMLDocument;
-    function  Get_ParentNode: IXMLNode;
-    function  Get_Prefix: string;
-    function  Get_PreviousSibling: IXMLNode;
-    function  Get_Text: string;
-    function  Get_Xml: string;
 
     /// <summary>
     /// Checks that node has any attributtes
     /// </summary>
-    function hasAttributes: Boolean;
+    function  hasAttributes: Boolean;
 
     /// <summary>
     /// Checks that node has children
@@ -313,7 +313,7 @@ type
     /// <remarks>
     ///  In cases where the document contains CDATASections, the normalize operation alone may not be sufficient, since XPointers do not differentiate between Text nodes and CDATASection nodes.
     /// <remarks>
-    procedure normalize;
+    procedure Normalize;
 
     /// <summary>
     /// Removes ChildNode from child nodes list
@@ -354,106 +354,111 @@ type
     /// <summary>
     /// Returns first node that matched XPath expression
     /// </summary>
-    /// <param name="QueryString">
-    /// <param>
+    /// <param name="QueryString">The XPath expression</param>
     /// <returns>
+    ///  first node that matched XPath expression
     /// </returns>
     function  SelectSingleNode(const QueryString: string): IXMLNode;
-
-    procedure Set_NodeValue(const Value: string);
-    procedure Set_Text(const text: string);
-
     function  Transform(const stylesheet: IXMLDocument; out doc: IXMLDocument): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload;
-
     function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload;
     function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload;
     function  TransformNode(const stylesheet: IXMLDocument): string;
 
     /// <summary>
-    ///
+    /// Returns all attributes of a node
     /// </summary>
+    /// <remarks>
+    ///  Collection includes namespaces definitions, that placed before other attributes
+    /// </remarks>
     property  Attributes: IXMLAttributes read Get_Attributes;
 
     /// <summary>
-    ///
+    /// Same as LocalName
     /// </summary>
     property  BaseName: string read Get_BaseName;
 
     /// <summary>
-    ///
+    /// Returns collection of all child nodes
     /// </summary>
+    /// <remarks>
+    /// Collection nil for node types other than XML_ELEMENT
+    /// </remarks>
     property  ChildNodes: IXMLNodeList read Get_ChildNodes;
 
     /// <summary>
-    ///
+    /// First child of node
     /// </summary>
     property  FirstChild: IXMLNode read Get_FirstChild;
 
     /// <summary>
-    ///
+    /// Last child of node
     /// </summary>
     property  LastChild: IXMLNode read Get_LastChild;
 
     /// <summary>
-    ///
+    /// Returns name of node without prefix
     /// </summary>
     property  LocalName: string read Get_BaseName;
 
     /// <summary>
-    ///
+    /// The namespace URI of node or empty string, if no namespace
     /// </summary>
     property  NamespaceURI: string read Get_NamespaceURI;
 
     /// <summary>
-    ///
+    /// Next sibling of node
     /// </summary>
     property  NextSibling: IXMLNode read Get_NextSibling;
 
     /// <summary>
-    ///
+    /// Qualified name of node
     /// </summary>
     property  NodeName: string read Get_NodeName;
 
     /// <summary>
-    ///
+    /// Type of node
     /// </summary>
     property  NodeType: DOMNodeType read Get_NodeType;
 
     /// <summary>
-    ///
+    /// Value of node, depends on type of node
+    /// for Attributes - value of attribute
+    /// for CDATA, Text, Comment, PI - content of node
+    /// for Attribute declaration - default value
+    /// for other types - empty string
     /// </summary>
     property  NodeValue: string read Get_NodeValue write Set_NodeValue;
 
     /// <summary>
-    ///
+    /// Document that owns node or can be nil if node unlinked from tree
     /// </summary>
     property  OwnerDocument: IXMLDocument read Get_OwnerDocument;
 
     /// <summary>
-    ///
+    /// Parent node of this node or nil if node unlinked from tree
     /// </summary>
     property  ParentNode: IXMLNode read Get_ParentNode;
 
     /// <summary>
-    ///
+    /// Namespace prefix of node
     /// </summary>
     property  Prefix: string read Get_Prefix;
 
     /// <summary>
-    ///
+    /// Previous sibling of node
     /// </summary>
     property  PreviousSibling: IXMLNode read Get_PreviousSibling;
 
     /// <summary>
-    ///
+    /// Content of node
     /// </summary>
     property  Text: string read Get_Text write Set_Text;
 
     /// <summary>
-    ///
+    /// XML markup of Node and all of it childrens
     /// </summary>
     property  Xml: string read Get_Xml;
   end;
@@ -464,37 +469,140 @@ type
     function  Get_Value: string;
     procedure Set_Value(const Value: string);
     function  Get_OwnerElement: IXMLElement;
+
+    /// <summary>
+    /// Element to which the attribute belongs
+    /// </summary>
     property  OwnerElement: IXMLElement read Get_OwnerElement;
+
+    /// <summary>
+    /// Qualified name of attribute
+    /// </summary>
     property  Name: string read Get_name;
+
+    /// <summary>
+    /// Value of attribute
+    /// </summary>
     property  Value: string read Get_value write Set_value;
   end;
 
   IXMLElement = interface(IXMLNode)
     ['{3E24AC42-F609-444B-922F-74064C28FF57}']
-    function  AddChild(const Name: string; const Content: string = ''): IXMLElement;
-    function  AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
     function  Get_TagName: string;
+
+    /// <summary>
+    /// Add new element to the of child node list and optionally set it content.
+    /// <param name="Name">Name of new node. Can contain prefix of namespace, namespace muat be accesible up to hierarchy of current node</param>
+    /// <param name="Content">Optional content</param>
+    /// </summary>
+    function  AddChild(const Name: string; const Content: string = ''): IXMLElement;
+
+    /// <summary>
+    /// Add new element to the of child node list and optionally set it content.
+    /// <param name="Name">Local name of new node</param>
+    /// <param name="NamespaceURI">Namespace URI of new node, namespace muat be accesible up to hierarchy of current node</param>
+    /// <param name="Content">Optional content</param>
+    /// </summary>
+    function  AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  GetAttribute(const Name: string): string;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  GetAttributeNode(const Name: string): IXMLAttribute; overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute; overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  GetAttributeNs(const NamespaceURI, Name: string): string;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  HasAttribute(const Name: string): Boolean;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  HasAttributeNs(const NamespaceURI, Name: string): Boolean;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  RemoveAttribute(const Name: string): Boolean;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
+
+    /// <summary>
+    ///
+    /// </summary>
     procedure SetAttribute(const Name: string; Value: string); overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     procedure SetAttribute(const Name: string; Value: Int64); overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     procedure SetAttribute(const Name: string; Value: Boolean); overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     procedure SetAttribute(const Name: string; Value: TDateTime); overload;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
 
+    /// <summary>
+    ///
+    /// </summary>
     function  NextSiblingElement: IXMLElement;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  FirstChildElement: IXMLElement;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  LastChildElement: IXMLElement;
+
+    /// <summary>
+    ///
+    /// </summary>
     function  PreviousSiblingElement: IXMLElement;
 
+    /// <summary>
+    ///
+    /// </summary>
     property  TagName: string read Get_TagName;
   end;
 
@@ -556,12 +664,12 @@ type
     ['{E15B0DD9-82E1-44BF-9DC5-73213AC492EC}']
   end;
 
-  IXMLResolver = interface
+  IXMLResolver = interface(IDispatchInvokable)
     ['{7962DA56-2770-4AFD-86A6-1527D0A1D50E}']
     function  Resolve(const url: string): TBytes;
   end;
 
-  IXMLSchemaCollection = interface
+  IXMLSchemaCollection = interface(IDispatchInvokable)
     ['{EA6126A1-514A-4C6D-A026-C369452ECB42}']
     procedure Add(const namespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver = nil);
     procedure Remove(const namespaceURI: string);
@@ -576,12 +684,30 @@ type
 
   IXMLDocument = interface(IXMLNode)
     ['{8CE71137-BDB3-4A71-A505-EFB6D1181A5F}']
+
+    {$region 'Getters & Setters'}
+    function  Get_Doctype: IXMLDocumentType;
+    function  Get_DocumentElement: IXMLElement;
+    function  Get_ParseError: IXMLParseError;
+    function  Get_PreserveWhiteSpace: Boolean;
+    function  Get_ReadyState: Integer;
+    function  Get_ResolveExternals: Boolean;
+    function  Get_Schemas: IXMLSchemaCollection;
+    function  Get_Url: string;
+    function  Get_ValidateOnParse: Boolean;
+    procedure Set_DocumentElement(const Element: IXMLElement);
+    procedure Set_PreserveWhiteSpace(isPreserving: Boolean);
+    procedure Set_ResolveExternals(isResolving: Boolean);
+    procedure Set_Schemas(const Value: IXMLSchemaCollection);
+    procedure Set_ValidateOnParse(isValidating: Boolean);
+    {$endregion}
+
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
-    function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
+    function  CreateAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
     function  CreateCDATASection(const data: string): IXMLCDATASection;
     function  CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
     function  CreateComment(const data: string): IXMLComment;
@@ -592,21 +718,12 @@ type
     function  CreateProcessingInstruction(const target: string; const data: string): IXMLProcessingInstruction;
     function  CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
     function  CreateTextNode(const data: string): IXMLText;
-    function  Get_Doctype: IXMLDocumentType;
-    function  Get_DocumentElement: IXMLElement;
-    function  Get_ParseError: IXMLParseError;
-    function  Get_PreserveWhiteSpace: Boolean;
-    function  Get_ReadyState: Integer;
-    function  Get_ResolveExternals: Boolean;
-    function  Get_Schemas: IXMLSchemaCollection;
-    function  Get_Url: string;
-    function  Get_ValidateOnParse: Boolean;
-    function  getElementById(const elementId: string): IXMLElement;
+    function  GetElementById(const elementId: string): IXMLElement;
     function  GetElementsByTagName(const tagName: string): IXMLNodeList;
-    function  getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
+    function  GetElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
     function  GetErrors: IXMLErrors;
     function  GetXSLTErrors: IXSLTErrors;
-    function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
+    function  ImportNode(const node: IXMLNode; deep: Boolean): IXMLNode;
     function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
     function  Load(const Data: TBytes): Boolean; overload;
     function  Load(const URL: string): Boolean; overload;
@@ -618,11 +735,6 @@ type
     procedure ReconciliateNs;
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
-    procedure Set_DocumentElement(const Element: IXMLElement);
-    procedure Set_PreserveWhiteSpace(isPreserving: Boolean);
-    procedure Set_ResolveExternals(isResolving: Boolean);
-    procedure Set_Schemas(const Value: IXMLSchemaCollection);
-    procedure Set_ValidateOnParse(isValidating: Boolean);
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Encoding: string; const Format: Boolean = False): string; overload;
