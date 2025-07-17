@@ -57,8 +57,8 @@ type
     FList: TInterfaceList;
     FIndex: NativeInt;
   protected
-    function  Get_Count: NativeUInt; inline;
-    function  Get_Item(Index: NativeUInt): IXMLParseError; inline;
+    function  Get_Count: NativeInt; inline;
+    function  Get_Item(Index: NativeInt): IXMLParseError; inline;
     function  Get__newEnum: IXMLErrorEnumerator;
     function  Get_next: IXMLParseError;
   public
@@ -68,8 +68,8 @@ type
     procedure Reset;
     function  MainError: IXMLParseError;
     function  GetEnumerator: IXMLErrorEnumerator;
-    property  Count: NativeUInt read Get_Count;
-    property  Items[Index: NativeUInt]: IXMLParseError read Get_Item; default;
+    property  Count: NativeInt read Get_Count;
+    property  Items[Index: NativeInt]: IXMLParseError read Get_Item; default;
   end;
 
   TXSLTError = class(TXMLBase, IXSLTError)
@@ -96,15 +96,15 @@ type
   private
     FList: TInterfaceList;
   protected
-    function  Get_Count: NativeUInt; inline;
-    function  Get_Item(Index: NativeUInt): IXSLTError; inline;
+    function  Get_Count: NativeInt; inline;
+    function  Get_Item(Index: NativeInt): IXSLTError; inline;
   public
     constructor Create;
     destructor Destroy; override;
     procedure Clear;
     function  GetEnumerator: IXSLTErrorEnumerator;
-    property  Count: NativeUInt read Get_Count;
-    property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
+    property  Count: NativeInt read Get_Count;
+    property  Items[Index: NativeInt]: IXSLTError read Get_Item; default;
   end;
 
   TXMLNodeEnumerator = class(TXMLBase, IXMLEnumerator)
@@ -2697,12 +2697,12 @@ begin
   Result := TEnumerator.Create(Self);
 end;
 
-function TXMLErrors.Get_Count: NativeUInt;
+function TXMLErrors.Get_Count: NativeInt;
 begin
   Result := FList.Count;
 end;
 
-function TXMLErrors.Get_Item(Index: NativeUInt): IXMLParseError;
+function TXMLErrors.Get_Item(Index: NativeInt): IXMLParseError;
 begin
   Result := FList[Index] as IXMLParseError;
 end;
@@ -2794,12 +2794,12 @@ begin
   Result := TEnumerator.Create(Self);
 end;
 
-function TXSLTErrors.Get_Count: NativeUInt;
+function TXSLTErrors.Get_Count: NativeInt;
 begin
   Result := FList.Count;
 end;
 
-function TXSLTErrors.Get_Item(Index: NativeUInt): IXSLTError;
+function TXSLTErrors.Get_Item(Index: NativeInt): IXSLTError;
 begin
   Result := FList[Index] as IXSLTError;
 end;

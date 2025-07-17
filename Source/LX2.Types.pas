@@ -392,6 +392,8 @@ label
   HasSpaces;
 begin
   // Most cases
+  if S = '' then
+    Exit('');
   var Src := PWord(Pointer(S));
   while Src^ <> 0 do
   begin

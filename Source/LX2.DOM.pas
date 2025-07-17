@@ -113,8 +113,8 @@ type
   /// </remarks>
   IXMLErrors = interface(IDispatchInvokable)
     ['{C48BAB36-1029-48B6-BC85-79E0FB9C23BC}']
-    function  Get_Count: NativeUInt;
-    function  Get_Item(Index: NativeUInt): IXMLParseError;
+    function  Get_Count: NativeInt;
+    function  Get_Item(Index: NativeInt): IXMLParseError;
     function  GetEnumerator: IXMLErrorEnumerator;
     function  Get__newEnum: IXMLErrorEnumerator;
     function  Get_next: IXMLParseError;
@@ -122,8 +122,8 @@ type
     procedure Reset;
     property  _newEnum: IXMLErrorEnumerator read Get__newEnum;
     property  Next: IXMLParseError read Get_next;
-    property  Count: NativeUInt read Get_Count;
-    property  Items[Index: NativeUInt]: IXMLParseError read Get_Item; default;
+    property  Count: NativeInt read Get_Count;
+    property  Items[Index: NativeInt]: IXMLParseError read Get_Item; default;
   end;
 
   /// <summary>
@@ -150,12 +150,12 @@ type
   /// </summary>
   IXSLTErrors = interface(IDispatchInvokable)
     ['{CD2275A7-3989-4CDE-BF17-5158193EA18C}']
-    function  Get_Count: NativeUInt;
-    function  Get_Item(Index: NativeUInt): IXSLTError;
+    function  Get_Count: NativeInt;
+    function  Get_Item(Index: NativeInt): IXSLTError;
     function  GetEnumerator: IXSLTErrorEnumerator;
     procedure Clear;
-    property  Count: NativeUInt read Get_Count;
-    property  Items[Index: NativeUInt]: IXSLTError read Get_Item; default;
+    property  Count: NativeInt read Get_Count;
+    property  Items[Index: NativeInt]: IXSLTError read Get_Item; default;
   end;
 
   /// <summary>
