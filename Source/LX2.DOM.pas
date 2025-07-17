@@ -363,8 +363,8 @@ type
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean;
+    function  TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
     function  TransformNode(const stylesheet: IXMLDocument): string;
 
     /// <summary>
@@ -702,9 +702,9 @@ type
     procedure Set_ValidateOnParse(isValidating: Boolean);
     {$endregion}
 
-    function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
+    function  CanonicalizeToFile(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
+    function  CanonicalizeToStream(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString;
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
     function  CreateAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
@@ -724,22 +724,22 @@ type
     function  GetErrors: IXMLErrors;
     function  GetXSLTErrors: IXSLTErrors;
     function  ImportNode(const node: IXMLNode; deep: Boolean): IXMLNode;
-    function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
-    function  Load(const Data: TBytes): Boolean; overload;
-    function  Load(const URL: string): Boolean; overload;
-    function  Load(Stream: TStream; const Encoding: Utf8String): Boolean; overload;
+    function  LoadFromMemory(const Data: Pointer; Size: NativeUInt): Boolean;
+    function  LoadFromBytes(const Data: TBytes): Boolean;
+    function  LoadFromStream(Stream: TStream; const Encoding: Utf8String): Boolean; overload;
+    function  Load(const URL: string): Boolean;
     function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions = DefaultParserOptions): Boolean; overload;
     function  LoadXML(const XML: string; const Options: TXmlParserOptions = DefaultParserOptions): Boolean; overload;
     function  NodeFromID(const idString: string): IXMLNode;
     procedure Normalize;
     procedure ReconciliateNs;
-    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
-    function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean; overload;
-    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
-    function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
+    function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean;
+    function  SaveToStream(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TXmlSaveOptions = []): Boolean;
+    function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString;
+    function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes;
     function  ToString(const Encoding: string; const Format: Boolean = False): string; overload;
     function  ToString(const Format: Boolean = False): string; overload;
-    function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
+    function  ToUtf8(const Format: Boolean = False): RawByteString;
     property  Doctype: IXMLDocumentType read Get_Doctype;
     property  DocumentElement: IXMLElement read Get_DocumentElement write Set_DocumentElement;
     property  Errors: IXMLErrors read GetErrors;

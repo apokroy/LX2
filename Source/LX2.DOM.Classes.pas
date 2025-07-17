@@ -125,16 +125,17 @@ type
   protected
     function  DoNextNode: xmlNodePtr; virtual; abstract;
     function  CreateEnumerator: TXMLNodeEnumerator; virtual; abstract;
+  public
      { MSXMLDOMNodeList }
     function  Get_Item(Index: NativeInt): IXMLNode; virtual; abstract;
     function  Get_Length: NativeInt; virtual; abstract;
     function  NextNode: IXMLNode;
     procedure Reset; virtual; abstract;
-    property  Items[Index: NativeInt]: IXMLNode read Get_Item; default;
-    property  Length: NativeInt read Get_Length;
     { Delphi enumerable }
     function  GetEnumerator: IXMLEnumerator;
     function  ToArray: TArray<IXMLNode>; virtual;
+    property  Items[Index: NativeInt]: IXMLNode read Get_Item; default;
+    property  Length: NativeInt read Get_Length;
   end;
 
   TXMLNodeChildEnumerator = class(TXMLNodeEnumerator, IXMLEnumerator)
@@ -273,6 +274,8 @@ type
     function  getNamedItemNS(const namespaceURI, localName: string): IXMLNode;
     function  setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
     function  removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
+    property  Item[index: NativeInt]: IXMLNode read Get_Item; default;
+    property  Length: NativeInt read Get_Length;
   end;
 
   TXMLAttributes = class(TXMLAttributeList, IXMLAttributes)
@@ -287,6 +290,7 @@ type
   public
     { IXMLAttributes }
     function  NextNode: IXMLAttribute;
+    property  Item[Index: NativeInt]: IXMLAttribute read Get_Attr; default;
     { Delphi enumerable }
     function  GetEnumerator: IXMLAttributesEnumerator;
     function  ToArray: TArray<IXmlAttribute>; reintroduce; overload;
@@ -323,8 +327,6 @@ type
   protected
     function  DoNextNode: xmlNodePtr; override;
     function  CreateEnumerator: TXMLNodeEnumerator; override;
-    function  Get_Item(Index: NativeInt): IXMLNode; override;
-    function  Get_Length: NativeInt; override;
     function  FindItem(const Name: string): xmlNodePtr; override;
     function  FindQualifiedItem(const BaseName: string; const NamespaceURI: string): xmlNodePtr; override;
     property  UseMask: Boolean read FUseMask;
@@ -332,6 +334,8 @@ type
     constructor Create(Parent: xmlNodePtr; Recursive: Boolean; const Mask: string = '*'; const NamespaceURI: string = '');
     destructor Destroy; override;
     procedure Reset; override;
+    function  Get_Item(Index: NativeInt): IXMLNode; override;
+    function  Get_Length: NativeInt; override;
     property  Recursive: Boolean read FRecursive;
     property  Mask: string read FMask;
     property  NamespaceURI: string read FNamespaceURI;
@@ -377,8 +381,8 @@ type
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload; virtual;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload; virtual;
     function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; virtual;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload; virtual;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload; virtual;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; virtual;
+    function  TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean; virtual;
     function  TransformNode(const stylesheet: IXMLDocument): string; virtual;
   protected
     NodePtr: xmlNodePtr;
@@ -444,8 +448,8 @@ type
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload;
     function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; virtual;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean;
+    function  TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
     function  TransformNode(const stylesheet: IXMLDocument): string;
   protected
     NsPtr: xmlNsPtr;
@@ -646,9 +650,9 @@ type
     function  SetNewDoc(Doc: xmlDocPtr): xmlDocPtr;
     property  DocOwner: Boolean read FDocOwner;
   protected
-    function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
-    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
+    function  CanonicalizeToFile(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
+    function  CanonicalizeToStream(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
+    function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString;
     function  Clone(Recursive: Boolean = True): IXMLDocument;
     function  CreateAttribute(const name: string): IXMLAttribute;
     function  createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
@@ -687,8 +691,8 @@ type
     function  Transform(const stylesheet: IXMLDocument; out S: RawByteString): Boolean; overload; override;
     function  Transform(const stylesheet: IXMLDocument; out S: string): Boolean; overload; override;
     function  Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean; overload; override;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; overload; override;
-    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean; overload; override;
+    function  TransformNodeToObject(const stylesheet: IXMLDocument; const output: IXMLDocument): Boolean; override;
+    function  TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean; override;
     function  TransformNode(const stylesheet: IXMLDocument): string; override;
     function  Validate: IXMLParseError;
     function  ValidateNode(const node: IXMLNode): IXMLParseError;
@@ -707,13 +711,13 @@ type
 
     function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean; overload;
     function  LoadXML(const XML: string; const Options: TXmlParserOptions): Boolean; overload;
-    function  Load(const Data: TBytes): Boolean; overload;
-    function  Load(const Data: Pointer; Size: NativeUInt): Boolean; overload;
-    function  Load(const URL: string): Boolean; overload;
-    function  Load(Stream: TStream; const Encoding: Utf8String): Boolean; overload;
+    function  LoadFromBytes(const Data: TBytes): Boolean;
+    function  LoadFromMemory(const Data: Pointer; Size: NativeUInt): Boolean;
+    function  Load(const URL: string): Boolean;
+    function  LoadFromStream(Stream: TStream; const Encoding: Utf8String): Boolean;
 
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
-    function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
+    function  SaveToStream(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Encoding: string; const Format: Boolean = False): string; reintroduce; overload;
     function  ToString(const Format: Boolean): string; reintroduce; overload;
@@ -2289,7 +2293,7 @@ begin
   end;
 end;
 
-function TXMLNode.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+function TXMLNode.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
 begin
   FXSLTErrors.Clear;
 
@@ -2846,12 +2850,12 @@ begin
   Result := xmlDocPtr(NodePtr).Canonicalize(Mode, Comments);
 end;
 
-function TXMLDocument.CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+function TXMLDocument.CanonicalizeToFile(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 begin
   Result := xmlDocPtr(NodePtr).CanonicalizeTo(FileName, Mode, Comments);
 end;
 
-function TXMLDocument.CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
+function TXMLDocument.CanonicalizeToStream(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 begin
   Result := xmlDocPtr(NodePtr).CanonicalizeTo(Stream, Mode, Comments);
 end;
@@ -3123,21 +3127,21 @@ begin
     Result := FSchemas.Validate(Self);
 end;
 
-function TXMLDocument.Load(const Data: TBytes): Boolean;
+function TXMLDocument.LoadFromBytes(const Data: TBytes): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Data, Options, ErrorCallback)) <> nil;
   if Result and FValidateOnParse and (FSchemas <> nil) then
     Result := FSchemas.Validate(Self);
 end;
 
-function TXMLDocument.Load(const Data: Pointer; Size: NativeUInt): Boolean;
+function TXMLDocument.LoadFromMemory(const Data: Pointer; Size: NativeUInt): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Data, Size, Options, ErrorCallback)) <> nil;
   if Result and FValidateOnParse and (FSchemas <> nil) then
     Result := FSchemas.Validate(Self);
 end;
 
-function TXMLDocument.Load(Stream: TStream; const Encoding: Utf8String): Boolean;
+function TXMLDocument.LoadFromStream(Stream: TStream; const Encoding: Utf8String): Boolean;
 begin
   Result := SetNewDoc(xmlDoc.Create(Stream, Options, Encoding, ErrorCallback)) <> nil;
   if Result and FValidateOnParse and (FSchemas <> nil) then
@@ -3182,7 +3186,7 @@ begin
   Result := xmlDocPtr(NodePtr).Save(FileName, Encoding, Options);
 end;
 
-function TXMLDocument.Save(Stream: TStream; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
+function TXMLDocument.SaveToStream(Stream: TStream; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
   Result := xmlDocPtr(NodePtr).Save(Stream, Encoding, Options);
 end;
@@ -3293,7 +3297,7 @@ begin
   end;
 end;
 
-function TXMLDocument.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+function TXMLDocument.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
 begin
   FXSLTErrors.Clear;
 
@@ -3426,7 +3430,7 @@ begin
     if System.Length(Data) > 0 then
     begin
       var Include := TXMLDocument.Create as IXMLDocument;
-      if Include.Load(Data) then
+      if Include.LoadFromBytes(Data) then
         Add(URI, Include);
     end;
   end;
@@ -3441,7 +3445,7 @@ begin
     if System.Length(Data) > 0 then
     begin
       var Include := TXMLDocument.Create as IXMLDocument;
-      if Include.Load(Data) then
+      if Include.LoadFromBytes(Data) then
         Add(TargetNamespace, Include);
     end;
   end;
@@ -3786,7 +3790,7 @@ begin
   Result := '';
 end;
 
-function TXMLNsNode.TransformNodeToObject(const stylesheet: IXMLDocument; const output: TStream): Boolean;
+function TXMLNsNode.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
 begin
   Result := False;
 end;
