@@ -56,7 +56,7 @@ type
   private
     FList: TInterfaceList;
     FIndex: NativeInt;
-  protected
+  public
     function  Get_Count: NativeInt; inline;
     function  Get_Item(Index: NativeInt): IXMLParseError; inline;
     function  Get__newEnum: IXMLErrorEnumerator;
@@ -75,7 +75,7 @@ type
   TXSLTError = class(TXMLBase, IXSLTError)
   private
     FReason: string;
-  protected
+  public
     function  Get_Reason: string;
   public
     constructor Create(const Reason: string);
@@ -95,7 +95,7 @@ type
     end;
   private
     FList: TInterfaceList;
-  protected
+  public
     function  Get_Count: NativeInt; inline;
     function  Get_Item(Index: NativeInt): IXSLTError; inline;
   public
@@ -108,11 +108,11 @@ type
   end;
 
   TXMLNodeEnumerator = class(TXMLBase, IXMLEnumerator)
-  private
   protected
     function  DoGetCurrent: xmlNodePtr; virtual; abstract;
     function  DoMoveNext: Boolean; virtual; abstract;
     function  Predicate(Node: xmlNodePtr): Boolean; virtual;
+  public
     { IEnumerator }
     function  GetCurrent: IXMLNode;
   public
@@ -248,7 +248,7 @@ type
   private
     FEnum: TEnumerator;
     FParent: xmlNodePtr;
-  protected
+  public
     function  Get_Item(Index: NativeInt): IXMLNode;
     function  Get_Length: NativeInt;
   protected
@@ -284,9 +284,8 @@ type
     public
       function  GetCurrent: IXMLAttribute;
     end;
-  protected
+  public
     function  Get_Attr(Index: NativeInt): IXmlAttribute;
-  protected
   public
     { IXMLAttributes }
     function  NextNode: IXMLAttribute;
@@ -346,7 +345,7 @@ type
     FXSLTErrors: TXSLTErrors;
     procedure XPathErrorHandler(const error: xmlError);
     procedure XSLTError(const Msg: string); virtual;
-  protected
+  public
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
     function  CloneNode(Deep: WordBool): IXMLNode;
@@ -413,7 +412,7 @@ type
   /// MS XML threats NS declartion as Node, while libxml2 does not so wee need handle this scpecial case
   /// </summary>
   TXMLNsNode = class(TXMLBase, IXMLNode)
-  protected
+  public
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
     function  CloneNode(Deep: WordBool): IXMLNode;
@@ -477,7 +476,7 @@ type
   end;
 
   TXMLNsAttribute = class(TXMLNsNode, IXMLAttribute)
-  protected
+  public
     function  Get_OwnerElement: IXMLElement;
     function  Get_Name: string;
     function  Get_Value: string;
@@ -495,7 +494,7 @@ type
     UnlinkedURI: RawByteString;
     constructor Create(AttrPtr: xmlAttrPtr);
     property  AttrPtr: xmlAttrPtr read GetAttrPtr;
-  protected
+  public
     function  Get_Name: string;
     function  Get_OwnerElement: IXMLElement;
     function  Get_Value: string;
@@ -649,7 +648,7 @@ type
     procedure ErrorCallback(const error: xmlError); virtual;
     function  SetNewDoc(Doc: xmlDocPtr): xmlDocPtr;
     property  DocOwner: Boolean read FDocOwner;
-  protected
+  public
     function  CanonicalizeToFile(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
     function  CanonicalizeToStream(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean;
     function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString;

@@ -274,6 +274,19 @@ uses
 
 function ValueFromVariant(const Value: TVarData; const Typ: TRttiType): TValue;
 begin
+//TRttiStringKind = (skShortString, skAnsiString, skWideString, skUnicodeString);
+
+  if Typ is TRttiStringType then
+  begin
+    case TRttiStringType(Typ).StringKind of
+      skShortString: Result := TValue.From<ShortString>(ShortString(VarToStr(Variant(Value))));
+      skAnsiString:  Result := TValue.From<AnsiString>(AnsiString(VarToStr(Variant(Value))));
+      skWideString:  Result := TValue.From<WideString>(WideString(VarToStr(Variant(Value))));
+    else
+      Result := TValue.From<string>(VarToStr(Variant(Value)));
+    end;
+    Exit;
+  end;
   case Value.VType of
     varEmpty:    Result := TValue.From<Variant>(Unassigned);
     varNull:     Result := TValue.From<Variant>(Null);
@@ -680,19 +693,23 @@ end;
 
 function UnitExists(const Name: string): Boolean;
 begin
-  var M := LibModuleList;
-  while M <> nil do
-  begin
-    var P := PByte(M.TypeInfo.UnitNames);
-    for var I := 0 to M.TypeInfo.UnitCount - 1 do
+  try
+    var M := LibModuleList;
+    while M <> nil do
     begin
-      var UnitName := ReadShortString(P);
-      if UnitName = Name then
-        Exit(True);
+      var P := PByte(M.TypeInfo.UnitNames);
+      for var I := 0 to M.TypeInfo.UnitCount - 1 do
+      begin
+        var UnitName := ReadShortString(P);
+        if UnitName = Name then
+          Exit(True);
+      end;
+      M := M.Next;
     end;
-    M := M.Next;
+    Result := False;
+  except
+    Result := True;
   end;
-  Result := False;
 end;
 
 initialization
