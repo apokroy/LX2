@@ -1969,7 +1969,8 @@ begin
       xmlFreeNode(NodePtr);
   end;
 
-  FXSLTErrors._Release;
+  if FXSLTErrors <> nil then
+    FXSLTErrors._Release;
 
   {$IFDEF DEBUG}
   AtomicDecrement(DebugObjectCount);
@@ -2818,16 +2819,19 @@ begin
   end;
 
   Create(xmlNewDoc(nil), True);
-  FSuccessError := TXMLError.Create;
-  FSuccessError._AddRef;
 end;
 
 constructor TXMLDocument.Create(doc: xmlDocPtr; DocOwner: Boolean);
 begin
   inherited Create(xmlNodePtr(doc));
-  FDocOwner := DocOwner;
+
   FErrors := TXMLErrors.Create;
   FErrors._AddRef;
+
+  FSuccessError := TXMLError.Create;
+  FSuccessError._AddRef;
+
+  FDocOwner := DocOwner;
   FValidateOnParse := True;
 end;
 
@@ -2840,8 +2844,10 @@ begin
     NodePtr := nil;
   end;
   inherited;
-  FErrors._Release;
-  FSuccessError._Release;
+  if FErrors <> nil then
+    FErrors._Release;
+  if FSuccessError <> nil then
+    FSuccessError._Release;
 end;
 
 function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
