@@ -37,7 +37,10 @@ begin
   Child.SetAttribute('Hello', 'World');
 
   TestStart('Remove child');
-  TestEnd(Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild) <> nil);
+  var Node := Doc.DocumentElement.FirstChild;
+  Node := Doc.DocumentElement.RemoveChild(Node);
+  TestEnd(Node <> nil);
+  Node := nil;
 
   WriteLn(Doc.ToString(True));
 

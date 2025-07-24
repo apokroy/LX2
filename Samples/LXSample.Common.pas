@@ -34,6 +34,11 @@ end;
 
 procedure EndTests;
 begin
+  WriteLn('Cleanup libxml...');
+  xmlCleanupParser;
+  WriteLn('Cleanup libxslt...');
+  xsltCleanupGlobals;
+
   TestStart('Memory leak');
   if xmlMemUsed > MemUsedBefore then
   begin
@@ -46,10 +51,6 @@ begin
   else
     TestEnd(True);
 
-  WriteLn('Cleanup libxml...');
-  xmlCleanupParser;
-  WriteLn('Cleanup libxslt...');
-  xsltCleanupGlobals;
   Write('Mem used: ');
   WriteLn(xmlMemUsed);
 end;

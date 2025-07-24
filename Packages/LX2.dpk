@@ -25,6 +25,7 @@ package LX2;
 {$IMAGEBASE $400000}
 {$DEFINE DEBUG}
 {$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'LX2 Library'}
 {$IMPLICITBUILD ON}
 
 requires
@@ -37,6 +38,7 @@ contains
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
   LX2.SAX in '..\Source\LX2.SAX.pas',
   LX2.DOM in '..\Source\LX2.DOM.pas',
-  LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas';
+  LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas',
+  RttiDispatch in '..\Source\RttiDispatch.pas';
 
 end.

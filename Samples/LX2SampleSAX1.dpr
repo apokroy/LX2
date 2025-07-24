@@ -5,16 +5,17 @@ program LX2SampleSAX1;
 {$R *.res}
 
 uses
-{$IFDEF MSWINDOWS}
+  {$IFDEF MSWINDOWS}
   FastMM4,
-{$ENDIF}
+  {$ENDIF }
   System.SysUtils,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.SAX in '..\Source\LX2.SAX.pas',
   LX2.Types in '..\Source\LX2.Types.pas',
   LX2SampleXML in 'LX2SampleXML.pas',
-  LXSample.Common in 'LXSample.Common.pas';
+  LXSample.Common in 'LXSample.Common.pas',
+  RttiDispatch in '..\Source\RttiDispatch.pas';
 
 type
   TSAXConsoleHandler = class(TSAXCustomContentHandler)

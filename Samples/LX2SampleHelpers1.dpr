@@ -48,10 +48,7 @@ begin
     var C14N := Doc.Canonicalize;
 
     if TestEnd(C14N <> '') then
-    begin
       WriteLn(C14N);
-      TestEnd(True);
-    end;
 
     Doc.Free;
 

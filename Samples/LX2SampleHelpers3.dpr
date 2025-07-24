@@ -5,9 +5,9 @@ program LX2SampleHelpers3;
 {$R *.res}
 
 uses
-{$IFDEF MSWINDOWS}
+  {$IFDEF MSWINDOWS}
   FastMM4,
-{$ENDIF}
+  {$ENDIF }
   System.SysUtils,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
@@ -16,7 +16,8 @@ uses
   LX2.DOM in '..\Source\LX2.DOM.pas',
   LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas',
   LX2SampleXML in 'LX2SampleXML.pas',
-  LXSample.Common in 'LXSample.Common.pas';
+  LXSample.Common in 'LXSample.Common.pas',
+  RttiDispatch in '..\Source\RttiDispatch.pas';
 
 var
   Indent: Integer = 0;
