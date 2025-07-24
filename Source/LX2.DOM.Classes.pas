@@ -2197,8 +2197,7 @@ function TXMLNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
 begin
   Result := ChildNode;
   var Node := TXMLNode(ChildNode);
-  var OldPtr := NodePtr.RemoveChild(Node.NodePtr);
-  xmlFreeNode(OldPtr);
+  NodePtr.RemoveChild(Node.NodePtr);
 end;
 
 function TXMLNode.ReplaceChild(const NewChild, OldChild: IXMLNode): IXMLNode;
