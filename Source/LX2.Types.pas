@@ -40,36 +40,6 @@ uses
   libxml2.API;
 
 type
-  EXmlError = class(Exception)
-  end;
-
-  EXmlInternalError = class(EXmlError)
-  end;
-
-  EXmlParserError = class(EXmlError)
-  private
-    FUrl: string;
-    FLevel: xmlErrorLevel;
-    FCode: Integer;
-    FCol: Integer;
-    FLine: Integer;
-  public
-    constructor Create(error: xmlError); overload;
-    property  Code: Integer read FCode;
-    property  Level: xmlErrorLevel read FLevel;
-    property  Url: string read FUrl;
-    property  Line: Integer read FLine;
-    property  Col: Integer read FCol;
-  end;
-
-  EXmlNsHrefNotFound = class(EXmlError)
-  public
-    constructor Create(const URI: string);
-  end;
-
-  EXmlUnsupported = class(EXmlError)
-  end;
-
   TXmlCompatibility = (
     xmlDefault,
     xmlMsXml3,
@@ -132,6 +102,8 @@ const
 type
   TXmlParseErrors = class;
 
+  TXmlErrorLevel = xmlErrorLevel;
+
   TXmlParseError = record
   private
     FCode: Integer;
@@ -166,17 +138,50 @@ type
   TXmlParseErrors = class
   private
     FList: TArray<TXmlParseError>;
-    function GetCount: NativeInt;
-    function GetItem(const Index: NativeInt): TXmlParseError;
+    function  GetCount: NativeInt;
+    function  GetItem(const Index: NativeInt): TXmlParseError;
   public
     constructor Create;
-    procedure Add(const error: xmlError);
+    function  Add(const error: xmlError): TXmlParseError;
     procedure Clear;
     function  GetEnumerator: TXmlParseErrorEnumerator;
     function  ToArray: TArray<TXmlParseError>;
     property  Count: NativeInt read GetCount;
     property  Items[const Index: NativeInt]: TXmlParseError read GetItem; default;
   end;
+
+  EXmlError = class(Exception)
+  end;
+
+  EXmlInternalError = class(EXmlError)
+  end;
+
+  EXmlParserError = class(EXmlError)
+  private
+    FUrl: string;
+    FLevel: xmlErrorLevel;
+    FCode: Integer;
+    FCol: Integer;
+    FLine: Integer;
+  public
+    constructor Create(error: xmlError); overload;
+    constructor Create(const Error: TXmlParseError); overload;
+    property  Code: Integer read FCode;
+    property  Level: xmlErrorLevel read FLevel;
+    property  Url: string read FUrl;
+    property  Line: Integer read FLine;
+    property  Col: Integer read FCol;
+  end;
+
+  EXmlNsHrefNotFound = class(EXmlError)
+  public
+    constructor Create(const URI: string);
+  end;
+
+  EXmlUnsupported = class(EXmlError)
+  end;
+
+
 
 function  xmlEscapeString(const Value: RawByteString): RawByteString;
 function  xmlNormalizeString(const S: string): string;
@@ -550,13 +555,11 @@ begin
   inherited Create;
 end;
 
-procedure TXmlParseErrors.Add(const error: xmlError);
-var
-  Item: TXmlParseError;
+function TXmlParseErrors.Add(const error: xmlError): TXmlParseError;
 begin
-  Item := TXmlParseError.Create(error);
+  Result := TXmlParseError.Create(error);
 
-  FList := FList + [Item];
+  FList := FList + [Result];
 end;
 
 procedure TXmlParseErrors.Clear;
@@ -606,6 +609,16 @@ begin
   FUrl    := UTF8ToUnicodeString(error.&file);
   FLine   := error.line;
   FCol    := error.int2;
+end;
+
+constructor EXmlParserError.Create(const Error: TXmlParseError);
+begin
+  inherited Create(Error.Text);
+  FCode   := Error.code;
+  FLevel  := Error.level;
+  FUrl    := Error.Url;
+  FLine   := Error.Line;
+  FCol    := Error.Col;
 end;
 
 { EXmlNsHrefNotFound }

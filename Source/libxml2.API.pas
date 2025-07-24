@@ -4673,35 +4673,11 @@ implementation
 {$IFDEF MSWINDOWS}
 
 function SafeLoadLibrary(const LibraryFileName: string): THandle;
-var
-  DllDir: string;
 begin
-  SetLength(DllDir, MAX_PATH);
-  SetLength(DllDir, GetDllDirectory(MAX_PATH, Pointer(DllDir)));
-  var LibPath := ExtractFilePath(LibraryFileName);
-  if LibPath <> '' then
-     SetDllDirectory(PChar(LibPath));
-   try
-     Result := System.SysUtils.SafeLoadLibrary(LibraryFileName);
-   finally
-     if LibPath <> '' then
-     begin
-       if DllDir = '' then
-         SetDllDirectory(nil)
-       else
-         SetDllDirectory(PChar(DllDir));
-     end;
-   end;
+  Result := System.SysUtils.SafeLoadLibrary(LibraryFileName);
 end;
 
 {$ENDIF}
-
-{function GetProcAddress(hModule: THandle; const ProcName: string): Pointer;
-begin
-  Result := Winapi.Windows.GetProcAddress(hModule, PWideChar(ProcName));
-  if not Assigned(Result) then
-    WriteLn(ProcName);
-end;}
 
 { LX2Lib }
 
@@ -4726,7 +4702,7 @@ begin
   if Handle <> 0 then
     Unload;
 
-  Handle := SafeLoadLibrary(ExpandFileName(LibraryFileName));
+  Handle := SafeLoadLibrary(LibraryFileName);
 
   if Handle = 0 then
     RaiseLastOSError;

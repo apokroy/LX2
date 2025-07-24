@@ -30,18 +30,31 @@ unit LX2.SAX;
 interface
 
 uses
-  System.SysUtils,
-  libxml2.API, LX2.Types;
+  System.SysUtils, System.Classes,
+  libxml2.API, LX2.Types, RttiDispatch;
 
 type
+  {$M+}
+  /// <summary>
+  /// SAX Parser base class
+  /// </summary>
+  /// <remarks>
+  /// Since parser written in plain C we cannot raise exceptions in callbacks,
+  /// so callbacks hides exceptions in try except block then store exception information and stop parsing,
+  /// After parser completes we can raise exception
+  /// </remarks>
   TLX2SAXParserWrapper = class(TObject)
   private
     FOptions: TXmlParserOptions;
   protected
     SAX: xmlSAXHandler;
     Ctxt: xmlParserCtxtPtr;
+    FWasException: Boolean;
+    FExceptionClass: TClass;
+    FExceptionMessage: string;
     procedure PrepareContext; virtual;
   protected
+    procedure DoException(E: Exception);
     procedure SetDocumentLocator(loc: xmlSAXLocatorPtr); virtual;
     procedure StartDocument; virtual;
     procedure EndDocument; virtual;
@@ -65,7 +78,7 @@ type
     procedure ProcessingInstruction(const target, data: xmlCharPtr); virtual;
     procedure Comment(const value: xmlCharPtr); virtual;
     procedure CDataBlock(const value: xmlCharPtr; len: Integer); virtual;
-    procedure StructuredError(const error: xmlErrorPtr); virtual;
+    procedure Error(const error: xmlErrorPtr); virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -74,11 +87,13 @@ type
     function  Parse(const Xml: RawByteString): Boolean; overload;
     function  Parse(const Data: Pointer; Size: NativeUInt): Boolean; overload;
     function  Parse(const Data: TBytes): Boolean; overload;
+    function  Parse(const Stream: TStream): Boolean; overload;
     procedure Stop;
     property  Options: TXmlParserOptions read FOptions write FOptions;
   end;
+  {$M-}
 
-  ISAXLocator = interface
+  ISAXLocator = interface(IDispatchInvokable)
     ['{71F3FBC1-2EC3-4144-8FE2-C835B942AB00}']
     function GetPublicId: string;
     function GetSystemId: string;
@@ -86,25 +101,34 @@ type
     function GetColumnNumber: Integer;
   end;
 
-  TSAXLocator = class(TNoRefCountObject, ISAXLocator)
+  TSAXLocator = class(TDispatchInvokable, ISAXLocator)
   protected
     Loc: xmlSAXLocatorPtr;
-    Parser: TLX2SAXParserWrapper;
+    FParser: TLX2SAXParserWrapper;
   public
+    constructor Create(Parser: TLX2SAXParserWrapper);
     function GetPublicId: string;
     function GetSystemId: string;
     function GetLineNumber: Integer;
     function GetColumnNumber: Integer;
+    property Parser: TLX2SAXParserWrapper read FParser;
   end;
 
+  PSAXAttribute = ^TSAXAttribute;
   TSAXAttribute = record
     Name: string;
     Prefix: string;
     URI: string;
     Value: string;
     Defaulted: Boolean;
+    function QualifiedName: string;
   end;
   TSAXAttributes = TArray<TSAXAttribute>;
+
+  TSAXAttributesHelper = record helper for TSAXAttributes
+  public
+    function Find(const LocalName: string; var Index: NativeInt): Boolean;
+  end;
 
   TSAXNamespace = record
     Prefix: string;
@@ -112,7 +136,7 @@ type
   end;
   TSAXNamespaces = TArray<TSAXNamespace>;
 
-  ISAXContentHandler = interface(IUnknown)
+  ISAXContentHandler = interface(IDispatchInvokable)
   ['{C4E14ED1-8764-400B-98E3-139842A6DB03}']
     procedure PutDocumentLocator(const Locator: ISAXLocator);
     procedure StartDocument;
@@ -122,6 +146,9 @@ type
     procedure Characters(const Chars: string);
     procedure IgnorableWhitespace(const Chars: string);
     procedure ProcessingInstruction(const Target, Data: string);
+    procedure Warning(const Error: TXmlParseError);
+    procedure Error(const Error: TXmlParseError);
+    procedure FatalError(const Error: TXmlParseError);
   end;
 
   TSAXCustomParser = class(TLX2SAXParserWrapper)
@@ -138,10 +165,11 @@ type
     procedure EndDocument; override;
     procedure EndElement(const localname, prefix, URI: xmlCharPtr); override;
     procedure StartElement(const localname, prefix, URI: xmlCharPtr; nb_namespaces: Integer; namespaces: xmlSAX2NsPtr; nb_attributes, nb_defaulted: Integer; attributes: xmlSAX2AttrPtr); override;
-    procedure StructuredError(const error: xmlErrorPtr); override;
+    procedure Error(const error: xmlErrorPtr); override;
     procedure Characters(const ch: xmlCharPtr; len: Integer); override;
     procedure IgnorableWhitespace(const ch: xmlCharPtr; len: Integer); override;
     procedure ProcessingInstruction(const target, data: xmlCharPtr); override;
+    procedure CDataBlock(const ch: xmlCharPtr; len: Integer); override;
   protected
     procedure DoStartDocument; virtual;
     procedure DoEndDocument; virtual;
@@ -150,6 +178,9 @@ type
     procedure DoCharacters(const Chars: string); virtual;
     procedure DoIgnorableWhitespace(const Chars: string); virtual;
     procedure DoProcessingInstruction(const Target, Data: string); virtual;
+    procedure DoWarning(const Error: TXmlParseError); virtual;
+    procedure DoError(const Error: TXmlParseError); virtual;
+    procedure DoFatalError(const Error: TXmlParseError); virtual;
   public
     constructor Create;
     destructor Destroy; override;
@@ -162,6 +193,7 @@ type
   private
     FHandler: ISAXContentHandler;
   protected
+    procedure SetDocumentLocator(loc: xmlSAXLocatorPtr); override;
     procedure DoStartDocument; override;
     procedure DoEndDocument; override;
     procedure DoEndElement(const LocalName, Prefix, URI: string); override;
@@ -169,11 +201,14 @@ type
     procedure DoCharacters(const Chars: string); override;
     procedure DoIgnorableWhitespace(const Chars: string); override;
     procedure DoProcessingInstruction(const Target, Data: string); override;
+    procedure DoWarning(const Error: TXmlParseError); override;
+    procedure DoError(const Error: TXmlParseError); override;
+    procedure DoFatalError(const Error: TXmlParseError); override;
   public
     property  Handler: ISAXContentHandler read FHandler write FHandler;
   end;
 
-  TSAXCustomContentHandler = class(TInterfacedObject, ISAXContentHandler)
+  TSAXCustomContentHandler = class(TDispatchInvokable, ISAXContentHandler)
   public
     procedure PutDocumentLocator(const Locator: ISAXLocator); virtual;
     procedure StartDocument; virtual;
@@ -183,6 +218,9 @@ type
     procedure Characters(const Chars: string); virtual;
     procedure IgnorableWhitespace(const Chars: string); virtual;
     procedure ProcessingInstruction(const Target, Data: string); virtual;
+    procedure Warning(const Error: TXmlParseError); virtual;
+    procedure Error(const Error: TXmlParseError); virtual;
+    procedure FatalError(const Error: TXmlParseError); virtual;
   end;
 
 implementation
@@ -194,117 +232,232 @@ end;
 
 procedure startDocumentCallback(ctx: Pointer); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).StartDocument;
+  try
+    TLX2SAXParserWrapper(ctx).StartDocument;
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure endDocumentCallback(ctx: Pointer); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).EndDocument;
+  try
+    TLX2SAXParserWrapper(ctx).EndDocument;
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure startElementNsCallback(ctx: Pointer; const localname, prefix, URI: xmlCharPtr; nb_namespaces: Integer; namespaces: xmlSAX2NsPtr; nb_attributes, nb_defaulted: Integer; attributes: xmlSAX2AttrPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).StartElement(localname, prefix, URI, nb_namespaces, namespaces, nb_attributes, nb_defaulted, attributes);
+  try
+    TLX2SAXParserWrapper(ctx).StartElement(localname, prefix, URI, nb_namespaces, namespaces, nb_attributes, nb_defaulted, attributes);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure endElementNsCallback(ctx: Pointer; const localname, prefix, URI: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).EndElement(localname, prefix, URI);
+  try
+    TLX2SAXParserWrapper(ctx).EndElement(localname, prefix, URI);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure internalSubsetCallback(ctx: Pointer; const name, ExternalID, SystemID: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).InternalSubset(name, ExternalID, SystemID);
+  try
+    TLX2SAXParserWrapper(ctx).InternalSubset(name, ExternalID, SystemID);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure externalSubsetCallback(ctx: Pointer; const name, ExternalID, SystemID: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).ExternalSubset(name, ExternalID, SystemID);
+  try
+    TLX2SAXParserWrapper(ctx).ExternalSubset(name, ExternalID, SystemID);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 function hasInternalSubsetCallback(ctx: Pointer): Integer; cdecl;
 begin
-  Result := Ord(TLX2SAXParserWrapper(ctx).HasInternalSubset);
+  try
+    Result := Ord(TLX2SAXParserWrapper(ctx).HasInternalSubset);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 function hasExternalSubsetCallback(ctx: Pointer): Integer; cdecl;
 begin
-  Result := Ord(TLX2SAXParserWrapper(ctx).HasExternalSubset);
+  try
+    Result := Ord(TLX2SAXParserWrapper(ctx).HasExternalSubset);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 function resolveEntityCallback(ctx: Pointer; const publicId, systemId: xmlCharPtr): xmlParserInputPtr; cdecl;
 begin
-  Result := TLX2SAXParserWrapper(ctx).ResolveEntity(publicId, systemId);
+  try
+    Result := TLX2SAXParserWrapper(ctx).ResolveEntity(publicId, systemId);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 function getEntityCallback(ctx: Pointer; const name: xmlCharPtr): xmlEntityPtr; cdecl;
 begin
-  Result := TLX2SAXParserWrapper(ctx).GetEntity(name);
+  try
+    Result := TLX2SAXParserWrapper(ctx).GetEntity(name);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 function getParameterEntityCallback(ctx: Pointer; const name: xmlCharPtr): xmlEntityPtr; cdecl;
 begin
-  Result := TLX2SAXParserWrapper(ctx).GetParameterEntity(name);
+  try
+    Result := TLX2SAXParserWrapper(ctx).GetParameterEntity(name);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure entityDeclCallback(ctx: Pointer; const name: xmlCharPtr; entType: Integer; publicId, systemId, content: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).EntityDecl(name, entType, publicId, systemId, content);
+  try
+    TLX2SAXParserWrapper(ctx).EntityDecl(name, entType, publicId, systemId, content);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure notationDeclCallback(ctx: Pointer; const name, publicId, systemId: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).NotationDecl(name, publicId, systemId);
+  try
+    TLX2SAXParserWrapper(ctx).NotationDecl(name, publicId, systemId);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure attributeDeclCallback(ctx: Pointer; const elem, fullname: xmlCharPtr; attrType, def: Integer; defaultValue: xmlCharPtr; tree: xmlEnumerationPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).AttributeDecl(elem, fullname, attrType, def, defaultValue, tree);
+  try
+    TLX2SAXParserWrapper(ctx).AttributeDecl(elem, fullname, attrType, def, defaultValue, tree);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure elementDeclCallback(ctx: Pointer; const name: xmlCharPtr; elemType: Integer; content: xmlElementContentPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).ElementDecl(name, elemType, content);
+  try
+    TLX2SAXParserWrapper(ctx).ElementDecl(name, elemType, content);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure unparsedEntityDeclCallback(ctx: Pointer; const name, publicId, systemId, notationName: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).UnparsedEntityDecl(name, publicId, systemId, notationName);
+  try
+    TLX2SAXParserWrapper(ctx).UnparsedEntityDecl(name, publicId, systemId, notationName);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure referenceCallback(ctx: Pointer; const name: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).Reference(name);
+  try
+    TLX2SAXParserWrapper(ctx).Reference(name);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure charactersCallback(ctx: Pointer; const ch: xmlCharPtr; len: Integer); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).Characters(ch, len);
+  try
+    TLX2SAXParserWrapper(ctx).Characters(ch, len);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure ignorableWhitespaceCallback(ctx: Pointer; const ch: xmlCharPtr; len: Integer); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).IgnorableWhitespace(ch, len);
+  try
+    TLX2SAXParserWrapper(ctx).IgnorableWhitespace(ch, len);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure processingInstructionCallback(ctx: Pointer; const target, data: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).ProcessingInstruction(target, data);
+  try
+    TLX2SAXParserWrapper(ctx).ProcessingInstruction(target, data);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure commentCallback(ctx: Pointer; const value: xmlCharPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).Comment(value);
+  try
+    TLX2SAXParserWrapper(ctx).Comment(value);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 procedure cdataBlockCallback(ctx: Pointer; const value: xmlCharPtr; len: Integer); cdecl;
 begin
-  TLX2SAXParserWrapper(ctx).CDataBlock(value, len);
+  try
+    TLX2SAXParserWrapper(ctx).CDataBlock(value, len);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
-procedure StructuredErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
+procedure StructuredErrorCallback(ctx: Pointer; const error: xmlErrorPtr); cdecl;
 begin
-  TLX2SAXParserWrapper(userData).StructuredError(error);
+  try
+    TLX2SAXParserWrapper(ctx).Error(error);
+  except
+    on E: Exception do
+      TLX2SAXParserWrapper(ctx).DoException(E);
+  end;
 end;
 
 { TLX2SAXParserWrapper }
@@ -363,6 +516,8 @@ end;
 
 function TLX2SAXParserWrapper.Parse(const Data: Pointer; Size: NativeUInt): Boolean;
 begin
+  FWasException := False;
+
   Ctxt := xmlCreatePushParserCtxt(@sax, Self, nil, 0, nil);
   try
     PrepareContext;
@@ -373,11 +528,42 @@ begin
     xmlFreeParserCtxt(Ctxt);
     Ctxt := nil;
   end;
+  if FWasException then
+    raise Exception(FExceptionClass).Create(FExceptionMessage);
 end;
 
 function TLX2SAXParserWrapper.Parse(const Data: TBytes): Boolean;
 begin
   Result := Parse(Pointer(Data), Length(Data));
+end;
+
+function TLX2SAXParserWrapper.Parse(const Stream: TStream): Boolean;
+const
+  BufferSize = 16 * 1024;
+var
+  Chunk: array[0..BufferSize - 1] of Byte;
+begin
+  FWasException := False;
+
+  Ctxt := xmlCreatePushParserCtxt(@sax, Self, nil, 0, nil);
+  try
+    PrepareContext;
+    var ChunkSize := Stream.Read(Chunk, BufferSize);
+    while ChunkSize > 0 do
+    begin
+      xmlParseChunk(ctxt, @Chunk, ChunkSize, 0);
+      ChunkSize := Stream.Read(Chunk, BufferSize);
+    end;
+    xmlParseChunk(ctxt, nil, 0, 1);
+
+    Result := xmlCtxtGetStatus(ctxt) = 0;
+  finally
+    xmlFreeParserCtxt(Ctxt);
+    Ctxt := nil;
+  end;
+
+  if FWasException then
+    raise Exception(FExceptionClass).Create(FExceptionMessage);
 end;
 
 function TLX2SAXParserWrapper.ParseFile(const FileName: string): Boolean;
@@ -386,6 +572,8 @@ const
 var
   Chunk: array[0..BufferSize - 1] of Byte;
 begin
+  FWasException := False;
+
   var Handle := FileOpen(FileName, fmOpenRead or fmShareDenyWrite);
   if Handle = INVALID_HANDLE_VALUE then
     RaiseLastOSError;
@@ -409,6 +597,18 @@ begin
   finally
     FileClose(Handle);
   end;
+
+  if FWasException then
+    raise Exception(FExceptionClass).Create(FExceptionMessage);
+end;
+
+procedure TLX2SAXParserWrapper.DoException(E: Exception);
+begin
+  Stop;
+
+  FWasException := True;
+  FExceptionClass := E.ClassType;
+  FExceptionMessage := E.Message;
 end;
 
 procedure TLX2SAXParserWrapper.PrepareContext;
@@ -422,7 +622,7 @@ begin
   xmlStopParser(ctxt);
 end;
 
-procedure TLX2SAXParserWrapper.StructuredError(const error: xmlErrorPtr);
+procedure TLX2SAXParserWrapper.Error(const error: xmlErrorPtr);
 begin
 
 end;
@@ -548,14 +748,16 @@ constructor TSAXCustomParser.Create;
 begin
   inherited Create;
   FErrors := TXMLParseErrors.Create;
-  FLocator := TSAXLocator.Create;
-  FLocator.Parser := Self;
+  FLocator := TSAXLocator.Create(Self);
+  FLocator._AddRef;
 end;
 
 destructor TSAXCustomParser.Destroy;
 begin
-  FreeAndNil(FErrors);
-  FreeAndNil(FLocator);
+  if FErrors <> nil then
+    FreeAndNil(FErrors);
+  if FLocator <> nil then
+    FLocator._Release;
   inherited;
 end;
 
@@ -570,6 +772,21 @@ begin
 end;
 
 procedure TSAXCustomParser.DoEndElement(const LocalName, Prefix, URI: string);
+begin
+
+end;
+
+procedure TSAXCustomParser.DoWarning(const Error: TXmlParseError);
+begin
+
+end;
+
+procedure TSAXCustomParser.DoError(const Error: TXmlParseError);
+begin
+
+end;
+
+procedure TSAXCustomParser.DoFatalError(const Error: TXmlParseError);
 begin
 
 end;
@@ -681,6 +898,24 @@ begin
     DoCharacters(xmlCharToStr(ch, len));
 end;
 
+procedure TSAXCustomParser.CDataBlock(const ch: xmlCharPtr; len: Integer);
+begin
+{  if not PreserveWhitespaces then
+  begin
+    while len > 0 do
+      if ch[len - 1] = #32 then
+        Dec(Len)
+      else
+        Break;
+
+    if (len > 0) and (ch[len - 1] = #10) then
+      Dec(len);
+  end;}
+
+  if len > 0 then
+    DoCharacters(xmlCharToStr(ch, len));
+end;
+
 procedure TSAXCustomParser.IgnorableWhitespace(const ch: xmlCharPtr; len: Integer);
 begin
   DoIgnorableWhitespace(xmlCharToStr(ch, len));
@@ -696,9 +931,14 @@ begin
   FLocator.Loc := loc;
 end;
 
-procedure TSAXCustomParser.StructuredError(const error: xmlErrorPtr);
+procedure TSAXCustomParser.Error(const error: xmlErrorPtr);
 begin
   FErrors.Add(error^);
+  case error.level of
+    XML_ERR_WARNING: DoWarning(FErrors[FErrors.Count - 1]);
+    XML_ERR_ERROR: DoError(FErrors[FErrors.Count - 1]);
+    XML_ERR_FATAL: DoFatalError(FErrors[FErrors.Count - 1]);
+  end;
 end;
 
 { TSAXParser }
@@ -716,6 +956,21 @@ end;
 procedure TSAXParser.DoEndElement(const LocalName, Prefix, URI: string);
 begin
   Handler.EndElement(LocalName, Prefix, URI)
+end;
+
+procedure TSAXParser.DoWarning(const Error: TXmlParseError);
+begin
+  Handler.Warning(Error);
+end;
+
+procedure TSAXParser.DoError(const Error: TXmlParseError);
+begin
+  Handler.Error(Error);
+end;
+
+procedure TSAXParser.DoFatalError(const Error: TXmlParseError);
+begin
+  Handler.FatalError(Error);
 end;
 
 procedure TSAXParser.DoIgnorableWhitespace(const Chars: string);
@@ -738,7 +993,19 @@ begin
   Handler.StartElement(LocalName, Prefix, URI, Namespaces, Attributes);
 end;
 
+procedure TSAXParser.SetDocumentLocator(loc: xmlSAXLocatorPtr);
+begin
+  inherited;
+  Handler.PutDocumentLocator(Locator);
+end;
+
 { TSAXLocator }
+
+constructor TSAXLocator.Create(Parser: TLX2SAXParserWrapper);
+begin
+  inherited Create;
+  FParser := Parser;
+end;
 
 function TSAXLocator.GetColumnNumber: Integer;
 begin
@@ -777,6 +1044,16 @@ begin
 
 end;
 
+procedure TSAXCustomContentHandler.Error(const Error: TXmlParseError);
+begin
+
+end;
+
+procedure TSAXCustomContentHandler.FatalError(const Error: TXmlParseError);
+begin
+
+end;
+
 procedure TSAXCustomContentHandler.IgnorableWhitespace(const Chars: string);
 begin
 
@@ -800,6 +1077,38 @@ end;
 procedure TSAXCustomContentHandler.StartElement(const LocalName, Prefix, URI: string; const Namespaces: TSAXNamespaces; const Attributes: TSAXAttributes);
 begin
 
+end;
+
+procedure TSAXCustomContentHandler.Warning(const Error: TXmlParseError);
+begin
+
+end;
+
+{ TSAXAttributesHelper }
+
+function TSAXAttributesHelper.Find(const LocalName: string; var Index: NativeInt): Boolean;
+var
+  H: NativeInt;
+begin
+  Index := Low(Self);
+  H := High(Self);
+  while Index <= H do
+  begin
+    if Self[Index].Name = LocalName then
+      Exit(True);
+    Inc(Index);
+  end;
+  Result := False;
+end;
+
+{ TSAXAttribute }
+
+function TSAXAttribute.QualifiedName: string;
+begin
+  if Prefix = '' then
+    Result := Name
+  else
+    Result := Prefix + ':' + Name;
 end;
 
 end.
