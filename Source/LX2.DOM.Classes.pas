@@ -3472,6 +3472,11 @@ begin
   else
   begin
     var Item := Items[Index];
+
+    // Prevent endless loop, when cloning yourself
+    if TXmlDocument(Item.Doc).NodePtr = TXmlDocument(Doc).NodePtr then
+      Exit;
+
     var Node := Doc.DocumentElement.FirstChildElement;
     while Node <> nil do
     begin
