@@ -83,7 +83,6 @@ type
     constructor Create;
     destructor Destroy; override;
     function  ParseFile(const FileName: string): Boolean;
-    function  Parse(const Xml: string): Boolean; overload;
     function  Parse(const Xml: RawByteString): Boolean; overload;
     function  Parse(const Data: Pointer; Size: NativeUInt): Boolean; overload;
     function  Parse(const Data: TBytes): Boolean; overload;
@@ -296,7 +295,10 @@ begin
     Result := Ord(TLX2SAXParserWrapper(ctx).HasInternalSubset);
   except
     on E: Exception do
+    begin
       TLX2SAXParserWrapper(ctx).DoException(E);
+      Result := 0;
+    end;
   end;
 end;
 
@@ -306,7 +308,10 @@ begin
     Result := Ord(TLX2SAXParserWrapper(ctx).HasExternalSubset);
   except
     on E: Exception do
+    begin
       TLX2SAXParserWrapper(ctx).DoException(E);
+      Result := 0;
+    end;
   end;
 end;
 
@@ -316,7 +321,10 @@ begin
     Result := TLX2SAXParserWrapper(ctx).ResolveEntity(publicId, systemId);
   except
     on E: Exception do
+    begin
       TLX2SAXParserWrapper(ctx).DoException(E);
+      Result := nil;
+    end;
   end;
 end;
 
@@ -326,7 +334,10 @@ begin
     Result := TLX2SAXParserWrapper(ctx).GetEntity(name);
   except
     on E: Exception do
+    begin
       TLX2SAXParserWrapper(ctx).DoException(E);
+      Result := nil;
+    end;
   end;
 end;
 
@@ -336,7 +347,10 @@ begin
     Result := TLX2SAXParserWrapper(ctx).GetParameterEntity(name);
   except
     on E: Exception do
+    begin
       TLX2SAXParserWrapper(ctx).DoException(E);
+      Result := nil;
+    end;
   end;
 end;
 
@@ -502,11 +516,6 @@ begin
   if Ctxt <> nil then
     xmlFreeParserCtxt(Ctxt);
   inherited;
-end;
-
-function TLX2SAXParserWrapper.Parse(const Xml: string): Boolean;
-begin
-  Result := Parse(UTF8Encode(Xml));
 end;
 
 function TLX2SAXParserWrapper.Parse(const Xml: RawByteString): Boolean;
