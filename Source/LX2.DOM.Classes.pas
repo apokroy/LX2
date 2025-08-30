@@ -527,10 +527,10 @@ type
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
     function  Get_TagName: string;
 
-    function  NextSiblingElement: IXMLElement;
-    function  FirstChildElement: IXMLElement;
-    function  LastChildElement: IXMLElement;
-    function  PreviousSiblingElement: IXMLElement;
+    function  NextElementSibling: IXMLElement;
+    function  FirstElementChild: IXMLElement;
+    function  LastElementChild: IXMLElement;
+    function  PreviousElementSibling: IXMLElement;
 
     property  TagName: string read Get_TagName;
   end;
@@ -584,43 +584,29 @@ type
     cImport = 'import';
     cInclude = 'include';
     cSchemaNs = 'http://www.w3.org/2001/XMLSchema';
-  private type
+  protected type
     TItem = class
       NamespaceURI: string;
-      URL: string;
-      Doc: IXMLDocument;
+      Schema: xmlDocPtr;
+      Sources: TList<IXmlDocument>;
+      Imports: TStringList;
+      FileName: string;
+      constructor Create;
+      destructor Destroy; override;
     end;
-
-    TItems = class(TObjectList<TItem>)
-    public
-      function Add(const NamespaceURI, URL: string; const Doc: IXMLDocument): TItem;
-      function IndexOfURL(const URL: string): NativeInt;
-    end;
-
-    TSchema = class
-      NamespaceURI: string;
-      Doc: IXMLDocument;
-    end;
-
-    TSchemas = class(TObjectList<TSchema>)
-    public
-      function Add(const NamespaceURI: string; const Doc: IXMLDocument): TSchema;
-    end;
-
   private
-    FItems: TItems;
-    FSchemas: TSchemas;
+    FCompiled: Boolean;
+    FItems: TList<TItem>;
     FErrors: TXMLErrors;
-    procedure ImportNode(Node: IXMLElement; const Location, TargetNamespace: string; const Resolver: IXMLResolver);
-    procedure IncludeNode(Node: IXMLNode; const Location, TargetNamespace: string; const Resolver: IXMLResolver);
+    FTempPath: string;
+    FSchemaRoot: xmlDocPtr;
+    procedure Cleanup;
   protected
-    function  ResourceLoader(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer;
-    property  Items: TItems read FItems;
-    property  Schemas: TSchemas read FSchemas;
+    property  Items: TList<TItem> read FItems;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure Parse;
+    procedure Compile;
     function  Validate(const Doc: IXMLDocument): Boolean;
     function  IndexOf(const NamespaceURI: string): NativeInt;
     procedure Add(const NamespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver = nil);
@@ -735,7 +721,7 @@ var
 implementation
 
 uses
-  libxslt.API;
+  libxslt.API, System.IOUtils;
 
 var
   GlobalLock: TObject;
@@ -812,6 +798,17 @@ begin
 
     Attr.Unlinked := False;
   end;
+end;
+
+function Cast(const Doc: xmlDocPtr): TXMLDocument; overload;
+begin
+  if Doc = nil then
+    Exit(nil);
+
+  if Doc._private <> nil then
+    Exit(TXMLDocument(Doc._private));
+
+  Result := TXMLDocument.Create(Doc, True);
 end;
 
 function Cast(const Node: xmlNodePtr): TXMLNode; overload;
@@ -2442,22 +2439,22 @@ begin
   Result := Cast(NodePtr.AddChildNs(xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Content)))) as IXMLElement;
 end;
 
-function TXMLElement.FirstChildElement: IXMLElement;
+function TXMLElement.FirstElementChild: IXMLElement;
 begin
   Result := Cast(xmlFirstElementChild(NodePtr)) as IXMLElement;
 end;
 
-function TXMLElement.LastChildElement: IXMLElement;
+function TXMLElement.LastElementChild: IXMLElement;
 begin
   Result := Cast(xmlLastElementChild(NodePtr)) as IXMLElement;
 end;
 
-function TXMLElement.NextSiblingElement: IXMLElement;
+function TXMLElement.NextElementSibling: IXMLElement;
 begin
   Result := Cast(xmlNextElementSibling(NodePtr)) as IXMLElement;
 end;
 
-function TXMLElement.PreviousSiblingElement: IXMLElement;
+function TXMLElement.PreviousElementSibling: IXMLElement;
 begin
   Result := Cast(xmlPreviousElementSibling(NodePtr)) as IXMLElement;
 end;
@@ -3312,10 +3309,7 @@ function TXMLDocument.Validate: IXMLParseError;
 begin
   Errors.FList.Clear;
 
-  if FSchemas <> nil then
-    xmlDocPtr(NodePtr).Validate(ErrorCallback, TXMLSchemaCollection(FSchemas).ResourceLoader)
-  else
-    xmlDocPtr(NodePtr).Validate(ErrorCallback);
+  xmlDocPtr(NodePtr).Validate(ErrorCallback);
 
   if Errors.Count = 0 then
     Exit(FSuccessError)
@@ -3342,34 +3336,27 @@ begin
   Result := ToString(False);
 end;
 
-{ TXMLSchemaCollection.TItems }
+{ TXMLSchemaCollection.TItem }
 
-function TXMLSchemaCollection.TItems.Add(const NamespaceURI, URL: string; const Doc: IXMLDocument): TItem;
+constructor TXMLSchemaCollection.TItem.Create;
 begin
-  Result := TItem.Create;
-  Result.NamespaceURI := NamespaceURI;
-  Result.URL := URL;
-  Result.Doc := Doc;
-
-  inherited Add(Result);
+  inherited Create;
+  Sources := TList<IXmlDocument>.Create;
+  Imports := TStringList.Create;
+  Imports.Sorted := True;
+  Imports.CaseSensitive := True;
 end;
 
-function TXMLSchemaCollection.TItems.IndexOfURL(const URL: string): NativeInt;
+destructor TXMLSchemaCollection.TItem.Destroy;
 begin
-  for var I := 0 to Count - 1 do
-    if AnsiSameText(List[I].URL, URL) then
-      Exit(I);
-
-  Result := -1;
-end;
-
-function TXMLSchemaCollection.TSchemas.Add(const NamespaceURI: string; const Doc: IXMLDocument): TSchema;
-begin
-  Result := TSchema.Create;
-  Result.NamespaceURI := NamespaceURI;
-  Result.Doc := Doc;
-
-  inherited Add(Result);
+  if Schema <> nil then
+  begin
+    xmlFreeDoc(Schema);
+    Schema := nil;
+  end;
+  FreeAndNil(Sources);
+  FreeAndNil(Imports);
+  inherited;
 end;
 
 { TXMLSchemaCollection }
@@ -3389,147 +3376,266 @@ begin
   inherited Create;
   FErrors := TXMLErrors.Create;
   FErrors._AddRef;
-  FItems := TItems.Create(True);
-  FSchemas := TSchemas.Create(True);
+  FItems := TObjectList<TItem>.Create;
 end;
 
 destructor TXMLSchemaCollection.Destroy;
 begin
+  Cleanup;
+
   FreeAndNil(FItems);
-  FreeAndNil(FSchemas);
   FErrors._Release;
   inherited;
 end;
 
-function TXMLSchemaCollection.ResourceLoader(const url: xmlCharPtr; const publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer;
+procedure TXMLSchemaCollection.Cleanup;
 begin
-  Result := Ord(XML_IO_ENOENT);
+  for var I := 0 to Items.Count - 1 do
+    if Items[I].Schema <> nil then
+    begin
+      xmlFreeDoc(Items[I].Schema);
+      Items[I].Schema := nil;
+    end;
+
+  if FTempPath <> '' then
+    TDirectory.Delete(FTempPath, True);
 end;
 
 procedure TXMLSchemaCollection.AddCollection(const otherCollection: IXMLSchemaCollection);
 begin
   var Src := TXMLSchemaCollection(otherCollection);
   for var I := 0 to Src.Items.Count - 1 do
-  begin
-    var Item := Src.Items[I];
-    Add(Item.NamespaceURI, Item.Doc);
-  end;
-end;
-
-procedure TXMLSchemaCollection.Parse;
-begin
-
-end;
-
-procedure TXMLSchemaCollection.ImportNode(Node: IXMLElement; const Location, TargetNamespace: string; const Resolver: IXMLResolver);
-begin
-  var URI := Node.GetAttribute('namespace');
-  if URI = '' then
-    URI := TargetNamespace;
-
-  var Index := Items.IndexOfURL(Location);
-  if (Index < 0) and (Resolver <> nil) then
-  begin
-    var Data := Resolver.Resolve(Location);
-    if System.Length(Data) > 0 then
-    begin
-      var Include := TXMLDocument.Create as IXMLDocument;
-      if Include.LoadFromBytes(Data) then
-        Add(URI, Include);
-    end;
-  end;
-end;
-
-procedure TXMLSchemaCollection.IncludeNode(Node: IXMLNode; const Location, TargetNamespace: string; const Resolver: IXMLResolver);
-begin
-  var Index := Items.IndexOfURL(Location);
-  if (Index < 0) and (Resolver <> nil) then
-  begin
-    var Data := Resolver.Resolve(Location);
-    if System.Length(Data) > 0 then
-    begin
-      var Include := TXMLDocument.Create as IXMLDocument;
-      if Include.LoadFromBytes(Data) then
-        Add(TargetNamespace, Include);
-    end;
-  end;
+    for var J := 0 to Src.Items[I].Sources.Count - 1 do
+      Add(Src.Items[I].NamespaceURI, Src.Items[I].Sources[J]);
 end;
 
 procedure TXMLSchemaCollection.Add(const NamespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver);
 var
-  URI: string;
+  Item: TItem;
 begin
-  URI := xmlNormalizeString(NamespaceURI);
-
-  Items.Add(URI, '', Doc);
-
-  var Index := IndexOf(URI);
-
-  if Index < 0 then
+  var Index := IndexOf(NamespaceURI);
+  if Index >= 0 then
+    Item := Items[Index]
+  else
   begin
-    FSchemas.Add(URI, Doc);
+    Item := TItem.Create;
+    Item.NamespaceURI := NamespaceURI;
+    Items.Add(Item);
+  end;
+
+  // Prevent re-adding doc
+  for var I := 0 to Item.Sources.Count - 1 do
+    if TXmlDocument(Item.Sources[I]).NodePtr = TXmlDocument(Doc).NodePtr then
+      Exit;
+
+  Item.Sources.Add(Doc);
+
+  FCompiled := False;
+end;
+
+procedure TXMLSchemaCollection.Compile;
+
+  function IsImport(const Node: xmlNodePtr): Boolean; inline;
+  begin
+    Result := (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cImport);
+  end;
+
+  function IsInclude(const Node: xmlNodePtr): Boolean; inline;
+  begin
+    Result := (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cInclude);
+  end;
+
+  procedure ProcessImports(Item: TItem; Doc: xmlDocPtr);
+  var
+    Elem: xmlNodePtr;
+  begin
+    Elem := Doc.documentElement.FirstElementChild;
+    while Elem <> nil do
+    begin
+      if IsImport(Elem) then
+      begin
+        var Import := Elem;
+        Elem := Elem.NextElementSibling;
+        Item.Imports.Add(Utf8ToString(Import.GetAttribute('namespace')));
+
+        Import.parent.RemoveChild(Import);
+      end
+      else if IsInclude(Elem) then
+      begin
+        var Temp := Elem;
+        Elem := Elem.NextElementSibling;
+        Temp.parent.RemoveChild(Temp);
+      end
+      else
+        Elem := Elem.NextElementSibling;
+    end;
+  end;
+
+  procedure AddSource(Item: TItem; Doc: xmlDocPtr);
+  var
+    Elem, NewNode: xmlNodePtr;
+  begin
+    Elem := Doc.documentElement.FirstElementChild;
+    while Elem <> nil do
+    begin
+      if IsImport(Elem) then
+        Item.Imports.Add(UTF8ToString(Elem.GetAttribute('namespace')))
+      else if IsInclude(Elem) then
+        Elem := Elem.NextElementSibling
+      else
+      begin
+        if xmlDOMWrapCloneNode(nil, Elem.doc, Elem, NewNode, Item.Schema, nil, 1, 0) = 0 then
+          Item.Schema.documentElement.AppendChild(NewNode);
+      end;
+      Elem := Elem.NextElementSibling;
+    end;
+  end;
+
+var
+  Source: xmlDocPtr;
+  I, J: NativeInt;
+  Item: TItem;
+begin
+  //Cleanup;
+
+  FTempPath := TPath.GetTempPath + TPath.GetGUIDFileName + PathDelim;
+  TDirectory.CreateDirectory(FTempPath);
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+
+    if Item.Schema <> nil then
+      xmlFreeDoc(Item.Schema);
+
+    Source := xmlDocPtr(TXmlDocument(Item.Sources[0]).NodePtr);
+    Item.Schema := xmlDoc.Create(Source.ToBytes, DefaultParserOptions);
+    ProcessImports(Item, Item.Schema);
+
+    for J := 1 to Item.Sources.Count - 1 do
+      AddSource(Item, xmlDocPtr(TXmlDocument(Item.Sources[J]).NodePtr));
+  end;
+
+  for I := 0 to Items.Count - 1 do
+  begin
+    Item := Items[I];
+
+    var ns := Item.Schema.documentElement.nsDef;
+    while ns <> nil do
+    begin
+      if xmlStrSame(ns.href, cSchemaNs) then
+        Break;
+      ns := ns.next;
+    end;
+
+    for J := 0 to Item.Imports.Count - 1 do
+    begin
+      var Index := IndexOf(Item.Imports[J]);
+      if Index >= 0 then
+      begin
+        var Import := xmlNewDocNode(Item.Schema, ns, 'import', nil);
+        Import.SetAttribute('namespace', Utf8Encode(Item.Imports[J]));
+        Import.SetAttribute('schemaLocation', Utf8Encode(Index.ToString + '.xsd'));
+        Item.Schema.documentElement.InsertBefore(Import, Item.Schema.documentElement.FirstElementChild);
+      end;
+    end;
+    Item.FileName := FTempPath + I.ToString + '.xsd';
+    Item.Schema.Save(Item.FileName);
+  end;
+
+  if FSchemaRoot <> nil then
+  begin
+    xmlFreeDoc(FSchemaRoot);
+    FSchemaRoot := nil;
+  end;
+
+  FSchemaRoot := xmlDoc.CreateFromFile(Items.Last.FileName, DefaultParserOptions);
+
+  FCompiled := True;
+end;
+
+function TXMLSchemaCollection.Validate(const Doc: IXMLDocument): Boolean;
+var
+  vctxt: xmlSchemaValidCtxtPtr;
+  SchemaDoc: xmlDocPtr;
+begin
+  Doc.errors.clear;
+
+  if (Items.Count = 1) and (Items[0].Sources.Count = 1) then
+  begin
+    // Typical situation - one schema file
+    SchemaDoc := xmlDocPtr(TXmlDocument(Items[0].Sources[0]).NodePtr);
   end
   else
   begin
-    var Item := Items[Index];
+    // We save compiled schema to files & load last one again, that allows resolve paths by libxml
+    // custom ResourceLoader doesnt called when not direct import in xsd
+    if not FCompiled then
+      Compile;
 
-    // Prevent endless loop, when cloning yourself
-    if TXmlDocument(Item.Doc).NodePtr = TXmlDocument(Doc).NodePtr then
-      Exit;
+    SchemaDoc := FSchemaRoot;
+  end;
 
-    var Node := Doc.DocumentElement.FirstChildElement;
-    while Node <> nil do
+  var ctxt := xmlSchemaNewDocParserCtxt(SchemaDoc);
+  xmlSchemaSetParserStructuredErrors(ctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
+
+  var schema := xmlSchemaParse(ctxt);
+  if schema = nil then
+  begin
+    xmlSchemaFreeParserCtxt(ctxt);
+    Exit(False);
+  end
+  else
+  begin
+    vctxt := xmlSchemaNewValidCtxt(schema);
+    if vctxt = nil then
     begin
-      // Try load imports via Resolver, if not succesful - just ignore, like MSXML do
-      if (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cImport) then
-      begin
-        var Location := Node.GetAttribute('schemaLocation');
-        if Location <> '' then
-          ImportNode(Node, Location, NamespaceURI, Resolver);
-      end
-      else if (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cInclude) then
-      begin
-        var Location := Node.GetAttribute('schemaLocation');
-        if Location <> '' then
-          IncludeNode(Node, Location, NamespaceURI, Resolver);
-      end
-      else
-      begin
-        Item.Doc.DocumentElement.AppendChild(Node.CloneNode(True));
-      end;
-      Node := Node.NextSiblingElement;
+      xmlSchemaFree(schema);
+      xmlSchemaFreeParserCtxt(ctxt);
+      Exit(False);
     end;
   end;
+
+  xmlSchemaSetValidStructuredErrors(vctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
+
+  var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
+  Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
+
+  xmlSchemaFreeValidCtxt(vctxt);
+  xmlSchemaFree(schema);
+  xmlSchemaFreeParserCtxt(ctxt);
 end;
 
 function TXMLSchemaCollection.Get(const NamespaceURI: string): IXMLDocument;
 begin
-  var Index := IndexOf(xmlNormalizeString(NamespaceURI));
-  if Index < 0 then
-    Result := nil
+  if not FCompiled then
+    Compile;
+
+  var Index := IndexOf(NamespaceURI);
+  if Index >= 0 then
+    Result := Cast(FItems[Index].Schema)
   else
-    Result := Schemas[Index].Doc;
+    Result := nil;
 end;
 
 function TXMLSchemaCollection.Get_Length: NativeInt;
 begin
-  Result := Schemas.Count;
+  Result := FItems.Count;
 end;
 
 function TXMLSchemaCollection.Get_NamespaceURI(Index: NativeInt): string;
 begin
-  Result := Schemas[Index].NamespaceURI;
+  Result := FItems[Index].NamespaceURI;
 end;
 
 function TXMLSchemaCollection.IndexOf(const NamespaceURI: string): NativeInt;
-var
-  URI: string;
 begin
-  URI := xmlNormalizeString(NamespaceURI);
-  for var I := 0 to Schemas.Count - 1 do
-    if AnsiSameText(Schemas[I].NamespaceURI, URI) then
-      Exit(I);
-
+  Result := 0;
+  while Result < FItems.Count do
+    if FItems[Result].NamespaceURI = NamespaceURI then
+      Exit
+    else
+      Inc(Result);
   Result := -1;
 end;
 
@@ -3537,55 +3643,7 @@ procedure TXMLSchemaCollection.Remove(const NamespaceURI: string);
 begin
   var Index := IndexOf(NamespaceURI);
   if Index >= 0 then
-    Schemas.Delete(Index);
-end;
-
-function TXMLSchemaCollection.Validate(const Doc: IXMLDocument): Boolean;
-var
-  rcb: TXmlResourceCallback;
-  vctxt: xmlSchemaValidCtxtPtr;
-begin
-  Result := True;
-  Doc.errors.clear;
-
-  Parse;
-
-  for var I := 0 to Schemas.Count - 1 do
-  begin
-    var ctxt := xmlSchemaNewDocParserCtxt(xmlDocPtr(TXMLDocument(Schemas[I].Doc).NodePtr));
-    rcb.Handler := ResourceLoader;
-    xmlSchemaSetResourceLoader(ctxt, xmlResourceLoaderCallback, @rcb);
-    xmlSchemaSetParserStructuredErrors(ctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
-
-    var schema := xmlSchemaParse(ctxt);
-    if schema = nil then
-    begin
-      xmlSchemaFreeParserCtxt(ctxt);
-      Exit(False);
-    end
-    else
-    begin
-      vctxt := xmlSchemaNewValidCtxt(schema);
-      if vctxt = nil then
-      begin
-        xmlSchemaFree(schema);
-        xmlSchemaFreeParserCtxt(ctxt);
-        Exit(False);
-      end;
-    end;
-
-    xmlSchemaSetValidStructuredErrors(vctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
-
-    var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
-    Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
-
-    xmlSchemaFreeValidCtxt(vctxt);
-    xmlSchemaFree(schema);
-    xmlSchemaFreeParserCtxt(ctxt);
-
-    if not Result then
-      Break;
-  end;
+    FItems.Delete(Index);
 end;
 
 { TXMLNsNode }

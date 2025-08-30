@@ -788,7 +788,7 @@ begin
   if RefChild = nil then
     Result := xmlAddChild(@Self, NewChild)
   else
-    Result := xmlAddPrevSibling(RefChild, children);
+    Result := xmlAddPrevSibling(RefChild, NewChild);
   if Result <> nil then
     xmlReconciliateNs(doc, Result);
 end;

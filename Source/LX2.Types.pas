@@ -181,7 +181,47 @@ type
   EXmlUnsupported = class(EXmlError)
   end;
 
+  XmlQualifiedName = record
+  private
+    FName: string;
+    FNamespace: string;
+  public
+    constructor Create(const Name: string); overload;
+    constructor Create(const Name, Namespace: string); overload;
+    function IsEmpty: Boolean; inline;
+    function ToString: string; overload; inline;
+    property Name: string read FName;
+    property Namespace: string read FNamespace;
+  public
+    class function ToString(const Name, Namespace: string): string; overload; static;
+    class operator Equal(const L, R: XmlQualifiedName): Boolean; static; inline;
+    class operator NotEqual(const L, R: XmlQualifiedName): Boolean; static; inline;
+  end;
 
+  XmlReservedNs = class
+  public const
+    NsXml             = 'http://www.w3.org/XML/1998/namespace';
+    NsXmlNs           = 'http://www.w3.org/2000/xmlns/';
+    NsDataType        = 'urn:schemas-microsoft-com:datatypes';
+    NsDataTypeAlias   = 'uuid:C2F41010-65B3-11D1-A29F-00AA00C14882';
+    NsDataTypeOld     = 'urn:uuid:C2F41010-65B3-11D1-A29F-00AA00C14882/';
+    NsXdrAlias        = 'uuid:BDC6E3F0-6DA3-11D1-A2A3-00AA00C14882';
+    NsWdXsl           = 'http://www.w3.org/TR/WD-xsl';
+    NsXs              = 'http://www.w3.org/2001/XMLSchema';
+    NsXsd             = 'http://www.w3.org/2001/XMLSchema-datatypes';
+    NsXsi             = 'http://www.w3.org/2001/XMLSchema-instance';
+    NsXslt            = 'http://www.w3.org/1999/XSL/Transform';
+    NsExsltCommon     = 'http://exslt.org/common';
+    NsExsltDates      = 'http://exslt.org/dates-and-times';
+    NsExsltMath       = 'http://exslt.org/math';
+    NsExsltRegExps    = 'http://exslt.org/regular-expressions';
+    NsExsltSets       = 'http://exslt.org/sets';
+    NsExsltStrings    = 'http://exslt.org/strings';
+    NsXQueryFunc      = 'http://www.w3.org/2003/11/xpath-functions';
+    NsXQueryDataType  = 'http://www.w3.org/2003/11/xpath-datatypes';
+    NsCollationBase   = 'http://collations.microsoft.com';
+    NsCollCodePoint   = 'http://www.w3.org/2004/10/xpath-functions/collation/codepoint';
+  end;
 
 function  xmlEscapeString(const Value: RawByteString): RawByteString;
 function  xmlNormalizeString(const S: string): string;
@@ -626,6 +666,50 @@ end;
 constructor EXmlNsHrefNotFound.Create(const URI: string);
 begin
   inherited CreateResFmt(@SXmlNsHrefNotFound, [URI]);
+end;
+
+{ XmlQualifiedName }
+
+constructor XmlQualifiedName.Create(const Name: string);
+begin
+  FName := Name;
+end;
+
+constructor XmlQualifiedName.Create(const Name, Namespace: string);
+begin
+  FName := Name;
+  FNamespace := Namespace;
+end;
+
+function XmlQualifiedName.IsEmpty: Boolean;
+begin
+  Result := (FName = '') and (FNamespace = '');
+end;
+
+class operator XmlQualifiedName.Equal(const L, R: XmlQualifiedName): Boolean;
+begin
+  Result := (L.FName = R.FName) and (L.FNamespace = R.FNamespace);
+end;
+
+class operator XmlQualifiedName.NotEqual(const L, R: XmlQualifiedName): Boolean;
+begin
+  Result := (L.FName <> R.FName) or (L.FNamespace <> R.FNamespace);
+end;
+
+class function XmlQualifiedName.ToString(const Name, Namespace: string): string;
+begin
+  if Namespace = '' then
+    Result := Name
+  else
+    Result := Namespace + ':' + Name;
+end;
+
+function XmlQualifiedName.ToString: string;
+begin
+  if Namespace = '' then
+    Result := Name
+  else
+    Result := Namespace + ':' + Name;
 end;
 
 end.

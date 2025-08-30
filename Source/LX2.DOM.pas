@@ -583,22 +583,22 @@ type
     /// <summary>
     ///
     /// </summary>
-    function  NextSiblingElement: IXMLElement;
+    function  NextElementSibling: IXMLElement;
 
     /// <summary>
     ///
     /// </summary>
-    function  FirstChildElement: IXMLElement;
+    function  FirstElementChild: IXMLElement;
 
     /// <summary>
     ///
     /// </summary>
-    function  LastChildElement: IXMLElement;
+    function  LastElementChild: IXMLElement;
 
     /// <summary>
     ///
     /// </summary>
-    function  PreviousSiblingElement: IXMLElement;
+    function  PreviousElementSibling: IXMLElement;
 
     /// <summary>
     ///

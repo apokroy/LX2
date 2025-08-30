@@ -30,6 +30,9 @@ unit LX2.SAX;
 interface
 
 uses
+  {$IFDEF MSWINDOWS}
+  Winapi.Windows,
+  {$ENDIF}
   System.SysUtils, System.Classes,
   libxml2.API, LX2.Types, RttiDispatch;
 
