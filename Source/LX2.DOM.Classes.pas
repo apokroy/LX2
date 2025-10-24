@@ -477,6 +477,7 @@ type
 
   TXMLNsAttribute = class(TXMLNsNode, IXMLAttribute)
   public
+    destructor Destroy; override;
     function  Get_OwnerElement: IXMLElement;
     function  Get_Name: string;
     function  Get_Value: string;
@@ -3600,6 +3601,9 @@ begin
 
   var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
   Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
+  //TODO: Временная заглушка, пока не научимся нормально схемы обрабатывать
+  if not Result and (Doc.Errors.Count > 0) and ((Items.Count > 1) or (Items[0].Sources.Count > 1)) then
+    Result := Doc.Errors[0].ErrorCode = 1845;
 
   xmlSchemaFreeValidCtxt(vctxt);
   xmlSchemaFree(schema);
@@ -3661,8 +3665,8 @@ begin
   if NsPtr <> nil then
   begin
     NsPtr._private := nil;
-    if NsPtr.context = nil then
-      xmlFreeNs(NsPtr);
+    {if NsPtr.context = nil then
+      xmlFreeNs(NsPtr);}
   end;
   inherited;
 end;
@@ -3868,6 +3872,11 @@ begin
 end;
 
 { TXMLNsAttribute }
+
+destructor TXMLNsAttribute.Destroy;
+begin
+  inherited;
+end;
 
 function TXMLNsAttribute.Get_Name: string;
 begin
