@@ -1523,7 +1523,12 @@ var
 begin
   Result := Transform(stylesheet, Text, errorHandler);
   if Result then
-    S := UTF8ToUnicodeString(Text);
+  begin
+    if AnsiSameText(stylesheet.encoding, 'utf-8') then
+      S := UTF8ToUnicodeString(Text)
+    else
+      S := string(Text);
+  end;
 end;
 
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler): Boolean;
