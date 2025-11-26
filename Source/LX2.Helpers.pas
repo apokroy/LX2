@@ -252,7 +252,7 @@ function  xmlResourceLoaderCallback(ctxt: Pointer; const url, publicId: xmlCharP
 implementation
 
 uses
-  libxslt.API;
+  libxslt.API, LX2.XPATH;
 
 function IOReadStream(context: Pointer; buffer: PUTF8Char; len: Integer): Integer; cdecl;
 begin
@@ -900,7 +900,7 @@ begin
   if xpathObj = nil then
     Exit(nil);
 
-  if (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
+  if (xpathObj.nodesetval <> nil) and (xpathObj.nodesetval.nodeNr > 0) then
   begin
     var nodes := xpathObj.nodesetval;
     SetLength(Result, nodes.nodeNr);
@@ -915,6 +915,15 @@ end;
 
 function xmlNodeHelper.SelectSingleNode(const queryString: RawByteString): xmlNodePtr;
 begin
+  if queryString = '' then
+    Exit(nil);
+
+  if TXPathQuery.IsSimple(queryString) then
+  begin
+    Result := TXPathQuery.Parse(QueryString).Select(@Self);
+    Exit;
+  end;
+
   var ctx := xmlXPathNewContext(doc);
   try
     xmlXPathSetContextNode(@Self, ctx);
@@ -1524,7 +1533,7 @@ begin
   Result := Transform(stylesheet, Text, errorHandler);
   if Result then
   begin
-    if AnsiSameText(stylesheet.encoding, 'utf-8') then
+    if AnsiSameText(string(stylesheet.encoding), 'utf-8') then
       S := UTF8ToUnicodeString(Text)
     else
       S := string(Text);

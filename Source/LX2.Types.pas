@@ -97,7 +97,7 @@ type
   );
 
 const
-  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines];
+  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines, xmlParseHuge];
 
 type
   TXmlParseErrors = class;

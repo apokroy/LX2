@@ -611,7 +611,7 @@ begin
   end;
 
   if FWasException then
-    raise Exception(FExceptionClass).Create(FExceptionMessage);
+    raise Exception.Create(FExceptionMessage);
 end;
 
 procedure TLX2SAXParserWrapper.DoException(E: Exception);
