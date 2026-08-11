@@ -9,6 +9,9 @@ uses
   FastMM4,
   {$ENDIF }
   System.SysUtils,
+  System.Classes,
+  System.Diagnostics,
+  System.Generics.Collections,
   libxml2.API in '..\Source\libxml2.API.pas',
   libxslt.API in '..\Source\libxslt.API.pas',
   LX2.Helpers in '..\Source\LX2.Helpers.pas',
@@ -17,43 +20,69 @@ uses
   LX2.DOM in '..\Source\LX2.DOM.pas',
   LX2SampleXML in 'LX2SampleXML.pas',
   LXSample.Common in 'LXSample.Common.pas',
-  RttiDispatch in '..\Source\RttiDispatch.pas';
+  RttiDispatch in '..\Source\RttiDispatch.pas',
+  LX2.XPATH in '..\Source\LX2.XPATH.pas';
+
+procedure Traverse(const Node: IXmlElement);
+begin
+  var Child := Node.FirstElementChild;
+  while Child <> nil do
+  begin
+    Child := Child.NextElementSibling;
+  end;
+end;
+
+type
+  TXmlSchemaSet = class
+  private
+  protected
+  public
+    constructor Create;
+    destructor Destroy; override;  
+  end;
+
+{ TXmlSchemaSet }
+
+constructor TXmlSchemaSet.Create;
+begin
+  inherited Create;
+end;
+
+destructor TXmlSchemaSet.Destroy;
+begin
+  inherited;
+end;
 
 procedure Test;
+
+  function Add(Schemas: IXMLSchemaCollection; const FileName: string): IXMLDocument;
+  begin
+    Result := CoCreateXMLDocument;
+    Result.Load(FileName);
+    Schemas.Add(Result.DocumentElement.GetAttribute('targetNamespace'), Result);
+  end;
+
+const
+  Xml: Utf8String =
+'''
+<?xml version="1.0" encoding="utf-8"?>
+<a:Root xmlns:a="1123213">
+</a:Root>
+''';
+var
+  Attrs: IXMLAttributes;
+  S: string;
+  Node, Sig: IXmlElement;
 begin
   var Doc := CoCreateXMLDocument;
+  Doc.LoadXML(Xml);
 
-  Doc.LoadXML(TestXml1);
+  Node := Doc.DocumentElement;
 
-  TestStart('SelectNodes');
-  var XNodes := Doc.DocumentElement.SelectNodes('//Tests/Test');
-  TestEnd(XNodes.Length = 6);
+  Sig := Node.AddChildNs('SigValue', 'dsig:urn:cbr-ru:dsig:v1.1');
 
-  TestStart('GetElementsByTagName');
-  var Elems := Doc.DocumentElement.GetElementsByTagName('tst:Test');
-  TestEnd(Elems.Length = 1);
+  WriteLn(Doc.Xml);
 
-  TestStart('Is Lists Live?');
-  Doc.DocumentElement.AddChild('tst:Test', 'Added Test');
-  TestEnd(Elems.Length = 2);
-
-  TestStart('Attributes (NamedNodeMap)');
-  var Attrs := Doc.DocumentElement.Attributes;
-  TestEnd(Attrs.Length = 2);
-
-  TestStart('Add namespace');
-  var Ns := Doc.CreateAttribute('xmlns:sample');
-  Ns.NodeValue := 'http://sample.com/attrs';
-  Attrs.SetNamedItem(Ns);
-  TestEnd(Attrs.GetNamedItem('xmlns:sample').NodeValue = 'http://sample.com/attrs');
-
-  TestStart('Is NamedNodeMap Live?');
-  Attrs.SetNamedItem(Doc.CreateAttribute('NewAttr')).NodeValue := '<Escaped value>';
-  TestEnd(Attrs.Length = 4);
-
-  WriteLn(Doc.ToString(True));
-
-  doc := nil;
 end;
 
 begin

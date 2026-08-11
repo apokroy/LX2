@@ -37,22 +37,60 @@ type
   xmlNodeArray  = TArray<xmlNodePtr>;
   xmlAttrArray  = TArray<xmlAttrPtr>;
 
+  /// <summary>Method-based callback invoked for libxml2/libxslt parsing, validation and XPath errors.</summary>
   xmlDocErrorHandler  = procedure(const error: xmlError) of object;
+  /// <summary>
+  /// Method-based callback allowing custom resolution of external resources
+  /// (DTDs, external entities, schema imports, etc.) during parsing/validation.
+  /// </summary>
+  /// <remarks>
+  /// Invoked through <see cref="xmlResourceLoaderCallback"/>, which wraps the
+  /// call in a try/except and converts any raised exception into
+  /// <c>XML_ERR_INTERNAL_ERROR</c> to prevent exceptions from propagating
+  /// across the C-callback boundary into libxml2's C runtime (which would
+  /// corrupt its internal state / crash).
+  /// </remarks>
   xmlResourceLoader   = function(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer of object;
+  /// <summary>Method-based callback for receiving libxslt transformation error/warning messages as decoded strings.</summary>
   xsltErrorHandler    = procedure(const Msg: string) of object;
 
+  /// <summary>
+  /// Represents a single XML namespace declaration (prefix + URI) used when
+  /// registering namespaces for XPath queries.
+  /// </summary>
   xmlNamespace = record
+    /// <summary>Namespace prefix (without colon), e.g. "soap".</summary>
     Prefix: RawByteString;
+    /// <summary>Namespace URI, e.g. "http://schemas.xmlsoap.org/soap/envelope/".</summary>
     URI: RawByteString;
   end;
 
+  /// <summary>
+  /// A list of namespace declarations, typically passed to XPath evaluation
+  /// methods so that prefixed names in the query can be resolved.
+  /// </summary>
   xmlNamespaces = TArray<xmlNamespace>;
 
+  /// <summary>Helper providing convenience methods over <see cref="xmlNamespaces"/>.</summary>
   xmlNamespacesHelper = record helper for xmlNamespaces
+    /// <summary>Appends a new namespace declaration to the array.</summary>
+    /// <param name="Prefix">Namespace prefix.</param>
+    /// <param name="URI">Namespace URI.</param>
     procedure Add(const Prefix, URI: RawByteString); inline;
-    function  Count: NativeInt; inline;
+
+    /// <summary>Returns the number of registered namespace declarations.</summary>
+    function Count: NativeInt; inline;
   end;
 
+  /// <summary>
+  /// Record helper exposing a DOM-like API (similar to W3C DOM Node interface)
+  /// over the low-level libxml2 <c>xmlNode</c> structure.
+  /// </summary>
+  /// <remarks>
+  /// All properties/methods operate directly on the underlying libxml2 node
+  /// via <c>@Self</c>; no additional memory is allocated unless explicitly
+  /// documented (e.g. array-returning methods).
+  /// </remarks>
   xmlNodeHelper = record helper for xmlNode
   private type
     TSelf = type xmlNode;
@@ -83,18 +121,100 @@ type
     function  GetValue: RawByteString;
     procedure SetNodeName(const Value: RawByteString); inline;
   public
+    /// <summary>
+    /// Creates a new child element with the given (optionally prefixed) name
+    /// and appends it to this node.
+    /// </summary>
+    /// <param name="Name">
+    /// Element name, optionally qualified as "prefix:local". The prefix must
+    /// already be declared and reachable from this node (via <c>xmlSearchNs</c>);
+    /// otherwise the node is created using the full literal <paramref name="Name"/>
+    /// without a namespace binding.
+    /// </param>
+    /// <param name="Content">Optional text content (will be escaped).</param>
+    /// <returns>The newly created and appended node, or <c>nil</c> on failure.</returns>
     function  AddChild(const Name: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
+    /// <summary>
+    /// Creates a new child element bound to the specified namespace URI,
+    /// creating and attaching the namespace declaration if it is not already
+    /// in scope.
+    /// </summary>
+    /// <param name="Name">
+    /// Element name, optionally qualified as "prefix:local". If a namespace
+    /// with matching URI is not found in scope, <paramref name="Name"/> is
+    /// split to obtain the desired prefix for the newly declared namespace.
+    /// </param>
+    /// <param name="NamespaceURI">Target namespace URI.</param>
+    /// <param name="Content">Optional text content.</param>
     function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
+    /// <summary>
+    /// Appends <paramref name="NewChild"/> as the last child of this node and
+    /// reconciles namespace declarations across the moved subtree.
+    /// </summary>
     function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
+    /// <summary>Returns the number of direct element children (ignores text/comment nodes).</summary>
     function  ChildElementCount: NativeInt; inline;
+    /// <summary>
+    /// Creates a deep or shallow copy of this node that is NOT attached to any
+    /// document/parent. Caller is responsible for freeing or attaching the result.
+    /// </summary>
+    /// <param name="Deep">If <c>True</c>, clones the whole subtree; otherwise only this node.</param>
     function  CloneNode(Deep: Boolean): xmlNodePtr; inline;
+    /// <summary>
+    /// Determines whether <paramref name="Node"/> is this node itself or a
+    /// descendant of it, by walking up the <c>parent</c> chain from
+    /// <paramref name="Node"/>.
+    /// </summary>
     function  Contains(const Node: xmlNodePtr): Boolean; inline;
     function  FirstElementChild: xmlNodePtr; inline;
+    /// <summary>
+    /// Returns the string value of an attribute, resolving namespace prefixes
+    /// and the special "xmlns"/"xmlns:prefix" pseudo-attributes.
+    /// </summary>
+    /// <param name="Name">
+    /// Attribute name. Special cases:
+    /// <list type="bullet">
+    /// <item><description>"xmlns" Ч returns the URI of the default namespace.</description></item>
+    /// <item><description>"xmlns:prefix" Ч returns the URI bound to <c>prefix</c>.</description></item>
+    /// <item><description>"prefix:local" Ч returns the value of the namespaced attribute.</description></item>
+    /// </list>
+    /// </param>
+    /// <returns>Attribute value, or empty string if not found.</returns>
     function  GetAttribute(const Name: RawByteString): RawByteString; inline;
+    /// <summary>
+    /// Looks up an attribute node by (optionally prefixed) name, matching
+    /// both local name and namespace prefix exactly.
+    /// </summary>
     function  GetAttributeNode(const name: RawByteString): xmlAttrPtr; overload;
+    /// <summary>Looks up an attribute node by local name and namespace URI.</summary>
     function  GetAttributeNodeNs(const namespaceURI, name: RawByteString): xmlAttrPtr; overload;
+    /// <summary>Returns the value of a namespace-qualified attribute.</summary>
     function  GetAttributeNs(const NamespaceURI, Name: RawByteString): RawByteString; inline;
+    /// <summary>
+    /// Returns all descendant elements matching <paramref name="Name"/>
+    /// ("*" matches any element), in document order.
+    /// </summary>
+    /// <remarks>
+    /// Uses a growable buffer (starting capacity 16, doubling by +16 on overflow)
+    /// to avoid re-counting matches in a separate pass.
+    /// </remarks>
     function  GetElementsByTagName(const Name: RawByteString): xmlNodeArray;
+    /// <summary>
+    /// Returns the next node in document order relative to <paramref name="Root"/>,
+    /// implementing a classic pre-order tree walk (used internally by
+    /// <see cref="GetElementsByTagName"/>).
+    /// </summary>
+    /// <param name="Root">
+    /// The node considered the traversal boundary; traversal stops (returns
+    /// <c>nil</c>) once it would ascend past this node.
+    /// </param>
+    /// <remarks>
+    /// Algorithm: descend into children first; if none, move to the next
+    /// sibling; if none, walk up through parents until either <paramref name="Root"/>
+    /// is reached (stop) or a parent with a next sibling is found. A defensive
+    /// <c>nil</c> check guards against detached subtrees where <paramref name="Root"/>
+    /// is not actually an ancestor.
+    /// </remarks>
     function  GetNext(Root: xmlNodePtr): xmlNodePtr;
     function  GetRootNode: xmlNodePtr; inline;
     function  HasAttribute(const Name: RawByteString): Boolean; inline;
@@ -107,10 +227,14 @@ type
     function  IsText: Boolean; inline;
     function  LastElementChild: xmlNodePtr; inline;
     function  NextElementSibling: xmlNodePtr; inline;
-    property  Path: RawByteString read GetPath;
     function  PreviousElementSibling: xmlNodePtr; inline;
     procedure ReconciliateNs; inline;
+    /// <summary>Removes the attribute with the given name, if present.</summary>
     procedure RemoveAttribute(const name: RawByteString); inline;
+    /// <summary>
+    /// Detaches and frees the given attribute node, then reconciles namespaces
+    /// on this node.
+    /// </summary>
     procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
     function  RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr; inline;
     function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr; inline;
@@ -118,15 +242,79 @@ type
     function  SearchNs(const Prefix: xmlCharPtr): xmlNsPtr; overload; inline;
     function  SearchNsByRef(const href: RawByteString): xmlNsPtr; overload; inline;
     function  SearchNsByRef(const href: xmlCharPtr): xmlNsPtr; overload; inline;
+    /// <summary>Evaluates an XPath expression and returns matched nodes as an array.</summary>
     function  SelectNodes(const QueryString: RawByteString; const Namespaces: xmlNamespaces = nil): xmlNodeArray;
+    /// <summary>
+    /// Evaluates an XPath expression and returns the first matched node, or
+    /// <c>nil</c> if none matched.
+    /// </summary>
+    /// <remarks>
+    /// For simple path expressions (as determined by <c>TXPathQuery.IsSimple</c>),
+    /// a fast-path parser/evaluator (<c>LX2.XPATH.TXPathQuery</c>) is used instead
+    /// of the full libxml2 XPath engine, bypassing context/namespace setup for
+    /// better performance on common cases like "a/b/c" or "@attr".
+    /// </remarks>
     function  SelectSingleNode(const QueryString: RawByteString): xmlNodePtr;
+    /// <summary>
+    /// Sets the attribute value, creating the attribute (or namespace
+    /// declaration, for "xmlns"/"xmlns:prefix" names) if it does not exist.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="SetAttributeNs"/>, the namespace for a "prefix:local"
+    /// name is resolved via <c>xmlSearchNs</c> starting from this node Ч the
+    /// prefix must already be in scope, otherwise the attribute is created
+    /// without a namespace binding (silently).
+    /// </remarks>
     procedure SetAttribute(const Name: RawByteString; const Value: RawByteString);
+    /// <summary>
+    /// Sets a namespace-qualified attribute value, resolving the namespace by
+    /// its URI (not by prefix) and creating the property with that namespace.
+    /// </summary>
     function  SetAttributeNs(const NamespaceURI, Name: RawByteString; const Value: RawByteString): xmlAttrPtr; inline;
+    /// <summary>
+    /// Applies an XSLT stylesheet to the subtree rooted at this node, treating
+    /// this node as the initial context node, and produces a new document.
+    /// </summary>
+    /// <param name="stylesheet">
+    /// Parsed stylesheet document. Internally cloned before parsing, because
+    /// <c>xsltFreeStylesheet</c> takes ownership of (and frees) the underlying
+    /// document Ч cloning avoids destroying the caller's stylesheet document.
+    /// </param>
+    /// <param name="doc">Receives the resulting transformed document on success.</param>
+    /// <param name="errorHandler">Optional callback receiving libxslt error messages.</param>
+    /// <returns><c>True</c> on success.</returns>
+    /// <remarks>
+    /// The compiled stylesheet (<c>xsltStylesheetPtr</c>) is always released
+    /// before returning, regardless of the outcome Ч on failure it is released
+    /// inside <c>XsltTransform</c> itself (and <c>style</c> set to <c>nil</c>),
+    /// on success it is released by the caller after the result is consumed.
+    /// Do not attempt to free it again externally.
+    /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>Applies an XSLT stylesheet and serializes the result to a UTF-8/raw byte string.</summary>
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>
+    /// Applies an XSLT stylesheet and serializes the result to a Unicode string.
+    /// </summary>
+    /// <remarks>Internally serializes to raw bytes first, then decodes as UTF-8.</remarks>
     function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>Applies an XSLT stylesheet and writes the serialized result to a stream.</summary>
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     property  Value: RawByteString read GetValue;
+    /// <summary>
+    /// Evaluates an XPath expression with this node as context node.
+    /// </summary>
+    /// <param name="queryString">XPath expression</param>
+    /// <param name="namespaces">
+    /// Explicit namespace bindings to register in the XPath context. If empty,
+    /// all namespace declarations in scope on this node (<c>Self.ns</c> chain)
+    /// are registered automatically.
+    /// </param>
+    /// <param name="ErrorHandler">Optional callback invoked on XPath errors.</param>
+    /// <returns>
+    /// The raw XPath result object. Caller must free it with
+    /// <c>xmlXPathFreeObject</c> unless consumed by <see cref="SelectNodes"/>.
+    /// </returns>
     function  XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
@@ -139,17 +327,34 @@ type
     property  NextSibling: xmlNodePtr read GetNextSibling;
     property  NodeName: RawByteString read GetNodeName write SetNodeName;
     property  NodeType: XmlElementType read GetNodeType;
+    /// <summary>
+    /// Type-dependent "value" of the node per the DOM <c>nodeValue</c> semantics:
+    /// text/CDATA/comment content for text-like nodes, attribute default value
+    /// for attribute declarations, empty string otherwise.
+    /// </summary>
     property  NodeValue: RawByteString read GetNodeValue write SetNodeValue;
     property  OwnerDocument: xmlDocPtr read GetOwnerDocument;
     property  ParentElement: xmlNodePtr read GetParentElement;
     property  ParentNode: xmlNodePtr read GetParentNode;
+    /// <summary>
+    /// XPath-style absolute path to this node from the document root
+    /// (e.g. "/root/child[2]"), computed via <c>xmlGetNodePath</c>.
+    /// </summary>
+    property  Path: RawByteString read GetPath;
     property  Prefix: RawByteString read GetPrefix;
     property  PreviousSibling: xmlNodePtr read GetPreviousSibling;
+    /// <summary>
+    /// Qualified tag name including namespace prefix, e.g. "soap:Envelope".
+    /// Returns the bare local name if the node has no namespace.
+    /// </summary>
     property  TagName: RawByteString read GetTagName;
+    /// <summary>Full text content of this node and all its text descendants (DOM <c>textContent</c> equivalent).</summary>
     property  Text: RawByteString read GetText write SetText;
+    /// <summary>Serializes this node (and its subtree) to an XML string, without XML declaration.</summary>
     property  Xml: RawByteString read GetXml;
   end;
 
+  /// <summary>Record helper exposing a DOM-like API over the libxml2 <c>xmlAttr</c> structure.</summary>
   xmlAttrHelper = record helper for xmlAttr
   private type
     TSelf = type xmlAttr;
@@ -161,6 +366,25 @@ type
     function  GetOwnerDocument: xmlDocPtr; inline;
     function  GetPrefix: RawByteString; inline;
     function  GetPreviousSibling: xmlAttrPtr; inline;
+    /// <summary>
+    /// Rebuilds the attribute's text content from scratch, handling the
+    /// ID-attribute bookkeeping required by libxml2's ID table.
+    /// </summary>
+    /// <remarks>
+    /// Order of operations matters here:
+    /// 1) If this attribute currently participates in the DTD ID table
+    ///    (<c>atype = XML_ATTRIBUTE_ID</c>), it is unregistered via
+    ///    <c>xmlRemoveID</c> BEFORE its text content changes, since the ID
+    ///    table is keyed by the old value.
+    /// 2) The old child text node list is freed and replaced with a single
+    ///    new text node (only if <paramref name="Value"/> is non-empty).
+    /// 3) <c>ns</c> is re-derived from <c>parent.ns</c> Ч this assumes the
+    ///    attribute's effective namespace always matches its owning element's
+    ///    default namespace, which is a simplification (it does not preserve
+    ///    a previously distinct attribute namespace).
+    /// 4) If this was (and still conceptually is) an ID attribute, it is
+    ///    re-registered via <c>xmlAddIDSafe</c> with the NEW value.
+    /// </remarks>
     procedure SetValue(const Value: RawByteString); inline;
     function  GetBaseURI: RawByteString; inline;
     procedure SetBaseURI(const Value: RawByteString); inline;
@@ -171,7 +395,17 @@ type
     property  LocalName: RawByteString read GetLocalName write SetLocalName;
     property  NamespaceURI: RawByteString read GetNamespaceURI;
     property  NextSibling: xmlAttrPtr read GetNextSibling;
+    /// <summary>
+    /// Qualified attribute name including namespace prefix (if any),
+    /// e.g. "xlink:href". Returns bare local name for unqualified attributes.
+    /// </summary>
     property  NodeName: RawByteString read GetName;
+    /// <summary>
+    /// Attribute value as plain text. Reading assumes a "simple" attribute
+    /// with at most a single text/CDATA child node Ч attributes with mixed
+    /// or entity-reference content are not fully supported and return an
+    /// unassigned <c>Result</c> (empty string) in that branch.
+    /// </summary>
     property  Value: RawByteString read GetValue write SetValue;
     property  OwnerDocument: xmlDocPtr read GetOwnerDocument;
     property  Prefix: RawByteString read GetPrefix;
@@ -179,6 +413,7 @@ type
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
   end;
 
+  /// <summary>Record helper exposing document-level construction, I/O and transformation APIs over <c>xmlDoc</c>.</summary>
   xmlDocHelper = record helper for xmlDoc
   private type
     TSelf = type xmlDoc;
@@ -186,20 +421,66 @@ type
     function  GetDocumentElement: xmlNodePtr; inline;
     function  GetUrl: RawByteString; inline;
     function  GetXml: RawByteString;
+    /// <summary>
+    /// Replaces the document's root element, freeing the previous root (if any).
+    /// </summary>
     procedure SetDocumentElement(const Value: xmlNodePtr);
   public
+    /// <summary>Creates an empty document with only an XML declaration.</summary>
     class function Create(const Version: RawByteString = '1.0'): xmlDocPtr; overload; static; inline;
+    /// <summary>Parses an XML document from a raw byte buffer (assumed to already be in the target encoding).</summary>
     class function Create(const XML: RawByteString; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
+    /// <summary>Parses an XML document from a Unicode string (encoded to UTF-8 before parsing).</summary>
     class function Create(const XML: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
     class function Create(const Data: TBytes; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
+    /// <summary>
+    /// Parses an XML document from a raw memory buffer.
+    /// </summary>
+    /// <remarks>
+    /// Uses <c>XML_INPUT_BUF_STATIC</c>, meaning libxml2 does NOT copy or take
+    /// ownership of <paramref name="Data"/> Ч the caller must keep the buffer
+    /// alive for the duration of the parse call (it is not needed afterwards,
+    /// since the parsed DOM owns its own copies of text content).
+    /// </remarks>
     class function Create(const Data: Pointer; Size: NativeUInt; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static;
+    /// <summary>
+    /// Parses an XML document directly from a file path/URL, honoring
+    /// <c>XML_PARSE_NONET</c>/<c>XML_PARSE_UNZIP</c> automatically.
+    /// </summary>
     class function CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static; inline;
+    /// <summary>Parses an XML document by reading from a <c>TStream</c> via a custom libxml2 IO callback.</summary>
     class function Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static;
+    /// <summary>
+    /// Creates and attaches the root element of this (assumed empty) document.
+    /// </summary>
+    /// <param name="RootName">
+    /// Root element name, optionally qualified as "prefix:local". If qualified,
+    /// a NEW namespace declaration is always created with <paramref name="NamespaceURI"/>
+    /// bound to that prefix Ч this does not search for an existing namespace
+    /// in scope (there can be none yet, since this is the root).
+    /// </param>
+    /// <param name="NamespaceURI">Namespace URI</param>
+    /// <param name="Content">Content if any</param>
     function  CreateRoot(const RootName: RawByteString; const NamespaceURI: RawByteString = ''; const Content: RawByteString = ''): xmlNodePtr;
+    /// <summary>
+    /// Creates a new element and appends it under <paramref name="Parent"/>,
+    /// or creates the document root if <paramref name="Parent"/> is <c>nil</c>.
+    /// </summary>
+    /// <param name="Parent">Parent node, can be nil for create detached node</param>
+    /// <param name="Name">Name of node, can be qualified name</param>
+    /// <param name="NamespaceURI">Namespace URI</param>
+    /// <param name="ResolveNamespace">Currently unused by the implementation Ч reserved.</param>
+    /// <param name="Content">Content if any.</param>
     function  CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString = ''; ResolveNamespace: Boolean = False; Content: RawByteString = ''): xmlNodePtr;
     procedure Free; inline;
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    /// <summary>
+    /// Serializes the document per the XML Canonicalization (C14N) spec directly
+    /// to a stream, without buffering the whole result in memory.
+    /// </summary>
     function  CanonicalizeTo(const Stream: TStream; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
+    /// <summary>Serializes the document per C14N to an in-memory raw byte string.</summary>
+    /// <exception cref="LX2InternalError">Raised if libxml2 reports a negative size (internal C14N failure).</exception>
     function  Canonicalize(Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): RawByteString; overload;
     function  Clone(Recursive: Boolean = True): xmlDocPtr; inline;
     function  CreateAttribute(const Name: RawByteString; const Value: RawByteString = ''): xmlAttrPtr; inline;
@@ -220,7 +501,25 @@ type
     function  ToBytes(const Encoding: string = 'UTF-8'; const Format: Boolean = False): TBytes; overload;
     function  ToString(const Encoding: string = 'UTF-8'; const Format: Boolean = False): string; overload;
     function  ToUtf8(const Format: Boolean = False): RawByteString; overload;
+    /// <summary>
+    /// Applies an XSLT stylesheet to the entire document and produces a new
+    /// result document.
+    /// </summary>
+    /// <remarks>
+    /// See remarks on <see cref="xmlNodeHelper.Transform"/> regarding stylesheet
+    /// cloning and lifetime of the compiled <c>xsltStylesheetPtr</c>.
+    /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>
+    /// Applies an XSLT stylesheet and decodes the result as a Unicode string,
+    /// choosing the decoding based on the STYLESHEET's declared output encoding
+    /// (falls back to raw byte-to-char conversion for non-UTF-8 encodings).
+    /// </summary>
+    /// <remarks>
+    /// Note: this inspects <c>stylesheet.encoding</c> (the source stylesheet
+    /// document's encoding attribute), not the actual <c>xsl:output encoding="..."</c>
+    /// directive Ч for stylesheets where these differ, decoding may be incorrect.
+    /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
@@ -308,8 +607,8 @@ begin
   Result := False;
 
   style := ParseStylesheet(stylesheet);
-  if style = nil then
-    Exit;
+  if style = nil then   // критично: сигнализирует вызывающему коду, что стиль уже освобождЄн,
+    Exit;               // чтобы тот не выполнил повторный xsltFreeStylesheet(style)
 
   var ctxt := xsltNewTransformContext(style, doc);
   if ctxt <> nil then
@@ -327,7 +626,10 @@ begin
   xsltFreeTransformContext(ctxt);
 
   if not Result then
+  begin
     xsltFreeStylesheet(style);
+    style := nil;
+  end;
 end;
 
 { xmlNamespacesHelper }
@@ -353,18 +655,41 @@ var
   Ns: xmlNsPtr;
 begin
   if SplitXMLName(Name, Prefix, LocalName) then
-    Ns := xmlSearchNs(Doc, @Self, xmlCharPtr(Prefix))
+  begin
+    Ns := xmlSearchNs(Doc, @Self, xmlCharPtr(Prefix));
+    if Ns = nil then
+      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content))
+    else
+      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(LocalName), xmlCharPtr(Content))
+  end
   else
-    Ns := nil;
-  Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(LocalName), xmlCharPtr(Content));
+    Result := xmlNewDocRawNode(doc, nil, xmlCharPtr(Name), xmlCharPtr(Content));
+
   if Result <> nil then
     AppendChild(Result);
 end;
 
 function xmlNodeHelper.AddChildNs(const Name, NamespaceURI, Content: RawByteString): xmlNodePtr;
+var
+  Prefix, LocalName: RawByteString;
 begin
   var Ns := xmlSearchNsByHRef(doc, @Self, xmlCharPtr(NamespaceURI));
-  Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content));
+
+  if Ns = nil then
+  begin
+    if SplitXMLName(Name, Prefix, LocalName) then
+    begin
+      Result := xmlNewDocRawNode(doc, nil, xmlCharPtr(LocalName), xmlCharPtr(Content));
+
+      Ns := xmlNewNs(Result, xmlCharPtr(NamespaceURI), xmlCharPtr(Prefix));
+      xmlSetNs(Result, ns);
+    end
+    else
+      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content));
+  end
+  else
+    Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content));
+
   if Result <> nil then
     AppendChild(Result);
 end;
@@ -466,7 +791,6 @@ function xmlNodeHelper.GetAttribute(const Name: RawByteString): RawByteString;
 var
   Prefix, LocalName: RawByteString;
 begin
-  //TODO: Test
   if Name = 'xmlns' then
   begin
     var Ns := nsDef;
@@ -502,8 +826,8 @@ begin
       var Attr := properties;
       while Attr <> nil do
       begin
-        if (Attr.ns <> nil) and xmlStrSame(Attr.ns.prefix, Pointer(Prefix)) then
-          Exit(xmlCharToRaw(Attr.ns.href));
+        if (Attr.ns <> nil) and xmlStrSame(Attr.ns.prefix, Pointer(Prefix))and xmlStrSame(Attr.name, Pointer(LocalName)) then
+          Exit(xmlAttrPtr(Attr).Value);
         Attr := Attr.next;
       end;
       Result := '';
@@ -598,6 +922,10 @@ begin
         Exit(Result.next)
       else
         Result := Result.parent;
+
+      if Result = nil then Exit(nil);    // защита от случа€, когда Root
+                                         // не €вл€етс€ предком стартового узла
+                                         // (например, узел был отсоединЄн от дерева)
     end;
   end;
 end;
@@ -729,7 +1057,10 @@ end;
 
 function xmlNodeHelper.GetPrefix: RawByteString;
 begin
-  Result := xmlCharToRaw(ns.prefix);
+  if ns = nil then
+    Result := ''
+  else
+    Result := xmlCharToRaw(ns.prefix);
 end;
 
 function xmlNodeHelper.GetPreviousSibling: xmlNodePtr;
@@ -996,7 +1327,8 @@ var
   style: xsltStylesheetPtr;
 begin
   Result := XsltTransform(stylesheet, Self.doc, @Self, style, doc, errorHandler);
-  xsltFreeStylesheet(style);
+  if Result then
+    xsltFreeStylesheet(style);
 end;
 
 function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
@@ -1016,8 +1348,8 @@ begin
       xmlFree(text);
     end;
     xmlFreeDoc(output);
+    xsltFreeStylesheet(style);
   end;
-  xsltFreeStylesheet(style);
 end;
 
 function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;
@@ -1043,8 +1375,8 @@ begin
     else
       Result := False;
     xmlFreeDoc(output);
+    xsltFreeStylesheet(style);
   end;
-  xsltFreeStylesheet(style);
 end;
 
 { xmlAttrHelper }
@@ -1061,7 +1393,10 @@ end;
 
 function xmlAttrHelper.GetName: RawByteString;
 begin
-  Result := xmlQName(ns.prefix, TSelf(Self).name)
+  if ns = nil then
+    Result := xmlCharToRaw(TSelf(Self).name)
+  else
+    Result := xmlQName(ns.prefix, TSelf(Self).name)
 end;
 
 function xmlAttrHelper.GetNamespaceURI: RawByteString;
@@ -1102,10 +1437,14 @@ begin
     Exit('');
 
   if ((child.&type = XML_TEXT_NODE) or (child.&type = XML_CDATA_SECTION_NODE)) and (child.next = nil) then
+  begin
     if child.content = nil then
       Exit('')
     else
       Exit(xmlCharToRaw(child.content));
+  end
+  else
+    Exit(xmlCharToRawAndFree(xmlNodeListGetString(doc, children, 1)));
 end;
 
 function xmlAttrHelper.IsDefaultNamespace(const namespaceURI: RawByteString): Boolean;
@@ -1129,10 +1468,7 @@ end;
 procedure xmlAttrHelper.SetValue(const Value: RawByteString);
 begin
   if atype = XML_ATTRIBUTE_ID then
-  begin
     xmlRemoveID(doc, @self);
-    atype := XML_ATTRIBUTE_ID;
-  end;
 
   if children <> nil then
     xmlFreeNodeList(children);
@@ -1321,13 +1657,13 @@ end;
 
 function xmlDocHelper.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
 var
-  Data: Pointer;
+  Data: xmlCharPtr;
 begin
-  var Size := xmlC14NDocDumpMemory(Doc, nil, xmlC14NMode(Mode), nil, Ord(Comments), xmlCharPtr(Data));
+  var Size := xmlC14NDocDumpMemory(Doc, nil, xmlC14NMode(Mode), nil, Ord(Comments), Data);
   if Size < 0 then
     LX2InternalError;
 
-  SetString(Result, PAnsiChar(Data), Size);
+  SetString(Result, Data, Size);
 
   xmlFree(Data);
 end;
@@ -1522,8 +1858,8 @@ begin
       xmlFree(text);
     end;
     xmlFreeDoc(output);
+    xsltFreeStylesheet(style);
   end;
-  xsltFreeStylesheet(style);
 end;
 
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;
@@ -1554,8 +1890,8 @@ begin
     else
       Result := False;
     xmlFreeDoc(output);
+    xsltFreeStylesheet(style);
   end;
-  xsltFreeStylesheet(style);
 end;
 
 function xmlDocHelper.ToBytes(const Encoding: string; const Format: Boolean): TBytes;

@@ -13,9 +13,9 @@ type
   PXPathStep = ^TXPathStep;
   TXPathStep = record
     Descendant: Boolean;
-    Name: PUTF8Char;
-    Prefix: PUTF8Char;
-    Selector: PUTF8Char;
+    Name: xmlCharPtr;
+    Prefix: xmlCharPtr;
+    Selector: xmlCharPtr;
     Next: PXPathStep;
     procedure Parse;
   end;
@@ -30,11 +30,11 @@ type
     function  Cmp(Node: xmlNodePtr; Step: PXPathStep): Boolean; inline;
     function  SelectNode(Node: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
     function  Traverse(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
-    function SelectNodes(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
+    function  SelectNodes(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
   public
     class function Parse(const Query: Utf8String): TXPathQuery; overload; static;
     class function IsSimple(const Query: Utf8String): Boolean; static;
-    function Select(Node: xmlNodePtr): xmlNodePtr;
+    function  Select(Node: xmlNodePtr): xmlNodePtr;
   end;
 
 implementation
@@ -43,7 +43,7 @@ implementation
 
 class function TXPathQuery.IsSimple(const Query: Utf8String): Boolean;
 var
-  Ch: PUTF8Char;
+  Ch: xmlCharPtr;
 begin
   Ch := Pointer(Query);
   while Ch^ <> #0 do
@@ -58,11 +58,25 @@ begin
   Result := True;
 end;
 
+function StrEquals(S1, S2: xmlCharPtr): Boolean; inline;
+begin
+  while True do
+  begin
+    if S1^ <> S2^ then
+      Exit(False)
+    else if S1^ = #0 then
+      Exit(True);
+
+    Inc(S1);
+    Inc(S2);
+  end;
+end;
+
 function TXPathQuery.Cmp(Node: xmlNodePtr; Step: PXPathStep): Boolean;
 begin
-  Result := StrComp(Node.name, Step.Name) = 0;
+  Result := StrEquals(Node.name, Step.Name);
   if Result and (Step.Prefix <> nil) then
-    Result := (Node.ns <> nil) and (StrComp(Node.ns.prefix, Step.Prefix) = 0);
+    Result := (Node.ns <> nil) and StrEquals(Node.ns.prefix, Step.Prefix);
 end;
 
 class function TXPathQuery.Parse(const Query: Utf8String): TXPathQuery;
@@ -124,6 +138,14 @@ function TXPathQuery.SelectNode(Node: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
 begin
   if Step.Descendant then
   begin
+    if Cmp(Node, Step) then
+    begin
+      if Step.Next = nil then
+        Exit(Node);
+      Result := SelectNodes(Node, Step.Next);
+      if Result <> nil then
+        Exit;
+    end;
     Result := Traverse(Node, Step);
   end
   else
@@ -190,7 +212,7 @@ end;
 
 procedure TXPathStep.Parse;
 
-  procedure Trim(var S: PUTF8Char);
+  procedure Trim(var S: xmlCharPtr);
   begin
     while S^ <= #32 do
       Inc(S);

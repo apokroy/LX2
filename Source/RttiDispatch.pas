@@ -487,6 +487,9 @@ begin
     if Info.Prop <> nil then
     begin
       Res^ := Info.Prop.GetValue(Self).AsVariant;
+      if PVarData(Res).VType = varUnknown then
+        if Supports(IUnknown(PVarData(Res).VUnknown), IDispatch, Disp) then
+          Res^ := IDispatch(Disp);
       Exit(S_OK);
     end;
 

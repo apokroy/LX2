@@ -1,3 +1,38 @@
+﻿/// <summary>
+/// COM/IDispatch-совместимая реализация MS XML DOM (MSXML2)-подобного API
+/// (<c>IXMLDocument</c>, <c>IXMLNode</c>, <c>IXMLElement</c> и т.д.) поверх
+/// нативных указателей libxml2 (<c>xmlNodePtr</c>, <c>xmlDocPtr</c>, <c>xmlNsPtr</c>).
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Модель владения памятью (ключевая идея всего модуля):</b> каждый
+/// libxml2-узел (<c>xmlNodePtr</c>) имеет поле <c>_private: Pointer</c>,
+/// используемое здесь для хранения обратной ссылки на Delphi-обёртку
+/// (<c>TXMLNode</c> и потомки). Это даёт кэширование "один xmlNodePtr — одна
+/// Delphi-обёртка": функции <c>Cast(...)</c> (см. ниже) всегда сначала
+/// проверяют <c>Node._private</c> и возвращают существующую обёртку вместо
+/// создания новой. Без этого повторные вызовы <c>ParentNode.FirstChild</c>
+/// и т.п. создавали бы новый управляемый объект на каждое обращение.
+/// </para>
+/// <para>
+/// <b>Взаимный refcounting документа и узлов:</b> каждый <c>TXMLNode</c>
+/// при создании увеличивает refcount владеющего его документа
+/// (<c>TXMLDocument._AddRef</c>), а при разрушении — уменьшает
+/// (<c>_Release</c>). Это гарантирует, что документ не будет уничтожен,
+/// пока жив хотя бы один DOM-объект, ссылающийся на его узлы, даже если
+/// пользовательский код полностью потерял ссылку на сам `IXMLDocument`.
+/// См. подробности в комментариях к <see cref="TXMLNode.Create"/> и
+/// <see cref="TXMLNode.Destroy"/>.
+/// </para>
+/// <para>
+/// <b>Глобальный libxml2 node-deregister hook:</b> <see cref="NodeFreeCallback"/>
+/// регистрируется один раз через <c>xmlDeregisterNodeDefault</c> и вызывается
+/// libxml2 всякий раз, когда сам libxml2 (а не эта обёртка) физически
+/// освобождает <c>xmlNodePtr</c> — например, при слиянии соседних текстовых
+/// узлов внутри <c>xmlAddChild</c>. Это необходимо, чтобы Delphi-обёртка не
+/// осталась с "висящим" (dangling) указателем <c>NodePtr</c>.
+/// </para>
+/// </remarks>
 unit LX2.DOM.Classes;
 
 interface
@@ -227,8 +262,24 @@ type
   end;
 
   /// <summary>
-  /// Node.NsDef & Node.properites enumeration <see cref="TXMLNsNode"/>
+  /// MSXML-совместимое представление "всех атрибутов узла" как единой
+  /// коллекции <c>IXMLNodeList</c>/<c>IXMLNamedNodeMap</c>, скрывающее тот
+  /// факт, что в libxml2 это физически ДВА РАЗНЫХ связных списка узла:
+  /// <c>Node.nsDef</c> (объявления пространств имён, <c>xmlns:...</c>) и
+  /// <c>Node.properties</c> (обычные атрибуты).
   /// </summary>
+  /// <remarks>
+  /// Причина такого объединения — семантика MSXML DOM, где
+  /// <c>xmlns:prefix="uri"</c> трактуется как обычный атрибут элемента
+  /// (доступный через <c>Attributes.GetNamedItem('xmlns:prefix')</c>), тогда
+  /// как в модели libxml2 это отдельная, специализированная структура
+  /// <c>xmlNs</c>, физически не являющаяся <c>xmlAttrPtr</c>/<c>xmlNodePtr</c>.
+  /// Практически ВСЕ методы данного класса (<see cref="Get_Item"/>,
+  /// <see cref="Get_Length"/>, <see cref="ToArray"/>, и внутренний
+  /// <see cref="TEnumerator"/>) содержат парную логику: "сначала пройти весь
+  /// <c>nsDef</c>, затем весь <c>properties</c>" — т.е. namespace-декларации
+  /// всегда идут ПЕРЕД обычными атрибутами в индексации/порядке перечисления.
+  /// </remarks>
   TXMLAttributeList = class(TXMLBase, IXMLNodeList, IXMLNamedNodeMap)
   protected type
     TEnumState = (esStart, esNs, esAttr);
@@ -295,6 +346,40 @@ type
     function  ToArray: TArray<IXmlAttribute>; reintroduce; overload;
   end;
 
+  /// <summary>
+  /// Реализация <c>getElementsByTagName</c>/<c>getElementsByTagNameNS</c>:
+  /// "живой" (вычисляемый лениво при каждом обходе, а не кэшируемый список)
+  /// набор элементов, отфильтрованных по имени тега (<see cref="Mask"/>) и,
+  /// опционально, обходящий либо только прямых потомков, либо всё поддерево
+  /// (<see cref="Recursive"/>).
+  /// </summary>
+  /// <remarks>
+  /// <para>
+  /// <b>Диспетчеризация через <c>TMoveNext = function: Boolean of object</c>:</b>
+  /// вместо ветвления <c>if Recursive then ... if UseMask then ...</c> внутри
+  /// каждого вызова <c>MoveNext</c> (что означало бы 2 проверки условий на
+  /// каждый шаг итерации), нужная реализация обхода
+  /// (<see cref="DoNextSibling"/>/<see cref="DoNextSiblingWithMask"/>/
+  /// <see cref="DoNextRecursive"/>/<see cref="DoNextRecursiveWithMask"/>)
+  /// выбирается ОДИН РАЗ в конструкторе и сохраняется как метод-указатель
+  /// <c>FDoMoveNext</c> — устраняя условные переходы из горячего пути
+  /// перечисления. Это особенно важно для <see cref="Get_Item"/>/
+  /// <see cref="Get_Length"/> (см. предупреждение о производительности ниже),
+  /// которые пересоздают перечислитель и полностью проходят его на каждый
+  /// вызов.
+  /// </para>
+  /// <para>
+  /// ⚠ <b>Предупреждение о производительности:</b> <see cref="Get_Item"/> и
+  /// <see cref="Get_Length"/> выполняют ПОЛНЫЙ обход (под)дерева документа на
+  /// КАЖДЫЙ вызов (пересоздавая <see cref="TEnumerator"/> с нуля), поскольку
+  /// результат обхода нигде не кэшируется. Типичный пользовательский цикл
+  /// <c>for I := 0 to List.Length - 1 do Process(List[I])</c> имеет,
+  /// следовательно, СЛОЖНОСТЬ O(n²) от размера документа вместо ожидаемого
+  /// O(n). Предпочитайте перечисление через <c>for..in</c> (единый проход,
+  /// использующий один и тот же <c>Enum.MoveNext</c>) или явный
+  /// <see cref="ToArray"/> вместо индексного доступа в цикле.
+  /// </para>
+  /// </remarks>
   TXMLElementList = class(TXMLNodeNamedNodeMap)
   private type
     TMoveNext = function: Boolean of object;
@@ -385,6 +470,7 @@ type
     function  TransformNode(const stylesheet: IXMLDocument): string; virtual;
   protected
     NodePtr: xmlNodePtr;
+    FOwnerDocRefTaken: Boolean;
     constructor Create(node: xmlNodePtr);
   public
     destructor Destroy; override;
@@ -499,6 +585,42 @@ type
     function  Get_Name: string;
     function  Get_OwnerElement: IXMLElement;
     function  Get_Value: string;
+    /// <summary>
+    /// Заменяет значение атрибута, полностью пересобирая его список дочерних
+    /// узлов (<c>AttrPtr.children</c>) — в модели libxml2/DOM значение атрибута
+    /// физически хранится не как строковое поле, а как единственный текстовый
+    /// узел-потомок атрибута (аналогично тому, как значение текстового элемента
+    /// хранится в его дочерних текстовых узлах).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Порядок действий небанален и важен:</b>
+    /// <list type="number">
+    /// <item><description>
+    /// Новый текстовый узел (<c>xmlNewDocText</c>) создаётся ПЕРВЫМ, ДО удаления
+    /// старого содержимого — если бы <c>AttrPtr.children</c> был очищен раньше,
+    /// а создание нового узла (теоретически) завершилось неудачей, атрибут
+    /// остался бы без значения вместо сохранения старого; текущий порядок
+    /// минимизирует окно, в котором операция может завершиться в
+    /// промежуточном состоянии.
+    /// </description></item>
+    /// <item><description>
+    /// Если атрибут был ID-атрибутом (<c>AttrPtr.atype = XML_ATTRIBUTE_ID</c>),
+    /// он снимается с ID-индекса документа (<c>xmlRemoveID</c>) ДО изменения
+    /// значения — поскольку ID-индекс документа физически хранит пары
+    /// (значение → узел), и смена значения атрибута сделала бы старую запись в
+    /// индексе неверной, если бы не была удалена заранее.
+    /// </description></item>
+    /// <item><description>
+    /// Старый список дочерних узлов освобождается (<c>xmlFreeNodeList</c>)
+    /// целиком, хотя в подавляющем большинстве случаев там ровно один текстовый
+    /// узел — это защищает от редкого, но допустимого в XML случая, когда
+    /// значение атрибута представлено НЕСКОЛЬКИМИ узлами (текст +
+    /// entity-ссылки, например <c>attr="&amp;amp;foo"</c>).
+    /// </description></item>
+    /// </list>
+    /// </para>
+    /// </remarks>
     procedure Set_Value(const attrValue: string);
     property  Name: string read Get_Name;
     property  Value: string read Get_Value write Set_value;
@@ -607,6 +729,58 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    /// <summary>
+    /// Компилирует все зарегистрированные (через <see cref="Add"/>) исходные
+    /// XSD-документы, сгруппированные по целевому namespace, в единый набор
+    /// файлов на диске, объединяя множественные источники одного и того же
+    /// namespace в единый XSD-документ на файл и корректно перестраивая
+    /// <c>&lt;xs:import&gt;</c>/<c>&lt;xs:include&gt;</c> связи между ними.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Почему временные файлы, а не документы в памяти:</b> согласно
+    /// комментарию в <see cref="Validate"/> ("custom ResourceLoader doesnt
+    /// called when not direct import in xsd"), механизм разрешения путей
+    /// libxml2 XML Schema для транзитивных (не прямых) <c>xs:import</c>
+    /// корректно работает только при загрузке схемы С ДИСКА через файловый
+    /// путь (<c>xmlSchemaNewParserCtxt</c> от имени файла), а не из документа,
+    /// уже находящегося в памяти — отсюда необходимость сохранения
+    /// скомпилированных схем во временную директорию (<c>FTempPath</c>) и
+    /// последующей повторной загрузки последнего файла (<c>FSchemaRoot</c>)
+    /// именно с диска.
+    /// </para>
+    /// <para>
+    /// <b>Обработка <c>xs:import</c> vs <c>xs:include</c> (вложенные функции
+    /// <c>IsImport</c>/<c>IsInclude</c>):</b>
+    /// <list type="bullet">
+    /// <item><description>
+    /// <c>xs:include</c>-элементы полностью УДАЛЯЮТСЯ из дерева (поскольку их
+    /// содержимое физически СЛИВАЕТСЯ в целевой документ через
+    /// <see cref="AddSource"/> — в один namespace может быть несколько
+    /// зарегистрированных исходных документов, объединяемых построчным клонированием
+    /// узлов <c>xmlDOMWrapCloneNode</c>).
+    /// </description></item>
+    /// <item><description>
+    /// <c>xs:import</c>-элементы также удаляются из исходного документа, но их
+    /// целевой namespace ЗАПОМИНАЕТСЯ (<c>Item.Imports.Add(...)</c>) и позже
+    /// заново синтезируется (второй проход <c>for I := 0 to Items.Count - 1</c>)
+    /// с корректным <c>schemaLocation</c>, указывающим на итоговый файл этого
+    /// импортируемого namespace (<c>Index.ToString + '.xsd'</c>) — поскольку
+    /// путь к файлу известен только ПОСЛЕ того, как все схемы скомпилированы и
+    /// сохранены, этот процесс не может быть выполнен за один проход.
+    /// </description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <b>Почему <c>FSchemaRoot</c> — это именно <c>Items.Last</c>:</b> "корневой"
+    /// файл для финальной валидации выбирается как ПОСЛЕДНИЙ зарегистрированный
+    /// namespace — неявное допущение, что вызывающий код регистрирует основную
+    /// (целевую) схему последней через <see cref="Add"/>, а её зависимости
+    /// (импортируемые схемы) — раньше. Если это предположение нарушается
+    /// (основная схема добавлена не последней), валидация будет использовать
+    /// не тот корневой документ.
+    /// </para>
+    /// </remarks>
     procedure Compile;
     function  Validate(const Doc: IXMLDocument): Boolean;
     function  IndexOf(const NamespaceURI: string): NativeInt;
@@ -750,6 +924,55 @@ begin
   end;
 end;
 
+/// <summary>
+/// Callback, регистрируемый один раз глобально через
+/// <c>xmlDeregisterNodeDefault</c>, вызываемый libxml2 непосредственно
+/// перед физическим освобождением памяти любого <c>xmlNodePtr</c> —
+/// НЕЗАВИСИМО от того, инициировано ли освобождение из кода этой Delphi-
+/// обёртки или изнутри самого libxml2 (например, слияние соседних текстовых
+/// узлов внутри <c>xmlAddChild</c>, или каскадное удаление поддерева).
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Почему это необходимо:</b> Delphi-обёртка (<c>TXMLNode</c>) хранит
+/// сырой указатель <c>NodePtr</c> на структуру libxml2. Если libxml2
+/// физически освободит эту структуру без ведома обёртки, <c>NodePtr</c>
+/// станет dangling-указателем, и любое последующее обращение к нему из
+/// Delphi-кода приведёт к неопределённому поведению (обычно — access
+/// violation при чтении освобождённой памяти, или ещё хуже — тихое чтение
+/// уже переиспользованной под другие данные памяти).
+/// </para>
+/// <para>
+/// <b>Что делает функция:</b> находит Delphi-обёртку через
+/// <c>Node._private</c> (если она существует — то есть если на этот узел
+/// когда-либо ссылался управляемый DOM-код) и:
+/// <list type="number">
+/// <item><description>
+/// Обходит список объявленных на узле пространств имён (<c>nsDef</c>) и для
+/// каждого, у которого есть своя обёртка (<c>Ns._private &lt;&gt; nil</c>,
+/// т.е. на него ссылается объект <see cref="TXMLNsNode"/>), обнуляет его
+/// поле <c>NsPtr</c> — поскольку освобождение узла в libxml2 обычно влечёт и
+/// освобождение его <c>nsDef</c>-списка.
+/// </description></item>
+/// <item><description>
+/// Обнуляет <c>NodePtr</c> самой обёртки узла, чтобы дальнейшие обращения к
+/// её свойствам (которые все читают <c>NodePtr.*</c>) как минимум не читали
+/// освобождённую память напрямую — хотя без дополнительных проверок
+/// <c>NodePtr = nil</c> в каждом геттере это всё равно приведёт к access
+/// violation при разыменовании <c>nil</c>, а не к тихой порче данных, что
+/// строго предпочтительнее.
+/// </description></item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>Известное ограничение:</b> эта функция НЕ снимает ref-счётчик с
+/// владеющего документа, который был установлен в
+/// <see cref="TXMLNode.Create"/> — освобождение этого ref-а происходит
+/// только в <see cref="TXMLNode.Destroy"/>, которая, однако, к этому
+/// моменту уже не может прочитать <c>NodePtr.doc</c> (он уже <c>nil</c>).
+/// См. соответствующее примечание в <see cref="TXMLNode.Destroy"/>.
+/// </para>
+/// </remarks>
 procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
 begin
   if Node._private <> nil then
@@ -771,6 +994,50 @@ begin
     raise EXmlUnsupported.CreateResFmt(@SUnsupportedBy, [NodeTypeName(xmlElementType(Node.NodeType))]);
 end;
 
+/// <summary>
+/// Разрешает "отложенное" (<c>Unlinked</c>) пространство имён атрибута в
+/// момент его фактического присоединения к дереву документа (см.
+/// <c>Cast(xmlAttrPtr, Prefix, NamespaceURI)</c> и общее замечание там же).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Вызывается из <see cref="TXMLNode.AppendChild"/>,
+/// <see cref="TXMLNode.InsertBefore"/> и <see cref="TXMLAttributeList.SetNamedItem"/>
+/// непосредственно перед фактическим прикреплением атрибута к родительскому
+/// элементу — на этот момент уже известен конкретный узел дерева
+/// (<paramref name="Parent"/>), от которого можно оттолкнуться при поиске/
+/// создании подходящего <c>xmlNsPtr</c> через <c>xmlSearchNs</c>/
+/// <c>xmlSearchNsByHref</c>.
+/// </para>
+/// <para>
+/// <b>Логика выбора стратегии поиска (три ветки if/elsif/else) — на первый
+/// взгляд неочевидна:</b>
+/// <list type="bullet">
+/// <item><description>
+/// Если задан ТОЛЬКО префикс (URI неизвестен/пуст) — ищем существующую
+/// декларацию namespace по префиксу (<c>xmlSearchNs</c>): предполагается,
+/// что вызывающий код полагается на то пространство имён, что уже объявлено
+/// в дереве под этим префиксом.
+/// </description></item>
+/// <item><description>
+/// Если задан ТОЛЬКО URI (префикс неизвестен/пуст) — ищем по URI
+/// (<c>xmlSearchNsByHref</c>): находим ЛЮБОЙ существующий в области
+/// видимости префикс, под которым уже объявлен этот URI.
+/// </description></item>
+/// <item><description>
+/// Если заданы ОБА (и префикс, и URI) — сначала ищем по префиксу, а затем
+/// ДОПОЛНИТЕЛЬНО проверяем, что найденная декларация действительно имеет
+/// именно этот URI (<c>xmlStrSame(...href)</c>); если URI не совпадает —
+/// откатываемся к <c>Ns := nil</c>, что ниже приведёт к созданию НОВОЙ
+/// namespace-декларации с этим префиксом и URI на самом узле
+/// <paramref name="Parent"/> (через <c>xmlNewNs</c>), даже если префикс уже
+/// использовался в дереве для другого URI — это соответствует ожидаемой
+/// семантике: точное соответствие (prefix, URI) имеет приоритет над простым
+/// совпадением одного из двух полей.
+/// </description></item>
+/// </list>
+/// </para>
+/// </remarks>
 procedure ResolveUnlinked(Parent: xmlNodePtr; Node: TXMLNode);
 var
   Ns: xmlNsPtr;
@@ -801,6 +1068,19 @@ begin
   end;
 end;
 
+/// <summary>
+/// Возвращает уже существующую Delphi-обёртку документа (через
+/// <c>Doc._private</c>), либо создаёт новую с флагом владения документом
+/// (<c>DocOwner = True</c>), если обёртки ещё нет.
+/// </summary>
+/// <remarks>
+/// <c>DocOwner = True</c> здесь означает, что созданная обёртка сама
+/// вызовет <c>xmlFreeDoc</c> в своём деструкторе — это корректно, поскольку
+/// единственный способ попасть в эту ветку "обёртки ещё нет" — это когда
+/// документ был создан напрямую через libxml2 API в обход этого враппера
+/// (например, документ трансформации XSLT), и теперь кто-то впервые
+/// обращается к нему через DOM-обёртку (см. <c>TXMLNode.Get_OwnerDocument</c>).
+/// </remarks>
 function Cast(const Doc: xmlDocPtr): TXMLDocument; overload;
 begin
   if Doc = nil then
@@ -812,6 +1092,13 @@ begin
   Result := TXMLDocument.Create(Doc, True);
 end;
 
+/// <summary>
+/// Возвращает уже существующую обёртку узла, либо создаёт новую нужного
+/// конкретного класса на основе <c>Node.&amp;type</c> (диспетчеризация по
+/// <c>xmlElementType</c>: элемент → <see cref="TXMLElement"/>, текст →
+/// <see cref="TXMLText"/>, и т.д.). Для неизвестных/необрабатываемых типов
+/// узлов возвращается базовый <see cref="TXMLNode"/>.
+/// </summary>
 function Cast(const Node: xmlNodePtr): TXMLNode; overload;
 begin
   if Node = nil then
@@ -835,6 +1122,7 @@ begin
   end;
 end;
 
+/// <summary>Атрибут-специфичная версия <see cref="Cast(xmlNodePtr)"/>, сокращающая явное приведение типа для вызывающего кода, ожидающего именно <see cref="TXMLAttribute"/>.</summary>
 function Cast(const Attr: xmlAttrPtr): TXMLAttribute; overload;
 begin
   if Attr = nil then
@@ -843,9 +1131,24 @@ begin
     Result := TXMLAttribute.Create(Attr)
   else
     Result := TXMLAttribute(Attr._private);
-
 end;
 
+/// <summary>
+/// Специальная перегрузка для "отвязанного" (unlinked) атрибута — созданного
+/// в памяти, но ещё не подключённого к дереву документа, для которого
+/// префикс/URI пространства имён ещё не могут быть разрешены через
+/// <c>xmlSearchNs</c> (это возможно только после того, как атрибут будет
+/// физически прикреплён к родительскому элементу — см.
+/// <see cref="ResolveUnlinked"/>).
+/// </summary>
+/// <remarks>
+/// Используется, например, при <c>CreateAttributeNS</c>, где вызывающий код
+/// указывает namespace URI ДО того, как атрибут присоединён к какому-либо
+/// элементу дерева — libxml2 не позволяет создать/найти <c>xmlNsPtr</c> без
+/// контекста конкретного узла дерева, поэтому запрос на разрешение
+/// пространства имён откладывается (<c>Attr.Unlinked := True</c>) до
+/// момента фактического присоединения атрибута к элементу.
+/// </remarks>
 function Cast(const Attr: xmlAttrPtr; const Prefix, NamespaceURI: RawByteString): TXMLAttribute; overload;
 begin
   if Attr = nil then
@@ -859,6 +1162,13 @@ begin
   Result.UnlinkedURI := NamespaceURI;
 end;
 
+/// <summary>
+/// Оборачивает <c>xmlNsPtr</c> (namespace-декларацию узла, физически не
+/// являющуюся отдельным DOM-узлом в libxml2) в MSXML-совместимый
+/// псевдо-узел-атрибут <see cref="TXMLNsAttribute"/>, поскольку MSXML DOM
+/// (в отличие от libxml2) трактует объявления <c>xmlns:prefix="uri"</c> как
+/// обычные атрибуты элемента — см. общее замечание к <see cref="TXMLNsNode"/>.
+/// </summary>
 function Cast(const Ns: xmlNsPtr; Parent: xmlNodePtr): TXMLNsAttribute; overload;
 begin
   if Ns = nil then
@@ -869,6 +1179,23 @@ begin
     Result := TXMLNsAttribute(Ns._private);
 end;
 
+/// <summary>
+/// Отвязывает узел <paramref name="Ns"/> от односвязного списка namespace-
+/// деклараций <paramref name="List"/> (обычно — <c>Node.nsDef</c>),
+/// корректируя указатели соседних элементов списка.
+/// </summary>
+/// <returns><c>True</c>, если <paramref name="Ns"/> был найден и отвязан; <c>False</c>, если он не найден в списке (или <c>nil</c>).</returns>
+/// <remarks>
+/// ⚠ Применять ТОЛЬКО к полям, реально являющимся головой связного списка
+/// (<c>Node.nsDef</c>), а не к одиночным ссылкам на namespace (например,
+/// <c>Node.ns</c> — используемое узлом пространство имён, а НЕ список его
+/// объявленных пространств имён). Для одиночных ссылок используйте
+/// <see cref="xmlClearNodeNsRef"/> — попытка передать <c>Node.ns</c> в
+/// качестве <paramref name="List"/> сюда семантически некорректна: функция
+/// присвоит полю значение <c>Ns.next</c> (следующий элемент ЧУЖОГО списка
+/// <c>nsDef</c>), а не <c>nil</c>, что приведёт к тихой порче ссылки узла на
+/// пространство имён.
+/// </remarks>
 function xmlUnlinkNs(var List: xmlNsPtr; Ns: xmlNsPtr): Boolean;
 begin
   if Ns = nil then
@@ -883,7 +1210,7 @@ begin
   else
   begin
     var Cur := List;
-    while Cur.next <> Ns do
+    while (Cur <> nil) and (Cur.next <> Ns) do
       Cur := Cur.next;
 
     if Cur <> nil then
@@ -896,6 +1223,37 @@ begin
   Result := False;
 end;
 
+/// <summary>
+/// Корректно сбрасывает ОДИНОЧНУЮ ссылку узла на используемое им
+/// пространство имён (<c>Node.ns</c>) в <c>nil</c>, если она указывает
+/// именно на удаляемый <paramref name="Ns"/> — в отличие от
+/// <see cref="xmlUnlinkNs"/>, которая предназначена для работы со связными
+/// списками, а не с одиночными полями.
+/// </summary>
+procedure xmlClearNodeNsRef(Node: xmlNodePtr; Ns: xmlNsPtr); inline;
+begin
+  if Node.ns = Ns then
+    Node.ns := nil;
+end;
+
+/// <summary>
+/// Полностью удаляет namespace-декларацию <paramref name="Ns"/> с узла
+/// <paramref name="Node"/>: отвязывает её из <c>Node.nsDef</c> и обходит ВСЕ
+/// узлы поддерева (<c>Node</c> и все его потомки через
+/// <c>Node.GetNext(Node)</c> — обход всего поддерева в document order),
+/// сбрасывая у каждого из них ссылку <c>Node.ns</c>, если она указывала
+/// именно на удаляемое пространство имён.
+/// </summary>
+/// <remarks>
+/// Этот полный обход поддерева необходим, потому что удаление
+/// декларации пространства имён с элемента делает НЕВАЛИДНЫМИ все ссылки на
+/// него у потомков — в libxml2/XML нет отдельного шага "переобъявления"
+/// (в отличие от MSXML, где это иногда решается через
+/// <c>ReconciliateNs</c>) при удалении, поэтому явная очистка ссылок
+/// обязательна во избежание dangling-указателей <c>xmlNsPtr</c> у дочерних
+/// узлов. Сложность операции — O(размер поддерева), что стоит учитывать при
+/// частом удалении namespace-деклараций в больших документах.
+/// </remarks>
 procedure xmlRemoveNsDef(Node: xmlNodePtr; Ns: xmlNsPtr);
 begin
   if not xmlUnlinkNs(Node.nsDef, Ns) then
@@ -907,7 +1265,7 @@ begin
   var Child := Node;
   while Child <> nil do
   begin
-    xmlUnlinkNs(Child.ns, Ns);
+    xmlClearNodeNsRef(Child, Ns);
     Child := Child.GetNext(Node);
   end;
 end;
@@ -1651,46 +2009,15 @@ end;
 
 function TXMLAttributes.NextNode: IXMLAttribute;
 begin
-  Result := NextNode as IXmlAttribute;
+  Result := inherited NextNode as IXmlAttribute;
 end;
 
 function TXMLAttributes.ToArray: TArray<IXmlAttribute>;
 begin
-  var Capacity := 16;
-  SetLength(Result, Capacity);
-
-  var Count := 0;
-  var Ns := Parent.nsDef;
-  while Ns <> nil do
-  begin
-    if Count = Capacity then
-    begin
-      Capacity := Capacity shl 1;
-      SetLength(Result, Capacity);
-    end;
-    Result[Count] := Cast(Ns, Parent);
-
-    Inc(Count);
-
-    Ns := Ns.next;
-  end;
-
-  var Prop := Parent.properties;
-  while Prop <> nil do
-  begin
-    if Count = Capacity then
-    begin
-      Capacity := Capacity shl 1;
-      SetLength(Result, Capacity);
-    end;
-    Result[Count] := Cast(Prop);
-
-    Inc(Count);
-
-    Prop := Prop.next;
-  end;
-
-  SetLength(Result, Count);
+  var Base := inherited ToArray;
+  SetLength(Result, System.Length(Base));
+  for var I := 0 to High(Base) do
+    Result[I] := Base[I] as IXmlAttribute;
 end;
 
 { TXMLElementList.TEnumerator }
@@ -1874,7 +2201,7 @@ begin
     while Enum.MoveNext do
     begin
       var Node := Enum.FCurrent;
-      if xmlStrSame(Node.Name, Pointer(LocalName)) and ((URI = '') or xmlStrSame(Node.ns.href, Pointer(URI))) then
+      if xmlStrSame(Node.Name, Pointer(LocalName)) and ((URI = '') or ((Node.ns <> nil) and xmlStrSame(Node.ns.href, Pointer(URI)))) then
       begin
         Result := Node;
         Break;
@@ -1936,12 +2263,41 @@ end;
 
 { TXMLNode }
 
+/// <summary>
+/// Создаёт Delphi-обёртку над уже существующим <c>xmlNodePtr</c>,
+/// устанавливая двустороннюю связь через <c>Node._private := Self</c>
+/// (используется функциями <c>Cast(...)</c> для кэширования — см. замечание
+/// к модулю в целом) и, если применимо, увеличивает refcount документа-
+/// владельца.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <b>Условие <c>FOwnerDocRefTaken</c>:</b>
+/// <c>(Node.doc &lt;&gt; nil) and (xmlNodePtr(Node.doc) &lt;&gt; Node) and (Node.doc._private &lt;&gt; nil)</c>.
+/// Третье условие в цепочке — <c>xmlNodePtr(Node.doc) &lt;&gt; Node</c> —
+/// исключает случай, когда сам создаваемый объект И ЕСТЬ обёртка документа
+/// (т.е. <c>TXMLDocument</c> унаследован от <c>TXMLNode</c> и вызывает этот
+/// же конструктор через <c>inherited Create(xmlNodePtr(doc))</c>) —
+/// документ не должен пытаться взять ref сам на себя, что привело бы к
+/// невозможности когда-либо снизить refcount до нуля и разрушить объект.
+/// </para>
+/// <para>
+/// Флаг <see cref="FOwnerDocRefTaken"/> запоминается отдельным полем (а не
+/// вычисляется заново в <c>Destroy</c> из текущего состояния <c>NodePtr</c>),
+/// поскольку к моменту разрушения объекта <c>NodePtr.doc</c> может быть уже
+/// недоступен (см. <see cref="NodeFreeCallback"/>, обнуляющий <c>NodePtr</c>
+/// при внешнем освобождении узла) — без сохранённого флага невозможно
+/// достоверно узнать, был ли вообще взят ref в конструкторе.
+/// </para>
+/// </remarks>
 constructor TXMLNode.Create(Node: xmlNodePtr);
 begin
   inherited Create;
   NodePtr := Node;
   NodePtr._private := Self;
-  if (Node.doc <> nil) and (xmlNodePtr(Node.doc) <> Node) and (Node.doc._private <> nil) then
+
+  FOwnerDocRefTaken := (Node.doc <> nil) and (xmlNodePtr(Node.doc) <> Node) and (Node.doc._private <> nil);
+  if FOwnerDocRefTaken then
     TXMLDocument(Node.doc._private)._AddRef;
 
   FXSLTErrors := TXSLTErrors.Create;
@@ -1957,7 +2313,7 @@ var
   doc: TXMLDocument;
 begin
   doc := nil;
-  if (NodePtr <> nil) and (NodePtr._private = Self) then
+  if FOwnerDocRefTaken and (NodePtr <> nil) and (NodePtr._private = Self) then
   begin
     if (NodePtr.doc <> nil) and (NodePtr.doc._private <> nil) then
       doc := TXMLDocument(NodePtr.doc._private);
@@ -2067,7 +2423,7 @@ end;
 
 function TXMLNode.Get_ChildNodes: IXMLNodeList;
 begin
-  Result := TXMLNodeList.Create(NodePtr.Children);
+  Result := TXMLNodeList.Create(NodePtr);
 end;
 
 function TXMLNode.Get_FirstChild: IXMLNode;
@@ -2343,6 +2699,7 @@ end;
 procedure TXMLAttribute.Set_Value(const AttrValue: string);
 begin
   var children: xmlNodePtr := nil;
+  var WasId := AttrPtr.atype = XML_ATTRIBUTE_ID;
 
   if AttrValue <> '' then
   begin
@@ -2351,11 +2708,11 @@ begin
       LX2InternalError;
   end;
 
-  if (AttrPtr.atype = XML_ATTRIBUTE_ID) then
-  begin
+  // Снимаем старую запись из ID-таблицы документа ДО того, как физически
+  // изменится значение атрибута — иначе таблица будет содержать устаревшую
+  // пару (старое значение -> узел).
+  if WasId then
     xmlRemoveID(AttrPtr.parent.doc, AttrPtr);
-    AttrPtr.atype := XML_ATTRIBUTE_ID;
-  end;
 
   if AttrPtr.children <> nil then
     xmlFreeNodeList(AttrPtr.children);
@@ -2373,6 +2730,18 @@ begin
         AttrPtr.last := Tmp;
       Tmp := Tmp.next;
     end;
+  end;
+
+  // Регистрируем НОВОЕ значение в ID-таблице документа, если атрибут
+  // изначально был ID-атрибутом и получил непустое новое значение.
+  // Сигнатура: xmlAddID(ctxt, doc, value, attr) — ctxt=nil означает
+  // регистрацию без выполнения валидационных проверок уникальности,
+  // см. conclase.net.
+  if WasId and (AttrValue <> '') then
+  begin
+    AttrPtr.atype := XML_ATTRIBUTE_ID;   // xmlRemoveID могла сбросить/не менять atype — восстанавливаем явно
+    if xmlAddID(nil, AttrPtr.parent.doc, xmlCharPtr(Utf8Encode(AttrValue)), AttrPtr) = nil then
+      LX2InternalError;   // например, дубликат ID в документе при включённой валидации
   end;
 end;
 
@@ -2830,6 +3199,7 @@ begin
 
   FDocOwner := DocOwner;
   FValidateOnParse := True;
+  FOptions := DefaultParserOptions;
 end;
 
 destructor TXMLDocument.Destroy;
@@ -2876,7 +3246,7 @@ begin
     if Prefix = 'xmlns' then
       Result := Cast(xmlNewNs(nil, nil, xmlCharPtr(LocalName)), nil)
     else
-      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(Utf8Encode(LocalName)), nil), Prefix, '');
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Prefix, '');
   end
   else if Name = 'xmlns' then
     Result := Cast(xmlNewNs(nil, '', nil), nil)
@@ -2893,7 +3263,7 @@ begin
     if Prefix = 'xmlns' then
       Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), xmlStrPtr(Utf8Encode(LocalName))), nil)
     else
-      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Utf8Encode(Prefix), Utf8Encode(namespaceURI));
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Prefix, Utf8Encode(namespaceURI));
   end
   else if LocalName = 'xmlns' then
     Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), nil), nil)
@@ -2945,16 +3315,11 @@ function TXMLDocument.CreateNode(NodeType: Integer; const Name, NamespaceURI: st
 var
   Prefix, LocalName, HRef: RawByteString;
 begin
+  SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
   if NamespaceURI <> '' then
-  begin
-    SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
-    HRef := Utf8Encode(NamespaceURI);
-  end
+    HRef := Utf8Encode(NamespaceURI)
   else
-  begin
-    SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
     HRef := '';
-  end;
 
   case NodeType of
     NODE_ATTRIBUTE:
@@ -3362,6 +3727,22 @@ end;
 
 { TXMLSchemaCollection }
 
+/// <summary>
+/// Мост между структурированными XML Schema ошибками libxml2 (вызываемыми
+/// НАПРЯМУЮ из C-кода libxml2 через указатель функции, зарегистрированный
+/// через <c>xmlSchemaSetParserStructuredErrors</c>/<c>SetValidStructuredErrors</c>)
+/// и управляемым Delphi-обработчиком ошибок документа.
+/// </summary>
+/// <remarks>
+/// Обёрнут в <c>try..except</c>, ПОЛНОСТЬЮ поглощающий любое исключение —
+/// это необходимо, поскольку данная функция вызывается напрямую из
+/// нативного C-кода libxml2 (объявлена <c>cdecl</c>), у которого нет
+/// механизма Pascal-исключений/finally-блоков в стеке вызовов: если бы
+/// Delphi-исключение "просочилось" через границу C-вызова обратно в
+/// libxml2, это привело бы к неопределённому поведению/аварийному
+/// завершению процесса, а не к корректной обработке ошибки на стороне
+/// Pascal-кода.
+/// </remarks>
 procedure SchemaParserErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 begin
   try
@@ -3601,8 +3982,8 @@ begin
 
   var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
   Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
-  //TODO: ��������� ��������, ���� �� �������� ��������� ����� ������������
-  if not Result and (Doc.Errors.Count > 0) and ((Items.Count > 1) or (Items[0].Sources.Count > 1)) then
+  //TODO: Временная заглушка, пока не научимся нормально схемы обрабатывать
+  if not Result and (Doc.Errors.Count > 0) then
     Result := Doc.Errors[0].ErrorCode = 1845;
 
   xmlSchemaFreeValidCtxt(vctxt);
@@ -3766,6 +4147,7 @@ begin
   begin
     if Prop.next = NsPtr then
       Exit(Cast(Prop, Parent));
+    Prop := Prop.next;
   end;
   Result := nil;
 end;
