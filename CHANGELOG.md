@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.0.1 — 2026-09-06
+
+### Fixed
+
+- `xmlNodeHelper.SelectSingleNode` (and therefore `IXMLNode.SelectSingleNode`) leaked the
+  libxml2 `xmlXPathObject` when a valid XPath expression selected nothing: the early exit
+  skipped `xmlXPathFreeObject`. Reported in
+  [#5](https://github.com/apokroy/LX2/issues/5). The single-node query now evaluates
+  through `XPathEval` like `SelectNodes`, which also registers the namespaces in scope, so
+  a prefixed query such as `//p:item` works in `SelectSingleNode` too.
+- Regression tests in `Tests\LX2APITests.pas` check `xmlMemUsed` across empty results and
+  the namespace resolution.
+
 ## v1.0.0 — 2026-09-06
 
 ### Static linking of libxml2 and libxslt (Windows x64)

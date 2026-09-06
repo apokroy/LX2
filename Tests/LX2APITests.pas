@@ -24,6 +24,10 @@ type
     procedure TestCreateDocFromFile;
     [Test]
     procedure TestCreateDocFromStream;
+    [Test]
+    procedure TestSelectSingleNodeEmptyResultDoesNotLeak;
+    [Test]
+    procedure TestSelectSingleNodeResolvesNamespacesInScope;
   end;
 
 implementation
@@ -76,6 +80,39 @@ begin
   if doc <> nil then
     Assert.AreEqual<RawByteString>(XmlPreamble + #10 + '<root/>', Trim(doc.Xml));
   xmlFreeDoc(doc);
+end;
+
+// Issue #5: an XPath query that is valid but selects nothing left the xmlXPathObject
+// unreleased. LX2Lib.Load installs the libxml2 debug allocator, so xmlMemUsed counts
+// every byte the library holds: it must not grow across a query with an empty result.
+procedure TXMLHelpersTest.TestSelectSingleNodeEmptyResultDoesNotLeak;
+begin
+  var doc := xmlDoc.Create('<root><item id="1"/><item id="2"/></root>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    Assert.AreNotEqual<Pointer>(doc.documentElement.SelectSingleNode('//item[@id="2"]'), nil);
+    var used := xmlMemUsed;
+    for var I := 1 to 100 do
+      Assert.AreEqual<Pointer>(doc.documentElement.SelectSingleNode('//item[@id="3"]'), nil);
+    Assert.AreEqual<NativeUInt>(used, xmlMemUsed, 'libxml2 memory must not grow on empty XPath results');
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// SelectSingleNode evaluates through XPathEval like SelectNodes, so a prefix declared in
+// the document resolves in a single-node query as well.
+procedure TXMLHelpersTest.TestSelectSingleNodeResolvesNamespacesInScope;
+begin
+  var doc := xmlDoc.Create('<p:root xmlns:p="urn:test"><p:item>x</p:item></p:root>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    var node := doc.documentElement.SelectSingleNode('//p:item[text()="x"]');
+    Assert.AreNotEqual<Pointer>(node, nil);
+    Assert.AreEqual<RawByteString>('item', node.LocalName);
+  finally
+    xmlFreeDoc(doc);
+  end;
 end;
 
 procedure TXMLHelpersTest.TestCreateDocFromStream;

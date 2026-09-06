@@ -1255,18 +1255,18 @@ begin
     Exit;
   end;
 
-  var ctx := xmlXPathNewContext(doc);
+  // Same evaluation as SelectNodes: the namespaces in scope are registered, and the
+  // result object is released on every path, including an empty node set.
+  var xpathObj := XPathEval(queryString, nil, nil);
+  if xpathObj = nil then
+    Exit(nil);
   try
-    xmlXPathSetContextNode(@Self, ctx);
-
-    var xpathObj := xmlXPathEvalExpression(xmlStrPtr(queryString), ctx);
-    if (xpathObj = nil) or (xpathObj.nodesetval = nil) or (xpathObj.nodesetval.nodeNr = 0) then
-      Exit(nil);
-
-    Result := xpathObj.nodesetval.nodeTab[0];
-    xmlXPathFreeObject(xpathObj);
+    if (xpathObj.nodesetval <> nil) and (xpathObj.nodesetval.nodeNr > 0) then
+      Result := xpathObj.nodesetval.nodeTab[0]
+    else
+      Result := nil;
   finally
-    xmlXPathFreeContext(ctx);
+    xmlXPathFreeObject(xpathObj);
   end;
 end;
 
