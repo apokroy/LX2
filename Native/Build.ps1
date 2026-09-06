@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Static build of libxml2 and libxslt for LX2: Win64 objects and the LX2.Static.pas unit.
 
@@ -193,7 +193,7 @@ $Win32Imports = @{
                        'InitOnceExecuteOnce', 'TlsAlloc', 'TlsFree', 'TlsGetValue', 'TlsSetValue',
                        'RegisterWaitForSingleObject', 'UnregisterWait', 'CloseHandle', 'DuplicateHandle',
                        'GetCurrentProcess', 'GetCurrentThread', 'GetLastError', 'SetLastError',
-                       'MultiByteToWideChar', 'WideCharToMultiByte', 'GetACP', 'IsValidCodePage', 'IsDBCSLeadByteEx',
+                       'MultiByteToWideChar', 'WideCharToMultiByte', 'GetACP', 'IsValidCodePage', 'IsDBCSLeadByteEx', 'GetCPInfo',
                        'GetLocaleInfoA', 'EnumSystemLocalesA', 'LCMapStringW',
                        'QueryPerformanceCounter', 'QueryPerformanceFrequency', 'GetFileAttributesA')
     'bcrypt.dll'   = @('BCryptGenRandom')

@@ -156,6 +156,7 @@ procedure WideCharToMultiByte; stdcall; external 'kernel32.dll';
 procedure GetACP; stdcall; external 'kernel32.dll';
 procedure IsValidCodePage; stdcall; external 'kernel32.dll';
 procedure IsDBCSLeadByteEx; stdcall; external 'kernel32.dll';
+procedure GetCPInfo; stdcall; external 'kernel32.dll';
 procedure GetLocaleInfoA; stdcall; external 'kernel32.dll';
 procedure EnumSystemLocalesA; stdcall; external 'kernel32.dll';
 procedure LCMapStringW; stdcall; external 'kernel32.dll';

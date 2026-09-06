@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.0.2 — 2026-09-06
+
+### Fixed
+
+- XPath queries without an explicit namespace list (`SelectNodes`, `SelectSingleNode`,
+  `XPathEval`) saw only the namespace of the context node itself. Every prefix declared on
+  the context node or on any of its ancestors is now registered, the nearest declaration
+  winning, so `//p:item` works from an unprefixed root that carries `xmlns:p`.
+- `xmlNodeHelper.GetElementsByTagName` never returned when called on an element with
+  children: the walk restarted from the first child on every step instead of advancing
+  from the current node. The DOM layer (`IXMLElement.GetElementsByTagName`) uses its own
+  list and was not affected.
+- Parsing single-byte encodings (`windows-1251`, ISO 8859, KOI8) through the static build
+  was about 20 % slower than the DLL: the iconv shim probed every input byte for a DBCS
+  lead byte. Single-byte code pages are recognised once per descriptor (`GetCPInfo`) and
+  converted in 1024-character chunks; the same document now parses about 9 % faster than
+  with the DLL.
+
 ## v1.0.1 — 2026-09-06
 
 ### Fixed

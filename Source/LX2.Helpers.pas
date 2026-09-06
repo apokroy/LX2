@@ -957,7 +957,7 @@ begin
         Inc(count);
       end;
     end;
-    node := GetNext(node);
+    node := node.GetNext(@Self);
   end;
   SetLength(Result, count);
 end;
@@ -1211,11 +1211,21 @@ begin
     end
     else
     begin
-      var ns := Self.ns;
-      while ns <> nil do
+      // Every prefix declared on the context node or one of its ancestors is visible to
+      // the expression, the way it is in the document; a declaration closer to the node
+      // shadows the same prefix declared further up, so the walk starts at the node and
+      // never overwrites a prefix already registered.
+      var node: xmlNodePtr := @Self;
+      while (node <> nil) and (node.&type = XML_ELEMENT_NODE) do
       begin
-        xmlXPathRegisterNs(ctx, ns.prefix, ns.href);
-        ns := ns.next;
+        var ns := node.nsDef;
+        while ns <> nil do
+        begin
+          if (ns.prefix <> nil) and (xmlXPathNsLookup(ctx, ns.prefix) = nil) then
+            xmlXPathRegisterNs(ctx, ns.prefix, ns.href);
+          ns := ns.next;
+        end;
+        node := node.parent;
       end;
     end;
 

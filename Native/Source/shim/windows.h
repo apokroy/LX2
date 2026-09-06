@@ -129,6 +129,8 @@ int    WINAPI WideCharToMultiByte(UINT, DWORD, LPCWSTR, int, LPSTR, int, LPCSTR,
 UINT   WINAPI GetACP(void);
 BOOL   WINAPI IsValidCodePage(UINT);
 BOOL   WINAPI IsDBCSLeadByteEx(UINT, BYTE);
+typedef struct _cpinfo { UINT MaxCharSize; BYTE DefaultChar[2]; BYTE LeadByte[12]; } CPINFO, *LPCPINFO;
+BOOL   WINAPI GetCPInfo(UINT, LPCPINFO);
 int    WINAPI GetLocaleInfoA(LCID, LCTYPE, LPSTR, int);
 BOOL   WINAPI EnumSystemLocalesA(LOCALE_ENUMPROCA, DWORD);
 int    WINAPI LCMapStringW(LCID, DWORD, LPCWSTR, int, LPWSTR, int);

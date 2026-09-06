@@ -28,6 +28,10 @@ type
     procedure TestSelectSingleNodeEmptyResultDoesNotLeak;
     [Test]
     procedure TestSelectSingleNodeResolvesNamespacesInScope;
+    [Test]
+    procedure TestGetElementsByTagNameWalksTheWholeSubtree;
+    [Test]
+    procedure TestXPathSeesPrefixesDeclaredOnAncestors;
   end;
 
 implementation
@@ -110,6 +114,59 @@ begin
     var node := doc.documentElement.SelectSingleNode('//p:item[text()="x"]');
     Assert.AreNotEqual<Pointer>(node, nil);
     Assert.AreEqual<RawByteString>('item', node.LocalName);
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// Without an explicit namespace list the XPath context carries every prefix in scope of
+// the context node: declared on the node itself or on any ancestor, the nearest
+// declaration winning. The context node need not be in a namespace itself.
+procedure TXMLHelpersTest.TestXPathSeesPrefixesDeclaredOnAncestors;
+begin
+  var doc := xmlDoc.Create(
+    '<a xmlns:p="urn:outer"><b xmlns:p="urn:inner"><p:x/></b><c><d><p:y/></d></c></a>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    var a := doc.documentElement;
+    // a is not in a namespace, the prefix comes from its own declaration: p:y only,
+    // p:x belongs to urn:inner
+    Assert.AreEqual<Integer>(1, Length(a.SelectNodes('//p:*')));
+    var y := a.SelectSingleNode('.//p:y');
+    Assert.AreNotEqual<Pointer>(y, nil);
+    Assert.AreEqual<RawByteString>('urn:outer', y.NamespaceURI);
+    // from d the nearest declaration of p is on a: urn:outer, so p:x is not visible.
+    // The queries carry a predicate or a "./" step so that libxml2 evaluates them, not the
+    // built-in namespace-agnostic engine.
+    var d := y.parent;
+    Assert.AreEqual<Integer>(0, Length(d.SelectNodes('//p:x')));
+    Assert.AreNotEqual<Pointer>(d.SelectSingleNode('./p:y'), nil);
+    // from b its own declaration shadows the outer one
+    var b := a.FirstElementChild;
+    Assert.AreNotEqual<Pointer>(b.SelectSingleNode('./p:x'), nil);
+    Assert.AreEqual<Integer>(0, Length(b.SelectNodes('//p:y')));
+    Assert.AreEqual<Integer>(1, Length(b.SelectNodes('//p:x')));
+    // an explicit list replaces the declarations in scope
+    var ns: xmlNamespaces := [Default(xmlNamespace)];
+    ns[0].Prefix := 'q';
+    ns[0].URI := 'urn:inner';
+    Assert.AreEqual<Integer>(1, Length(d.SelectNodes('//q:*', ns)));
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// GetElementsByTagName walks the subtree in document order and stops at the end of it:
+// matches at every depth are collected once, elements outside the subtree are not.
+procedure TXMLHelpersTest.TestGetElementsByTagNameWalksTheWholeSubtree;
+begin
+  var doc := xmlDoc.Create('<root><a><x/><b><x/><c><x/></c></b></a><x/><a><x/></a></root>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    Assert.AreEqual<Integer>(5, Length(doc.documentElement.GetElementsByTagName('x')));
+    Assert.AreEqual<Integer>(3, Length(doc.documentElement.FirstElementChild.GetElementsByTagName('x')));
+    Assert.AreEqual<Integer>(0, Length(doc.documentElement.GetElementsByTagName('none')));
+    Assert.AreEqual<Integer>(9, Length(doc.documentElement.GetElementsByTagName('*')));
   finally
     xmlFreeDoc(doc);
   end;

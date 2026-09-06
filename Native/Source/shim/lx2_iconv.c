@@ -30,7 +30,19 @@ enum {
 typedef struct {
     unsigned from;   /* code page of the input */
     unsigned to;     /* code page of the output */
+    int from_sbcs;   /* every input byte is one character: no lead-byte probing needed */
 } lx2_iconv;
+
+/* Single-byte code pages (the ANSI, OEM, ISO and KOI8 families) have MaxCharSize 1;
+ * the Unicode pseudo code pages and the DBCS/MBCS pages are probed per character. */
+static int lx2_is_sbcs(unsigned cp)
+{
+    CPINFO info;
+
+    if (cp == LX2_CP_UTF8 || cp >= 0x7FFF0000)
+        return 0;
+    return GetCPInfo(cp, &info) && info.MaxCharSize == 1;
+}
 
 /* Alias table: names normalised to upper case without '-', '_' and ' '. */
 static const struct { const char *name; unsigned cp; } lx2_aliases[] = {
@@ -111,6 +123,7 @@ iconv_t iconv_open(const char *tocode, const char *fromcode)
     }
     cd->from = from;
     cd->to = to;
+    cd->from_sbcs = lx2_is_sbcs(from);
     return (iconv_t)cd;
 }
 
@@ -249,7 +262,8 @@ static int lx2_from_wide(unsigned cp, const wchar_t *w, int wn, unsigned char *o
     return (GetLastError() == ERROR_INSUFFICIENT_BUFFER) ? -2 : -1;
 }
 
-#define LX2_CHUNK_CHARS 128
+/* 1024 characters keep the stack buffers at 12 KB and the Windows converter calls rare. */
+#define LX2_CHUNK_CHARS 1024
 
 size_t iconv(iconv_t cdp, char **inbuf, size_t *inbytesleft, char **outbuf, size_t *outbytesleft)
 {
@@ -277,6 +291,10 @@ size_t iconv(iconv_t cdp, char **inbuf, size_t *inbytesleft, char **outbuf, size
 
         /* Gather a chunk of whole characters. On any conversion error the chunk is retried
          * character by character below, so the error lands on the exact offender. */
+        if (cd->from_sbcs) {
+            bytes = (inleft < LX2_CHUNK_CHARS) ? (int)inleft : LX2_CHUNK_CHARS;
+            chars = bytes;
+        }
         while (chars < LX2_CHUNK_CHARS && (size_t)bytes < inleft) {
             int len = lx2_charlen(cd->from, in + bytes, inleft - bytes);
             if (len < 0) { err = EILSEQ; break; }
