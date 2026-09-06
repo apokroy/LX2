@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{90080221-ADBB-4707-BEBD-6153E5CCA489}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="Packages\LX2.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="Tests\LX2Tests.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="LX2">
+        <MSBuild Projects="Packages\LX2.dproj"/>
+    </Target>
+    <Target Name="LX2:Clean">
+        <MSBuild Projects="Packages\LX2.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LX2:Make">
+        <MSBuild Projects="Packages\LX2.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="LX2Tests">
+        <MSBuild Projects="Tests\LX2Tests.dproj"/>
+    </Target>
+    <Target Name="LX2Tests:Clean">
+        <MSBuild Projects="Tests\LX2Tests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="LX2Tests:Make">
+        <MSBuild Projects="Tests\LX2Tests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="LX2;LX2Tests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="LX2:Clean;LX2Tests:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="LX2:Make;LX2Tests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

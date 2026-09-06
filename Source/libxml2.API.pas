@@ -76,6 +76,9 @@ type
     FLibraryFileName: string;
     Handle: THandle;
   public
+    /// <summary>Binder for a statically linked library (the LX2.Static unit): when assigned,
+    /// Load calls it instead of loading the library file.</summary>
+    class var StaticBinder: TProcedure;
     class procedure Initialize; static;
     class procedure Load(const LibraryFileName: string = libxml2); static;
     class procedure Unload; static;
@@ -4683,29 +4686,41 @@ end;
 
 class procedure LX2Lib.Initialize;
 begin
-  if Handle = 0 then
+  if not FIsLoaded then
     Load;
 end;
 
 class procedure LX2Lib.Unload;
 begin
-  if Handle <> 0 then
+  if FIsLoaded then
   begin
     xmlCleanupParser;
-    FreeLibrary(Handle);
+    if Handle <> 0 then
+      FreeLibrary(Handle);
     Handle := 0;
+    FIsLoaded := False;
   end;
 end;
 
 class procedure LX2Lib.Load(const LibraryFileName: string);
 begin
-  if Handle <> 0 then
+  if FIsLoaded then
     Unload;
 
-  Handle := SafeLoadLibrary(LibraryFileName);
+  if Assigned(StaticBinder) then
+  begin
+    // The library is linked into the executable: the API pointers receive the addresses of
+    // the entry points, no library file is needed.
+    StaticBinder;
+    FLibraryFileName := '';
+  end
+  else
+  begin
+    Handle := SafeLoadLibrary(LibraryFileName);
 
-  if Handle = 0 then
-    RaiseLastOSError;
+    if Handle = 0 then
+      RaiseLastOSError;
+    FLibraryFileName := LibraryFileName;
 
 {$region 'load procs'}
 
@@ -5408,12 +5423,14 @@ begin
   xmlXPathWrapString              := GetProcAddress(Handle, 'xmlXPathWrapString');
 
 {$endregion}
+  end;
 
   xmlMemSetup(xmlMemFree, xmlMemMalloc, xmlMemRealloc, xmlMemoryStrdup);
 
   xmlMemGet(xmlFree, xmlMalloc, xmlRealloc, xmlStrdup);
 
   xmlSchemaInitTypes;
+  FIsLoaded := True;
 end;
 
 

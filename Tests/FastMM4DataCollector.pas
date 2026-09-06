@@ -1,4 +1,4 @@
-unit FastMM4DataCollector;
+﻿unit FastMM4DataCollector;
 
 {$I FastMM4Options.inc}
 

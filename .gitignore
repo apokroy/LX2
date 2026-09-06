@@ -37,9 +37,17 @@
 /Win64
 /OSX32
 /Linux64
+Packages/Win32/
+Packages/Win64/
+Tests/Win64/
 /__history
 *.bak
 *.Patch
 *.#00
 *.pch
 *.skincfg
+
+# Static build (Native): generated headers and smoke-test output; the objects in
+# Native/Lib are committed so that consumers never need the C compiler.
+Native/Gen/
+Native/Tests/Win64/

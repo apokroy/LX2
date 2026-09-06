@@ -1,4 +1,4 @@
-// Based on TOmniBaseBoundedStack class from the OmniThreadLibrary,
+﻿// Based on TOmniBaseBoundedStack class from the OmniThreadLibrary,
 // originally written by GJ and Primoz Gabrijelcic.
 
 unit FastMM4LockFreeStack;

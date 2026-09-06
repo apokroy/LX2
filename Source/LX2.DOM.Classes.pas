@@ -359,8 +359,7 @@ type
   /// вместо ветвления <c>if Recursive then ... if UseMask then ...</c> внутри
   /// каждого вызова <c>MoveNext</c> (что означало бы 2 проверки условий на
   /// каждый шаг итерации), нужная реализация обхода
-  /// (<see cref="DoNextSibling"/>/<see cref="DoNextSiblingWithMask"/>/
-  /// <see cref="DoNextRecursive"/>/<see cref="DoNextRecursiveWithMask"/>)
+  /// (DoNextSibling/DoNextSiblingWithMask/DoNextRecursive/DoNextRecursiveWithMask)
   /// выбирается ОДИН РАЗ в конструкторе и сохраняется как метод-указатель
   /// <c>FDoMoveNext</c> — устраняя условные переходы из горячего пути
   /// перечисления. Это особенно важно для <see cref="Get_Item"/>/
@@ -756,7 +755,7 @@ type
     /// <item><description>
     /// <c>xs:include</c>-элементы полностью УДАЛЯЮТСЯ из дерева (поскольку их
     /// содержимое физически СЛИВАЕТСЯ в целевой документ через
-    /// <see cref="AddSource"/> — в один namespace может быть несколько
+    /// AddSource — в один namespace может быть несколько
     /// зарегистрированных исходных документов, объединяемых построчным клонированием
     /// узлов <c>xmlDOMWrapCloneNode</c>).
     /// </description></item>
@@ -2698,12 +2697,13 @@ end;
 
 procedure TXMLAttribute.Set_Value(const AttrValue: string);
 begin
+  var Args: TXmlArgs;
   var children: xmlNodePtr := nil;
   var WasId := AttrPtr.atype = XML_ATTRIBUTE_ID;
 
   if AttrValue <> '' then
   begin
-    children := xmlNewDocText(AttrPtr.parent.doc, xmlCharPtr(Utf8Encode(attrValue)));
+    children := xmlNewDocText(AttrPtr.parent.doc, Args.StrPtr(attrValue));
     if children = nil then
       LX2InternalError;
   end;
@@ -2740,7 +2740,7 @@ begin
   if WasId and (AttrValue <> '') then
   begin
     AttrPtr.atype := XML_ATTRIBUTE_ID;   // xmlRemoveID могла сбросить/не менять atype — восстанавливаем явно
-    if xmlAddID(nil, AttrPtr.parent.doc, xmlCharPtr(Utf8Encode(AttrValue)), AttrPtr) = nil then
+    if xmlAddID(nil, AttrPtr.parent.doc, Args.StrPtr(AttrValue), AttrPtr) = nil then
       LX2InternalError;   // например, дубликат ID в документе при включённой валидации
   end;
 end;
@@ -2759,12 +2759,15 @@ end;
 
 function TXMLElement.GetAttributeNodeNs(const NamespaceURI, Name: string): IXMLAttribute;
 begin
-  Result := Cast(NodePtr.GetAttributeNodeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name))));
+  var Args: TXmlArgs;
+  Result := Cast(NodePtr.GetAttributeNodeNs(Args.StrPtr(NamespaceURI), Args.StrPtr(Name)));
 end;
 
 function TXMLElement.GetAttributeNs(const NamespaceURI, Name: string): string;
 begin
-  Result := xmlCharToStrAndFree(xmlGetNsProp(NodePtr, xmlStrPtr(Utf8Encode(NamespaceURI)), xmlStrPtr(Utf8Encode(Name))));
+  var Args: TXmlArgs;
+  // xmlGetNsProp takes the local name first and the namespace second
+  Result := xmlCharToStrAndFree(xmlGetNsProp(NodePtr, Args.StrPtr(Name), Args.StrPtr(NamespaceURI)));
 end;
 
 procedure TXMLElement.SetAttribute(const Name: string; Value: Int64);
@@ -2786,27 +2789,32 @@ end;
 
 function TXMLElement.SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
 begin
-  Result := Cast(NodePtr.SetAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Value))));
+  var Args: TXmlArgs;
+  Result := Cast(NodePtr.SetAttributeNs(Args.StrPtr(NamespaceURI), Args.StrPtr(Name), Args.StrPtr(Value)));
 end;
 
 function TXMLElement.HasAttribute(const Name: string): Boolean;
 begin
-  Result := NodePtr.HasAttribute(xmlCharPtr(Utf8Encode(Name)));
+  var Args: TXmlArgs;
+  Result := NodePtr.HasAttribute(Args.StrPtr(Name));
 end;
 
 function TXMLElement.HasAttributeNs(const NamespaceURI, Name: string): Boolean;
 begin
-  Result := NodePtr.HasAttributeNs(xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Name)));
+  var Args: TXmlArgs;
+  Result := NodePtr.HasAttributeNs(Args.StrPtr(NamespaceURI), Args.StrPtr(Name));
 end;
 
 function TXMLElement.AddChild(const Name: string; const Content: string = ''): IXMLElement;
 begin
-  Result := Cast(NodePtr.AddChild(xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(Content)))) as IXMLElement;
+  var Args: TXmlArgs;
+  Result := Cast(NodePtr.AddChild(Args.StrPtr(Name), Args.StrPtr(Content))) as IXMLElement;
 end;
 
 function TXMLElement.AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;
 begin
-  Result := Cast(NodePtr.AddChildNs(xmlCharPtr(Utf8Encode(Name)), xmlCharPtr(Utf8Encode(NamespaceURI)), xmlCharPtr(Utf8Encode(Content)))) as IXMLElement;
+  var Args: TXmlArgs;
+  Result := Cast(NodePtr.AddChildNs(Args.StrPtr(Name), Args.StrPtr(NamespaceURI), Args.StrPtr(Content))) as IXMLElement;
 end;
 
 function TXMLElement.FirstElementChild: IXMLElement;
@@ -2850,12 +2858,12 @@ var
 begin
   SplitXMLName(Utf8Encode(Name), Prefix, LocalName);
   if Prefix = '' then
-    Result := xmlUnsetProp(NodePtr, xmlCharPtr(LocalName)) = 0
+    Result := xmlUnsetProp(NodePtr, xmlStrPtr(LocalName)) = 0
   else
   begin
     var Ns := NodePtr.SearchNs(Prefix);
     if Ns <> nil then
-      Result := xmlUnsetNsProp(NodePtr, Ns, xmlCharPtr(LocalName)) = 0
+      Result := xmlUnsetNsProp(NodePtr, Ns, xmlStrPtr(LocalName)) = 0
     else
       Result := False;
   end;
@@ -2863,10 +2871,11 @@ end;
 
 function TXMLElement.RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
 begin
+  var Args: TXmlArgs;
   var Ns := NodePtr.SearchNsByRef(Utf8Encode(NamespaceURI));
   if Ns = nil then
     Exit(False);
-  Result := xmlUnsetNsProp(NodePtr, Ns, xmlCharPtr(Utf8Encode(Name))) = 0
+  Result := xmlUnsetNsProp(NodePtr, Ns, Args.StrPtr(Name)) = 0
 end;
 
 function TXMLElement.RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
@@ -2893,17 +2902,19 @@ end;
 
 procedure TXMLCharacterData.AppendData(const Data: string);
 begin
-  xmlNodeAddContent(NodePtr, xmlCharPtr(Utf8Encode(Data)));
+  var Args: TXmlArgs;
+  xmlNodeAddContent(NodePtr, Args.StrPtr(Data));
 end;
 
 procedure TXMLCharacterData.DeleteData(Offset, Count: Integer);
 begin
+  var Args: TXmlArgs;
   var S := xmlCharToStr(NodePtr.content);
 
   Delete(S, offset, count);
 
   xmlNodeSetContent(NodePtr, nil);
-  xmlNodeAddContent(NodePtr, XmlCharPtr(UTF8Encode(S)));
+  xmlNodeAddContent(NodePtr, Args.StrPtr(S));
 end;
 
 function TXMLCharacterData.Get_Data: string;
@@ -2913,34 +2924,41 @@ end;
 
 function TXMLCharacterData.Get_Length: NativeInt;
 begin
-  Result := Utf8toUtf16Count(NodePtr.content);
+  // a node with no content has no characters; Utf8toUtf16Count wants a buffer
+  if NodePtr.content = nil then
+    Result := 0
+  else
+    Result := Utf8toUtf16Count(NodePtr.content);
 end;
 
 procedure TXMLCharacterData.InsertData(Offset: Integer; const Data: string);
 begin
+  var Args: TXmlArgs;
   var S := xmlCharToStr(NodePtr.content);
 
   Insert(data, S, Offset);
 
   xmlNodeSetContent(NodePtr, nil);
-  xmlNodeAddContent(NodePtr, XmlCharPtr(UTF8Encode(S)));
+  xmlNodeAddContent(NodePtr, Args.StrPtr(S));
 end;
 
 procedure TXMLCharacterData.ReplaceData(Offset, Count: Integer; const Data: string);
 begin
+  var Args: TXmlArgs;
   var S := xmlCharToStr(NodePtr.content);
 
   Delete(S, Offset, Count);
   Insert(data, S, Offset);
 
   xmlNodeSetContent(NodePtr, nil);
-  xmlNodeAddContent(NodePtr, XmlCharPtr(UTF8Encode(S)));
+  xmlNodeAddContent(NodePtr, Args.StrPtr(S));
 end;
 
 procedure TXMLCharacterData.Set_Data(const Data: string);
 begin
+  var Args: TXmlArgs;
   xmlNodeSetContent(NodePtr, nil);
-  xmlNodeAddContent(NodePtr, XmlCharPtr(UTF8Encode(Data)));
+  xmlNodeAddContent(NodePtr, Args.StrPtr(Data));
 end;
 
 function TXMLCharacterData.SubstringData(Offset, Count: Integer): string;
@@ -2962,8 +2980,9 @@ end;
 
 procedure TXMLProcessingInstruction.Set_Data(const Value: string);
 begin
+  var Args: TXmlArgs;
   xmlNodeSetContent(NodePtr, nil);
-  xmlNodeAddContent(NodePtr, XmlCharPtr(UTF8Encode(Value)));
+  xmlNodeAddContent(NodePtr, Args.StrPtr(Value));
 end;
 
 { TXMLError }
@@ -3244,29 +3263,30 @@ begin
   if SplitXMLName(UTF8Encode(Name), Prefix, LocalName) then
   begin
     if Prefix = 'xmlns' then
-      Result := Cast(xmlNewNs(nil, nil, xmlCharPtr(LocalName)), nil)
+      Result := Cast(xmlNewNs(nil, nil, xmlStrPtr(LocalName)), nil)
     else
       Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Prefix, '');
   end
   else if Name = 'xmlns' then
     Result := Cast(xmlNewNs(nil, '', nil), nil)
   else
-    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(LocalName), nil));
+    Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil));
 end;
 
 function TXMLDocument.createAttributeNS(const namespaceURI, qualifiedName: string): IXMLAttribute;
 var
  Prefix, LocalName: RawByteString;
 begin
+  var Args: TXmlArgs;
   if SplitXMLName(UTF8Encode(qualifiedName), Prefix, LocalName) then
   begin
     if Prefix = 'xmlns' then
-      Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), xmlStrPtr(Utf8Encode(LocalName))), nil)
+      Result := Cast(xmlNewNs(nil, Args.StrPtr(namespaceURI), xmlStrPtr(LocalName)), nil)
     else
       Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Prefix, Utf8Encode(namespaceURI));
   end
   else if LocalName = 'xmlns' then
-    Result := Cast(xmlNewNs(nil, xmlStrPtr(Utf8Encode(namespaceURI)), nil), nil)
+    Result := Cast(xmlNewNs(nil, Args.StrPtr(namespaceURI), nil), nil)
   else
     Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil), Utf8Encode(Prefix), Utf8Encode(namespaceURI));
 end;
@@ -3281,8 +3301,9 @@ end;
 
 function TXMLDocument.CreateComment(const Data: string): IXMLComment;
 begin
+  var Args: TXmlArgs;
   var S := Utf8Encode(Data);
-  Result := Cast(xmlNewDocComment(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Data)))) as IXMLComment;
+  Result := Cast(xmlNewDocComment(xmlDocPtr(NodePtr), Args.StrPtr(Data))) as IXMLComment;
 end;
 
 function TXMLDocument.CreateDocumentFragment: IXMLDocumentFragment;
@@ -3323,7 +3344,7 @@ begin
 
   case NodeType of
     NODE_ATTRIBUTE:
-      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlCharPtr(LocalName), nil));
+      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil));
     NODE_CDATA_SECTION:
       Result := Cast(xmlNewCDataBlock(xmlDocPtr(NodePtr), nil, 0));
     NODE_COMMENT:
@@ -3336,18 +3357,18 @@ begin
       Result := Cast(xmlNewDocText(xmlDocPtr(NodePtr), nil));
     NODE_ELEMENT:
       begin
-        var Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlCharPtr(LocalName), nil);
+        var Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlStrPtr(LocalName), nil);
         if HRef <> '' then
         begin
           if Prefix = '' then
-            xmlNewNs(Node, xmlCharPtr(HRef), nil)
+            xmlNewNs(Node, xmlStrPtr(HRef), nil)
           else
-            xmlNewNs(Node, xmlCharPtr(HRef), xmlCharPtr(Prefix));
+            xmlNewNs(Node, xmlStrPtr(HRef), xmlStrPtr(Prefix));
         end;
         Result := Cast(Node);
       end;
     NODE_PROCESSING_INSTRUCTION:
-      Result := Cast(xmlNewDocPI(xmlDocPtr(NodePtr), xmlCharPtr(LocalName), nil));
+      Result := Cast(xmlNewDocPI(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil));
   else
     Result := nil;
   end;
@@ -3355,12 +3376,14 @@ end;
 
 function TXMLDocument.CreateProcessingInstruction(const Target, Data: string): IXMLProcessingInstruction;
 begin
-  Result := Cast(xmlNewDocPI(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Target)), xmlCharPtr(Utf8Encode(Data)))) as IXMLProcessingInstruction;
+  var Args: TXmlArgs;
+  Result := Cast(xmlNewDocPI(xmlDocPtr(NodePtr), Args.StrPtr(Target), Args.StrPtr(Data))) as IXMLProcessingInstruction;
 end;
 
 function TXMLDocument.CreateTextNode(const Data: string): IXMLText;
 begin
-  Result := Cast(xmlNewDocText(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(Data)))) as IXMLText;
+  var Args: TXmlArgs;
+  Result := Cast(xmlNewDocText(xmlDocPtr(NodePtr), Args.StrPtr(Data))) as IXMLText;
 end;
 
 procedure TXMLDocument.ErrorCallback(const error: xmlError);
@@ -3371,7 +3394,8 @@ end;
 
 function TXMLDocument.getElementById(const elementId: string): IXMLElement;
 begin
-  var Attr := xmlGetID(xmlDocPtr(NodePtr), xmlStrPtr(Utf8Encode(elementId)));
+  var Args: TXmlArgs;
+  var Attr := xmlGetID(xmlDocPtr(NodePtr), Args.StrPtr(elementId));
   if (Attr = nil) or (Attr.parent = nil) then
     Exit(nil);
 
@@ -3531,7 +3555,8 @@ end;
 
 function TXMLDocument.NodeFromID(const IdString: string): IXMLNode;
 begin
-  var Attr := xmlGetID(xmlDocPtr(NodePtr), xmlCharPtr(Utf8Encode(IdString)));
+  var Args: TXmlArgs;
+  var Attr := xmlGetID(xmlDocPtr(NodePtr), Args.StrPtr(IdString));
   if Attr = nil then
     Exit(nil);
 
@@ -3545,7 +3570,8 @@ end;
 
 procedure TXMLDocument.Save(const Url: string);
 begin
-  xmlSaveFile(xmlCharPtr(Utf8Encode(url)), xmlDocPtr(NodePtr));
+  var Args: TXmlArgs;
+  xmlSaveFile(Args.StrPtr(url), xmlDocPtr(NodePtr));
 end;
 
 function TXMLDocument.Save(const FileName, Encoding: string; const Options: TxmlSaveOptions): Boolean;
@@ -4214,8 +4240,9 @@ end;
 
 procedure TXMLNsNode.Set_Text(const Text: string);
 begin
+  var Args: TXmlArgs;
   xmlFree(NsPtr.href);
-  NsPtr.href := xmlStrdup(xmlCharPtr(Utf8Encode(Text)));
+  NsPtr.href := xmlStrdup(Args.StrPtr(Text));
 end;
 
 function TXMLNsNode.Transform(const stylesheet: IXMLDocument; out S: string): Boolean;

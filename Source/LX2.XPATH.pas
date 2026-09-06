@@ -39,6 +39,9 @@ type
 
 implementation
 
+uses 
+  System.WideStrUtils;
+
 { TXPathQuery }
 
 class function TXPathQuery.IsSimple(const Query: Utf8String): Boolean;
@@ -89,13 +92,17 @@ procedure TXPathQuery.Parse;
 var
   Cur:  PUTF8Char;
   Step: TXPathStep;
+  CharLen : Integer;
 begin
   FSteps := [];
   Cur := Pointer(FQuery);
   while Cur^ <> #0 do
   begin
     while (Cur^ <= #32) and (Cur^ > #0) do
-      Inc(Cur);
+    begin
+      CharLen := UTF8CharLength(Cur^);
+      Inc(Cur, CharLen)
+    end;
     if Cur^ = #0 then
       Exit;
 
@@ -115,7 +122,10 @@ begin
     FSteps := FSteps + [Step];
 
     while (Cur^ > #32) and (Cur^ <> '/') do
-      Inc(Cur);
+    begin
+      CharLen := UTF8CharLength(Cur^);
+      Inc(Cur, CharLen);
+    end;
   end;
   for var I := Low(FSteps) to High(FSteps) - 1 do
   begin
@@ -213,18 +223,23 @@ end;
 procedure TXPathStep.Parse;
 
   procedure Trim(var S: xmlCharPtr);
+  var
+    CharLen : Integer;
   begin
     while S^ <= #32 do
-      Inc(S);
+    begin
+      CharLen := UTF8CharLength(S^);
+      Inc(S, CharLen)
+    end;
     var Ch := S;
     while Ch^ <> #0 do
     begin
       if Ch^ <= #32 then
         Ch^ := #0;
-      Inc(Ch);
+      CharLen := UTF8CharLength(Ch^);
+      Inc(Ch, CharLen)
     end;
   end;
-
 begin
   Name := Selector;
   Prefix := nil;

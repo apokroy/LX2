@@ -41,6 +41,8 @@ unit LX2.Types;
 interface
 
 {$ALIGN 8}
+{$RANGECHECKS OFF}
+{$OVERFLOWCHECKS OFF}
 
 uses
   {$IFDEF MSWINDOWS}
@@ -315,6 +317,15 @@ function  xmlEscapeString(const Value: RawByteString): RawByteString;
 /// </remarks>
 function  xmlNormalizeString(const S: string): string;
 
+/// <summary>Byte length of a null-terminated UTF-8/ANSI buffer, or 0 for <c>nil</c>.</summary>
+/// <remarks>
+/// Scans 16 bytes per iteration with SSE2. The first load is taken from the
+/// 16-byte boundary at or below <paramref name="S"/> and the bytes preceding
+/// the string are shifted out of the compare mask, so every load is aligned
+/// and none can reach into a page the string does not occupy.
+/// </remarks>
+function  xmlStrLen(S: xmlCharPtr): NativeUInt;
+
 /// <summary>
 /// Compares two null-terminated UTF-8 strings for byte-exact equality.
 /// </summary>
@@ -331,16 +342,21 @@ function  xmlNormalizeString(const S: string): string;
 function  xmlStrSame(P1, P2: xmlCharPtr): Boolean;
 
 /// <summary>Returns a raw <c>xmlCharPtr</c> view into a <c>RawByteString</c>'s existing buffer, or <c>nil</c> for an empty string.</summary>
-/// <remarks>Does not copy or allocate; the returned pointer is only valid as long as <paramref name="S"/> is alive and not reallocated (COW).</remarks>
+/// <remarks>
+/// Does not copy or allocate; the returned pointer is only valid as long as
+/// <paramref name="S"/> is alive and not reallocated (COW). Relies on an
+/// empty <c>RawByteString</c> being a nil pointer, which is why
+/// <see cref="xmlEscapeString"/> must not hand out a zero-length string built
+/// by <see cref="NewUtf8String"/>.
+/// </remarks>
 function  xmlStrPtr(const S: RawByteString): xmlCharPtr; inline;
 
 /// <summary>Decodes a null-terminated UTF-8 <c>xmlCharPtr</c> into a Unicode <c>string</c>.</summary>
 /// <remarks>
-/// Performs a single combined pass via <see cref="Utf8toUtf16CountAndLen"/>
-/// to obtain both the byte length and the UTF-16 code unit count, then a
-/// second pass for the actual conversion (<c>UnicodeFromLocaleChars</c>) —
-/// this avoids the separate <c>Length(xmlCharPtr)</c> (strlen) pass that a
-/// naive implementation would otherwise require.
+/// Takes the byte length and the UTF-16 code unit count together from
+/// <see cref="Utf8toUtf16CountAndLen"/>, then converts in a second pass
+/// (<c>UnicodeFromLocaleChars</c>) — a naive implementation would need a
+/// separate <c>Length(xmlCharPtr)</c> (strlen) pass on top of both.
 /// </remarks>
 function  xmlCharToStr(const S: xmlCharPtr): string; overload; inline;
 
@@ -356,7 +372,7 @@ function  xmlCharToStr(const S: xmlCharPtr; Len: NativeUInt): string; overload;
 /// tagged with the UTF-8 code page (via <see cref="NewUtf8String"/>), copying
 /// the bytes without any encoding conversion.
 /// </summary>
-/// <remarks>Length is computed via <see cref="xmlStrLen"/> (RTL <c>StrLen</c>), not the two-pass UTF-16 counting path used by <see cref="xmlCharToStr"/>.</remarks>
+/// <remarks>Length comes from <see cref="xmlStrLen"/>, not from the UTF-16 counting path used by <see cref="xmlCharToStr"/>.</remarks>
 function  xmlCharToRaw(const S: xmlCharPtr): RawByteString; overload; inline;
 
 /// <summary>Wraps a UTF-8 buffer of known byte length as a <c>RawByteString</c> (CP_UTF8), copying the bytes.</summary>
@@ -371,16 +387,62 @@ function  xmlCharToRawAndFree(const S: xmlCharPtr): RawByteString; inline;
 /// <c>xmlCharToRaw</c> concatenation.
 /// </summary>
 /// <remarks>
-/// Manually computes byte lengths of <paramref name="Prefix"/> and
-/// <paramref name="Name"/> via inline strlen loops (avoiding a redundant
-/// <c>Length()</c> call on an <c>xmlCharPtr</c>), then allocates the exact
-/// combined buffer once via <see cref="NewUtf8String"/> and fills it with
-/// two <c>Move</c> calls plus the colon separator — a single allocation
-/// instead of string concatenation's intermediate temporaries.
+/// Takes both byte lengths from <see cref="xmlStrLen"/>, then allocates the
+/// exact combined buffer once via <see cref="NewUtf8String"/> and fills it
+/// with two <c>Move</c> calls plus the colon separator — a single
+/// allocation instead of string concatenation's intermediate temporaries.
 /// </remarks>
 /// <param name="Prefix">Namespace prefix, or <c>nil</c>/empty for no prefix.</param>
 /// <param name="Name">Local element/attribute name.</param>
 function  xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
+
+type
+  /// <summary>
+  /// Scratch space for the UTF-8 arguments of one libxml2 call: converts
+  /// <c>string</c> parameters to <c>xmlCharPtr</c> without touching the heap.
+  /// </summary>
+  /// <remarks>
+  /// <para>
+  /// Declare one as a local of the wrapping method and pass its results
+  /// straight into the libxml2 call:
+  /// <code>
+  /// var Args: TXmlArgs;
+  /// Result := xmlHasNsProp(NodePtr, Args.StrPtr(Name), Args.StrPtr(NamespaceURI));
+  /// </code>
+  /// Every argument of that call is packed into one stack buffer, so a call
+  /// that would otherwise build and free two or three temporary
+  /// <c>RawByteString</c>s allocates nothing at all.
+  /// </para>
+  /// <para>
+  /// The pointers stay valid until the record leaves scope or
+  /// <see cref="TXmlArgs.Reset"/> is called, and never longer - do not hand
+  /// one to anything that outlives the call. Arguments too long for the buffer
+  /// fall back to a heap string the record keeps alive, so the same rule
+  /// covers them.
+  /// </para>
+  /// <para>
+  /// An empty <c>string</c> becomes <c>nil</c>, the same rule
+  /// <see cref="xmlStrPtr"/> follows: libxml2 reads <c>nil</c> as "not given",
+  /// and that is what an empty Delphi string means at these boundaries - there
+  /// is no separate null. Passing a pointer to an empty string instead makes
+  /// libxml2 look for a namespace whose URI is literally empty, or for an
+  /// encoding named "", and find nothing.
+  /// </para>
+  /// </remarks>
+  TXmlArgs = record
+  private
+    FBuf: array[0..2047] of Byte;
+    FUsed: NativeInt;
+    FSpill: TArray<RawByteString>;
+    FSpillCount: Integer;
+    function Convert(const S: string): xmlCharPtr;
+  public
+    class operator Initialize(out Dest: TXmlArgs);
+    /// <summary>Invalidates every pointer handed out so far and reuses the buffer.</summary>
+    procedure Reset;
+    /// <summary>UTF-8 view of <paramref name="S"/>, <c>nil</c> when it is empty.</summary>
+    function StrPtr(const S: string): xmlCharPtr;
+  end;
 
 /// <summary>
 /// Splits a possibly-qualified XML name ("prefix:local") into its prefix
@@ -407,144 +469,75 @@ function  NodeTypeName(nodeType: xmlElementType): string;
 /// buffer of known byte length <paramref name="Size"/>.
 /// </summary>
 /// <remarks>
-/// Uses an 8-byte-at-a-time fast path: while a 64-bit word read from the
-/// buffer has no byte with its high bit set (i.e. all 8 bytes are plain
-/// ASCII, <c>$8080808080808080</c> mask test), 8 UTF-16 code units are
-/// counted in one step. This is a classic SWAR (SIMD Within A Register)
-/// technique and is safe here because <paramref name="Size"/> is known in
-/// advance, so the loop bound <c>I + 8 &lt;= Size</c> guarantees no
-/// out-of-bounds read. Falls back to the byte-by-byte
-/// <see cref="Utf8L"/>-table lookup for the remaining tail and for any
-/// non-ASCII run.
+/// <para>
+/// The count is "bytes that are not UTF-8 continuation bytes, plus bytes
+/// &gt;= $F0": the first term is the number of codepoints, the second adds
+/// the extra code unit every 4-byte sequence needs for its surrogate pair.
+/// Both terms are per-byte classifications, so the cost per byte does not
+/// depend on how multi-byte sequences are distributed through the buffer.
+/// </para>
+/// <para>
+/// Buffers of at least <see cref="Utf8BlockThreshold"/> bytes are counted 16
+/// bytes at a time with SSE2 (see Utf8toUtf16CountBlocks); shorter
+/// buffers, and the trailing bytes of longer ones, go 8 bytes at a time
+/// (<see cref="Utf8toUtf16CountWords"/>).
+/// </para>
+/// <para>
+/// <b>No error checking:</b> well-formed UTF-8 is assumed. Continuation-byte
+/// structure and overlong encodings are not validated; malformed input
+/// yields a wrong count, never an out-of-bounds read.
+/// </para>
 /// </remarks>
 function  Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt; overload;
 
 /// <summary>
-/// Null-terminated-buffer counterpart of <see cref="Utf8toUtf16Count(PUtf8Char,NativeUInt)"/>;
-/// scans until a <c>#0</c> byte is found instead of a known length.
+/// Null-terminated-buffer counterpart of
+/// <see cref="Utf8toUtf16Count(PUtf8Char,NativeUInt)"/>.
 /// </summary>
 /// <remarks>
-/// Currently uses only the byte-by-byte <see cref="Utf8L"/> table lookup
-/// (no 8-byte SWAR fast path), because a naive high-bit-only block test
-/// cannot distinguish "8 ASCII bytes" from "a shorter ASCII run followed by
-/// the terminator and out-of-bounds memory" — a safe block fast path here
-/// would additionally require a zero-byte-detection test
-/// (<c>(w - $0101010101010101) and not w and $8080808080808080</c>) before
-/// it could be applied to null-terminated input.
+/// Defers to <see cref="Utf8toUtf16CountAndLen"/> and discards the byte
+/// length. <paramref name="Input"/> must not be <c>nil</c>.
 /// </remarks>
 function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 
 /// <summary>
-/// Combined single-pass equivalent of "<c>strlen</c> + UTF-8→UTF-16 code-unit
-/// counting" for a null-terminated UTF-8 buffer, using an 8-byte-at-a-time
-/// SWAR (SIMD Within A Register) fast path for runs of plain ASCII.
+/// Byte length and UTF-16 code unit count of a null-terminated UTF-8 buffer,
+/// obtained together.
 /// </summary>
-/// <param name="Input">Null-terminated UTF-8 buffer.</param>
+/// <param name="Input">Null-terminated UTF-8 buffer. Must not be <c>nil</c>.</param>
 /// <param name="ByteLen">
 /// Receives the byte length of the string up to (but excluding) the
-/// terminating <c>#0</c> — equivalent to what <c>StrLen(PAnsiChar(Input))</c>
-/// would return.
+/// terminating <c>#0</c> - the same value <see cref="xmlStrLen"/> returns.
 /// </param>
-/// <returns>
-/// The number of UTF-16 code units required to represent the string
-/// (equivalent to what <c>Utf8toUtf16Count(Input)</c> would return, but
-/// computed together with <paramref name="ByteLen"/> in one combined scan).
-/// </returns>
+/// <returns>The number of UTF-16 code units the string decodes to.</returns>
 /// <remarks>
 /// <para>
-/// <b>Why this exists:</b> the straightforward way to get both values is to
-/// call <c>Length(xmlCharPtr)</c> (which performs a full <c>strlen</c> scan)
-/// and then <c>Utf8toUtf16Count(S, Len)</c> (a second full scan) — two
-/// complete passes over the same bytes. This function performs both in a
-/// single pass, which matters because it backs <c>xmlCharToStr(xmlCharPtr)</c>,
-/// one of the hottest functions in the library (called for every text node
-/// and attribute value materialized into a Delphi <c>string</c>).
+/// <b>Why this exists:</b> it backs <c>xmlCharToStr(xmlCharPtr)</c>, one of
+/// the hottest functions in the library - called for every text node and
+/// attribute value materialized into a Delphi <c>string</c> - which needs
+/// both numbers: the code unit count to size the result buffer and the byte
+/// length to drive the conversion.
 /// </para>
 /// <para>
-/// <b>Fast path algorithm (block of 8 bytes at a time):</b>
-/// <list type="number">
-/// <item><description>
-/// Load 8 bytes as a single <c>UInt64</c> and test
-/// <c>W and $8080808080808080</c>. If non-zero, at least one byte in the
-/// block has its high bit set (i.e. is part of a multi-byte UTF-8 sequence)
-/// — fall through to the byte-by-byte slow path for this and all
-/// subsequent bytes.
-/// </description></item>
-/// <item><description>
-/// Otherwise all 8 bytes are candidate ASCII (0..127), including possibly
-/// the NUL terminator (which is also &lt;= 127). Apply the classic SWAR
-/// "has a zero byte in this word" test:
-/// <c>(W - $0101010101010101) and (not W) and $8080808080808080</c>.
-/// A non-zero result means at least one of the 8 bytes is <c>#0</c> —
-/// fall through to the slow path so the exact terminator position is
-/// found precisely.
-/// </description></item>
-/// <item><description>
-/// If neither condition triggered, all 8 bytes are non-zero ASCII: count
-/// 8 UTF-16 code units (1 UTF-16 unit per ASCII byte) and advance 8 bytes,
-/// then repeat.
-/// </description></item>
-/// </list>
-/// This is the same class of technique used by other optimized Pascal
-/// UTF-8 conversion routines that deliberately bypass the standard RTL
-/// conversion path for speed, e.g. <c>Neslib.Utf8</c>
-/// (<see href="https://github.com/neslib/Neslib/blob/master/Neslib.Utf8.pas">github.com</see>,
-/// whose header explicitly notes these routines "are optimized for speed
-/// and don't perform any error checking") and mORMot 2's
-/// <c>mormot.core.unicode.pas</c>
-/// (<see href="https://github.com/synopse/mORMot2/blob/master/src/core/mormot.core.unicode.pas">github.com</see>),
-/// both of which hand-roll UTF-8/UTF-16 conversion instead of relying on
-/// the OS/RTL conversion API for the same reason: avoiding redundant
-/// full-buffer passes and generic-path overhead.
+/// Short strings are walked 8 bytes at a time by a loop that looks for the
+/// terminator and counts code units in the same step. Once <c>FusedWords</c>
+/// words have gone by without a terminator the string is long enough for two
+/// vectorised passes to win, and the remainder is handed to
+/// <see cref="xmlStrLen"/> and
+/// <see cref="Utf8toUtf16Count(PUtf8Char,NativeUInt)"/>. The unit count
+/// itself follows the same rule as
+/// <see cref="Utf8toUtf16Count(PUtf8Char,NativeUInt)"/>.
 /// </para>
 /// <para>
-/// <b>Correctness note — why the ASCII-only fast path is safe for code-unit
-/// counting:</b> a codepoint requires 1 UTF-16 code unit for every leading
-/// UTF-8 byte that is NOT a continuation byte, which for pure ASCII
-/// (bytes 0..127) is simply "1 code unit per byte" — this matches the
-/// classic byte-counting relationship between UTF-8 and UTF-16 lengths for
-/// the Basic Multilingual Plane, as discussed in general treatments of
-/// UTF-8↔UTF-16 length/counting algorithms
-/// (<see href="https://stackoverflow.com/questions/5728045/c-most-efficient-way-to-determine-how-many-bytes-will-be-needed-for-a-utf-16-st">stackoverflow.com</see>,
-/// <see href="https://stackoverflow.com/questions/73758747/looking-for-the-description-of-the-algorithm-to-convert-utf8-to-utf16">stackoverflow.com</see>).
-/// For any block containing a non-ASCII (multi-byte) leading or
-/// continuation byte, this function deliberately gives up the fast path
-/// and defers to the exact per-byte <c>Utf8L</c> table lookup below, which
-/// correctly accounts for 2/3/4-byte sequences collapsing to 1 (or, for
-/// astral/surrogate-pair codepoints via 4-byte UTF-8 sequences, 2) UTF-16
-/// code units — see also reference UTF-8→UTF-16 counting/conversion
-/// implementations such as Google's Protobuf
-/// <c>utf8_to_utf16/naive.c</c>
-/// (<see href="https://fossies.org/linux/protobuf/third_party/utf8_range/utf8_to_utf16/naive.c">fossies.org</see>)
-/// for the general (non-SWAR) per-codepoint algorithm this fast path
-/// short-circuits for the common ASCII case.
+/// <b>Nothing past the terminator is read:</b> the first word is taken from
+/// the 8-byte boundary at or below <paramref name="Input"/> and the bytes in
+/// front of the string are replaced inside the register, so every block read
+/// is aligned and cannot reach into a page the string does not occupy.
 /// </para>
 /// <para>
-/// <b>No error checking:</b> like the fast Pascal implementations cited
-/// above, this function assumes well-formed UTF-8 input and performs no
-/// validation of continuation-byte structure or overlong encodings —
-/// malformed input will silently produce an incorrect (but not
-/// out-of-bounds, within the slow path) result rather than raise an error.
-/// </para>
-/// <para>
-/// <b>⚠ Potential over-read caveat:</b> the fast-path block read
-/// (<c>PUInt64(@Input[I])^</c>) always reads a full 8 bytes starting at
-/// <c>I</c>, even when fewer than 8 valid bytes remain before the string's
-/// terminator. This is safe with respect to the STRING'S logical content
-/// (the zero-detection test above guarantees the loop stops at or before
-/// the block containing the terminator), but it does read up to 7 bytes
-/// PAST the terminator's position into whatever memory follows it in the
-/// underlying allocation. For strings whose backing buffer is not padded
-/// with at least 7 extra bytes past the terminator, this is technically an
-/// out-of-bounds read of the allocation (though in practice harmless for
-/// heap allocations with page/granule-sized rounding, as libxml2 buffers
-/// typically are). Libraries taking this same trade-off, such as
-/// <c>Neslib.Utf8</c>
-/// (<see href="https://github.com/neslib/Neslib/blob/master/Neslib.Utf8.pas">github.com</see>),
-/// accept it in exchange for speed; if this function is ever applied to
-/// buffers from an untrusted or tightly-bounded source (e.g. a memory-mapped
-/// file with no trailing slack), this fast path should be disabled or
-/// bounded by a known buffer end pointer.
+/// <b>No error checking:</b> well-formed UTF-8 is assumed. Continuation-byte
+/// structure and overlong encodings are not validated; malformed input
+/// yields a wrong count, never an out-of-bounds read.
 /// </para>
 /// </remarks>
 function  Utf8toUtf16CountAndLen(Input: PUtf8Char; out ByteLen: NativeUInt): NativeUInt;
@@ -606,6 +599,12 @@ procedure NewUtf16String(out Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(WideChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -617,6 +616,12 @@ procedure NewUtf16String(out Result: Pointer; Len: NativeInt; const Data: Pointe
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(WideChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -629,6 +634,12 @@ procedure NewRawString(out Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -640,6 +651,12 @@ procedure NewRawString(out Result: Pointer; Len: NativeInt; const Data: Pointer)
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -652,6 +669,12 @@ procedure NewUtf8String(out Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -663,6 +686,12 @@ procedure NewUtf8String(out Result: Pointer; Len: NativeInt; const Data: Pointer
 var
   P: PStrRec;
 begin
+  if Len = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
   P.length := Len;
@@ -672,105 +701,278 @@ begin
 end;
 
 const
+  Utf8Ones  = UInt64($0101010101010101);
+  Utf8Highs = UInt64($8080808080808080);
+  Utf8C0s   = UInt64($C0C0C0C0C0C0C0C0);
+  Utf8F0s   = UInt64($F0F0F0F0F0F0F0F0);
   /// <summary>
-  /// UTF-8 leading-byte length table: number of bytes in a UTF-8 sequence
-  /// starting with a given byte value (1 for ASCII/continuation bytes,
-  /// 2/3/4 for multi-byte sequence leaders per RFC 3629).
+  /// Buffers below this size stay on the word-at-a-time path: the block
+  /// routine only pays for its call and register setup once it gets several
+  /// whole 16-byte blocks.
   /// </summary>
-  Utf8L: array[AnsiChar] of NativeUInt = (
-{         0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F }
-{   0 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   1 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   2 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   3 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   4 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   5 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   6 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   7 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2,
-{   8 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   9 }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   A }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   B }   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-{   C }   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-{   D }   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-{   E }   3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-{   F }   4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4);
+  Utf8BlockThreshold = 64;
 
-function Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
+/// <summary>
+/// Word-at-a-time (SWAR) UTF-16 code unit count for a buffer of known length.
+/// </summary>
+function Utf8toUtf16CountWords(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
 var
-  I: NativeUInt;
+  P, E: PByte;
+  W, M: UInt64;
 begin
   Result := 0;
-  I := 0;
-
-  while (I + 8 <= Size) and (PUInt64(@Input[I])^ and $8080808080808080 = 0) do
+  P := PByte(Input);
+  E := P + (Size and not NativeUInt(7));
+  while P < E do
   begin
-    Inc(Result, 8);
-    Inc(I, 8);
+    W := PUInt64(P)^;
+    if W and Utf8Highs = 0 then
+      Inc(Result, 8)                        // the whole word is ASCII
+    else
+    begin
+      // a zero byte marks each continuation byte, i.e. each (b and $C0) = $80
+      M := (W and Utf8C0s) xor Utf8Highs;
+      M := (M - Utf8Ones) and not M and Utf8Highs;
+      Inc(Result, 8 - (((M shr 7) * Utf8Ones) shr 56));
+      // and here each 4-byte lead byte, i.e. each (b and $F0) = $F0
+      M := (W and Utf8F0s) xor Utf8F0s;
+      M := (M - Utf8Ones) and not M and Utf8Highs;
+      Inc(Result, ((M shr 7) * Utf8Ones) shr 56);
+    end;
+    Inc(P, 8);
   end;
 
-  while I < Size do
+  E := PByte(Input) + Size;
+  while P < E do
   begin
-    Inc(I, Utf8L[Input[I]]);
-    Inc(Result);
+    if P^ and $C0 <> $80 then
+      Inc(Result);
+    if P^ >= $F0 then
+      Inc(Result);
+    Inc(P);
   end;
+end;
+
+{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+/// <summary>SSE2 UTF-16 code unit count over whole 16-byte blocks.</summary>
+/// <remarks><paramref name="Size"/> must be a multiple of 16; the caller keeps the tail.</remarks>
+function Utf8toUtf16CountBlocks(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
+asm
+      XOR      EAX, EAX
+      MOV      R8, RDX
+      SHR      R8, 4
+      JZ       @@Done
+
+      MOV      R10D, $BFBFBFBF
+      MOVD     XMM0, R10D
+      PSHUFD   XMM0, XMM0, 0         // $BF x16 ($BF = -65 as a signed byte)
+      MOV      R10D, $F0F0F0F0
+      MOVD     XMM1, R10D
+      PSHUFD   XMM1, XMM1, 0         // $F0 x16
+      PXOR     XMM2, XMM2            // per-byte counters
+      PXOR     XMM4, XMM4            // 64-bit totals
+
+      // a lane gains at most 2 per block, so the byte counters are drained
+      // into XMM4 every 127 blocks, before any lane can wrap
+@@Chunk:
+      MOV      R9, R8
+      CMP      R9, 127
+      JBE      @@ChunkSize
+      MOV      R9, 127
+@@ChunkSize:
+      SUB      R8, R9
+@@Block:
+      MOVDQU   XMM3, [RCX]
+      MOVDQA   XMM5, XMM3
+      PCMPGTB  XMM5, XMM0            // $FF where the byte is not a continuation
+      PSUBB    XMM2, XMM5
+      MOVDQA   XMM5, XMM3
+      PMAXUB   XMM5, XMM1
+      PCMPEQB  XMM5, XMM3            // $FF where the byte is >= $F0
+      PSUBB    XMM2, XMM5
+      ADD      RCX, 16
+      DEC      R9
+      JNZ      @@Block
+      PXOR     XMM5, XMM5
+      PSADBW   XMM2, XMM5
+      PADDQ    XMM4, XMM2
+      PXOR     XMM2, XMM2
+      TEST     R8, R8
+      JNZ      @@Chunk
+
+      MOVDQA   XMM5, XMM4
+      PSRLDQ   XMM5, 8
+      PADDQ    XMM4, XMM5
+      MOVQ     RAX, XMM4
+@@Done:
+end;
+{$ENDIF}
+
+function Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
+{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+var
+  Blocks: NativeUInt;
+begin
+  if Size < Utf8BlockThreshold then
+    Result := Utf8toUtf16CountWords(Input, Size)
+  else
+  begin
+    Blocks := Size and not NativeUInt(15);
+    Result := Utf8toUtf16CountBlocks(Input, Blocks) +
+              Utf8toUtf16CountWords(Input + Blocks, Size - Blocks);
+  end;
+end;
+{$ELSE}
+begin
+  Result := Utf8toUtf16CountWords(Input, Size);
+end;
+{$ENDIF}
+
+function Utf8toUtf16CountAndLen(Input: PUtf8Char; out ByteLen: NativeUInt): NativeUInt;
+const
+  /// <summary>
+  /// How far the fused loop goes before handing the rest to the routines that
+  /// take the byte length and the code unit count in separate vectorised
+  /// passes.
+  /// </summary>
+  FusedWords = 8;
+var
+  P: PByte;
+  W, M, Lead, Ofs, Rest: UInt64;
+  N: Integer;
+begin
+  // Start from the aligned word holding Input, with the bytes in front of
+  // Input replaced by $01: they stay ASCII, so the all-ASCII shortcut below
+  // still fires, they cannot be mistaken for the terminator, and an aligned
+  // read never crosses a page boundary. Result starts at -Ofs to cancel the
+  // Ofs extra code units they make the first word contribute.
+  Ofs := UIntPtr(Input) and 7;
+  P := PByte(Input) - Ofs;
+  Lead := (UInt64(1) shl (Ofs * 8)) - 1;
+  W := (PUInt64(P)^ and not Lead) or (Lead and Utf8Ones);
+  Result := NativeUInt(0) - Ofs;
+
+  N := FusedWords;
+  while (W - Utf8Ones) and not W and Utf8Highs = 0 do
+  begin
+    if W and Utf8Highs = 0 then
+      Inc(Result, 8)
+    else
+    begin
+      M := (W and Utf8C0s) xor Utf8Highs;
+      M := (M - Utf8Ones) and not M and Utf8Highs;
+      Inc(Result, 8 - (((M shr 7) * Utf8Ones) shr 56));
+      M := (W and Utf8F0s) xor Utf8F0s;
+      M := (M - Utf8Ones) and not M and Utf8Highs;
+      Inc(Result, ((M shr 7) * Utf8Ones) shr 56);
+    end;
+    Inc(P, 8);
+    Dec(N);
+    if N = 0 then
+    begin
+      Rest := xmlStrLen(PUtf8Char(P));
+      ByteLen := NativeUInt(P - PByte(Input)) + Rest;
+      Exit(Result + Utf8toUtf16Count(PUtf8Char(P), Rest));
+    end;
+    W := PUInt64(P)^;
+  end;
+
+  // the terminator is inside W; that word is finished byte by byte
+  if P < PByte(Input) then
+  begin
+    Inc(Result, Ofs);                       // the first word was never counted
+    P := PByte(Input);
+  end;
+  while P^ <> 0 do
+  begin
+    if P^ and $C0 <> $80 then
+      Inc(Result);
+    if P^ >= $F0 then
+      Inc(Result);
+    Inc(P);
+  end;
+  ByteLen := NativeUInt(P - PByte(Input));
 end;
 
 function Utf8toUtf16Count(Input: PUtf8Char): NativeUInt;
+var
+  ByteLen: NativeUInt;
 begin
-  Result := 0;
-  var I: NativeUInt := 0;
-
-  while Input[I] <> #0 do
-  begin
-    Inc(I, Utf8L[Input[I]]);
-    Inc(Result);
-  end;
+  Result := Utf8toUtf16CountAndLen(Input, ByteLen);
 end;
 
-function Utf8toUtf16CountAndLen(Input: PUtf8Char; out ByteLen: NativeUInt): NativeUInt;
+{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+function xmlStrLen(S: xmlCharPtr): NativeUInt;
+asm
+      TEST     RCX, RCX
+      JZ       @@Nil
+      MOV      R9, RCX                 // string start
+      MOV      R8, RCX
+      AND      R8, -16                 // aligned address of the block holding it
+      PXOR     XMM0, XMM0
+      MOVDQA   XMM1, [R8]
+      PCMPEQB  XMM1, XMM0
+      PMOVMSKB EAX, XMM1               // one bit per zero byte of the block
+      AND      ECX, 15                 // bytes of the block that precede S
+      SHR      EAX, CL                 // ...drop them, the mask now starts at S
+      TEST     EAX, EAX
+      JNZ      @@Head
+@@Body:
+      ADD      R8, 16
+      MOVDQA   XMM1, [R8]
+      PCMPEQB  XMM1, XMM0
+      PMOVMSKB EAX, XMM1
+      TEST     EAX, EAX
+      JZ       @@Body
+      BSF      EAX, EAX
+      LEA      RAX, [R8 + RAX]
+      SUB      RAX, R9
+      JMP      @@Done
+@@Head:
+      BSF      EAX, EAX                // already relative to S
+      JMP      @@Done
+@@Nil:
+      XOR      EAX, EAX
+@@Done:
+end;
+{$ELSE}
+function xmlStrLen(S: xmlCharPtr): NativeUInt;
+const
+  Ones  = UInt64($0101010101010101);
+  Highs = UInt64($8080808080808080);
+var
+  P: xmlCharPtr;
+  W: UInt64;
 begin
-  Result := 0;
-  var I: NativeUInt := 0;
+  if S = nil then
+    Exit(0);
 
-  while True do
+  // the aligned word holding S, with the bytes in front of S forced non-zero,
+  // so the search cannot stop before the string starts and no read crosses a
+  // page boundary
+  P := xmlCharPtr(UIntPtr(S) and not UIntPtr(7));
+  W := PUInt64(P)^ or ((UInt64(1) shl ((UIntPtr(S) and 7) * 8)) - 1);
+  while (W - Ones) and not W and Highs = 0 do
   begin
-    var W := PUInt64(@Input[I])^;
-    if (W and $8080808080808080 <> 0) then
-      Break;
-
-    var HasZero := (W - UInt64($0101010101010101)) and (not W) and UInt64($8080808080808080);
-    if HasZero <> 0 then
-      Break;
-
-    Inc(Result, 8);
-    Inc(I, 8);
+    Inc(P, 8);
+    W := PUInt64(P)^;
   end;
 
-  while Input[I] <> #0 do
-  begin
-    Inc(I, Utf8L[Input[I]]);
-    Inc(Result);
-  end;
-  ByteLen := I;
+  if P < S then
+    P := S;
+  while P^ <> #0 do
+    Inc(P);
+  Result := P - S;
 end;
-
-/// <summary>
-/// Fast byte-length (strlen) computation for a null-terminated UTF-8/ANSI
-/// buffer, used instead of relying on the compiler-generated <c>Length()</c>
-/// intrinsic for <c>PAnsiChar</c>-compatible pointers.
-/// </summary>
-function xmlStrLen(S: xmlCharPtr): NativeUInt; inline;
-begin
-  Result := System.SysUtils.StrLen(PAnsiChar(S));
-end;
+{$ENDIF}
 
 function xmlStrPtr(const S: RawByteString): xmlCharPtr;
 begin
-  if Length(S) = 0 then
-    Result := nil
-  else
-    Result := Pointer(S);
+  // An empty RawByteString is a nil pointer, so there is nothing to test.
+  // Pointer(S) and not xmlCharPtr(S): the typed PAnsiChar cast substitutes a
+  // pointer to a static #0 for an empty string, and libxml2 reads that as an
+  // empty value rather than as no value at all.
+  Result := xmlCharPtr(Pointer(S));
 end;
 
 function xmlCharToStr(const S: xmlCharPtr): string;
@@ -828,24 +1030,133 @@ end;
 
 function xmlQName(const Prefix, Name: xmlCharPtr): RawByteString;
 begin
-  if prefix = nil then
+  if Prefix = nil then
     Exit(xmlCharToRaw(Name));
 
-  var L1 := 0;
-  while Prefix[L1] <> #0 do
-    Inc(L1);
-
+  var L1 := NativeInt(xmlStrLen(Prefix));
   if L1 = 0 then
     Exit(xmlCharToRaw(Name));
 
-  var L2 := 0;
-  while Name[L2] <> #0 do
-    Inc(L2);
+  var L2 := NativeInt(xmlStrLen(Name));
 
   NewUtf8String(Pointer(Result), L1 + L2 + 1);
   Move(Prefix^, Pointer(Result)^, L1);
   Result[L1 + 1] := ':';
   Move(Name^, (PByte(Result) + L1 + 1)^, L2);
+end;
+
+{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+/// <summary>
+/// Narrows leading ASCII UTF-16 units to bytes, 16 at a time, and returns how
+/// many were converted; stops at the first block holding a unit above $7F.
+/// </summary>
+function NarrowAscii(Src: PWideChar; Dst: PByte; L: NativeInt): NativeInt;
+asm
+      XOR      EAX, EAX
+      MOV      R9, R8
+      AND      R9, -16                // whole 16-unit blocks
+      JZ       @@Tail
+
+      MOV      R10D, $FF80FF80
+      MOVD     XMM0, R10D
+      PSHUFD   XMM0, XMM0, 0          // $FF80 x8
+      PXOR     XMM1, XMM1
+@@Block:
+      MOVDQU   XMM2, [RCX + RAX * 2]
+      MOVDQU   XMM3, [RCX + RAX * 2 + 16]
+      MOVDQA   XMM4, XMM2
+      POR      XMM4, XMM3
+      PAND     XMM4, XMM0             // keep only the bits above $7F
+      PCMPEQW  XMM4, XMM1             // $FFFF per unit that was ASCII
+      PMOVMSKB R10D, XMM4
+      CMP      R10D, $FFFF
+      JNE      @@Tail
+      PACKUSWB XMM2, XMM3             // 16 units -> 16 bytes, exact below $80
+      MOVDQU   [RDX + RAX], XMM2
+      ADD      RAX, 16
+      CMP      RAX, R9
+      JB       @@Block
+
+@@Tail:
+      CMP      RAX, R8
+      JAE      @@Done
+@@Unit:
+      MOVZX    R10D, WORD PTR [RCX + RAX * 2]
+      CMP      R10D, $80
+      JAE      @@Done
+      MOV      [RDX + RAX], R10B
+      INC      RAX
+      CMP      RAX, R8
+      JB       @@Unit
+@@Done:
+end;
+{$ELSE}
+function NarrowAscii(Src: PWideChar; Dst: PByte; L: NativeInt): NativeInt;
+begin
+  Result := 0;
+  while (Result < L) and (Word(Src[Result]) < $80) do
+  begin
+    Dst[Result] := Byte(Src[Result]);
+    Inc(Result);
+  end;
+end;
+{$ENDIF}
+
+class operator TXmlArgs.Initialize(out Dest: TXmlArgs);
+begin
+  Dest.FUsed := 0;
+  Dest.FSpillCount := 0;
+end;
+
+procedure TXmlArgs.Reset;
+begin
+  FUsed := 0;
+  while FSpillCount > 0 do
+  begin
+    Dec(FSpillCount);
+    FSpill[FSpillCount] := '';
+  end;
+end;
+
+function TXmlArgs.Convert(const S: string): xmlCharPtr;
+var
+  L, Room, N: NativeInt;
+begin
+  L := Length(S);
+  Room := Length(FBuf) - FUsed - 1;
+  if L <= Room then                   // a UTF-8 byte per unit is the floor
+  begin
+    // ASCII narrows straight into the buffer; anything else is finished off by
+    // the same conversion the RTL uses, writing into the buffer just the same
+    N := NarrowAscii(PWideChar(S), @FBuf[FUsed], L);
+    if N < L then
+      N := LocaleCharsFromUnicode(CP_UTF8, 0, PWideChar(S), L,
+             PAnsiChar(@FBuf[FUsed]), Room, nil, nil);
+    if N > 0 then
+    begin
+      Result := xmlCharPtr(@FBuf[FUsed]);
+      FBuf[FUsed + N] := 0;
+      Inc(FUsed, N + 1);
+      Exit;
+    end;
+  end;
+
+  // does not fit: keep a heap string alive for as long as the record lives.
+  // One managed field only - every extra one is paid for on every call that
+  // never spills at all, in record initialization and finalization.
+  if FSpillCount = Length(FSpill) then
+    SetLength(FSpill, FSpillCount + 4);
+  FSpill[FSpillCount] := Utf8Encode(S);
+  Result := xmlCharPtr(Pointer(FSpill[FSpillCount]));
+  Inc(FSpillCount);
+end;
+
+function TXmlArgs.StrPtr(const S: string): xmlCharPtr;
+begin
+  if Length(S) = 0 then
+    Result := nil
+  else
+    Result := Convert(S);
 end;
 
 function SplitXMLName(const Name: string; out Prefix, LocalName: string): Boolean;
@@ -881,7 +1192,11 @@ end;
 function xmlEscapeString(const Value: RawByteString): RawByteString;
 begin
   var Escaped := xmlEncodeSpecialChars(nil, Pointer(Value));
-  NewUtf8String(Pointer(Result), Length(Escaped), Escaped);
+  var Len := xmlStrLen(Escaped);
+  // An empty result has to stay a nil string: NewUtf8String would build a
+  // non-nil zero-length one, and xmlStrPtr relies on empty meaning nil.
+  if Len > 0 then
+    NewUtf8String(Pointer(Result), Len, Escaped);
   XmlFree(Escaped);
 end;
 

@@ -1,4 +1,4 @@
-(*
+﻿(*
 MIT License
 Copyright (c) 2025 Alexey Pokroy
 
@@ -584,13 +584,14 @@ const
 var
   Chunk: array[0..BufferSize - 1] of Byte;
 begin
+  var Args: TXmlArgs;
   FWasException := False;
 
   var Handle := FileOpen(FileName, fmOpenRead or fmShareDenyWrite);
   if Handle = INVALID_HANDLE_VALUE then
     RaiseLastOSError;
   try
-    Ctxt := xmlCreatePushParserCtxt(@sax, Self, nil, 0, xmlCharPtr(Utf8Encode(FileName)));
+    Ctxt := xmlCreatePushParserCtxt(@sax, Self, nil, 0, Args.StrPtr(FileName));
     try
       PrepareContext;
       var ChunkSize := FileRead(Handle, Chunk, BufferSize);

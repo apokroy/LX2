@@ -1,4 +1,4 @@
-(*
+п»ї(*
 MIT License
 Copyright (c) 2025 Alexey Pokroy
 
@@ -174,9 +174,9 @@ type
     /// <param name="Name">
     /// Attribute name. Special cases:
     /// <list type="bullet">
-    /// <item><description>"xmlns" — returns the URI of the default namespace.</description></item>
-    /// <item><description>"xmlns:prefix" — returns the URI bound to <c>prefix</c>.</description></item>
-    /// <item><description>"prefix:local" — returns the value of the namespaced attribute.</description></item>
+    /// <item><description>"xmlns" вЂ” returns the URI of the default namespace.</description></item>
+    /// <item><description>"xmlns:prefix" вЂ” returns the URI bound to <c>prefix</c>.</description></item>
+    /// <item><description>"prefix:local" вЂ” returns the value of the namespaced attribute.</description></item>
     /// </list>
     /// </param>
     /// <returns>Attribute value, or empty string if not found.</returns>
@@ -261,7 +261,7 @@ type
     /// </summary>
     /// <remarks>
     /// Unlike <see cref="SetAttributeNs"/>, the namespace for a "prefix:local"
-    /// name is resolved via <c>xmlSearchNs</c> starting from this node — the
+    /// name is resolved via <c>xmlSearchNs</c> starting from this node вЂ” the
     /// prefix must already be in scope, otherwise the attribute is created
     /// without a namespace binding (silently).
     /// </remarks>
@@ -278,14 +278,14 @@ type
     /// <param name="stylesheet">
     /// Parsed stylesheet document. Internally cloned before parsing, because
     /// <c>xsltFreeStylesheet</c> takes ownership of (and frees) the underlying
-    /// document — cloning avoids destroying the caller's stylesheet document.
+    /// document вЂ” cloning avoids destroying the caller's stylesheet document.
     /// </param>
     /// <param name="doc">Receives the resulting transformed document on success.</param>
     /// <param name="errorHandler">Optional callback receiving libxslt error messages.</param>
     /// <returns><c>True</c> on success.</returns>
     /// <remarks>
     /// The compiled stylesheet (<c>xsltStylesheetPtr</c>) is always released
-    /// before returning, regardless of the outcome — on failure it is released
+    /// before returning, regardless of the outcome вЂ” on failure it is released
     /// inside <c>XsltTransform</c> itself (and <c>style</c> set to <c>nil</c>),
     /// on success it is released by the caller after the result is consumed.
     /// Do not attempt to free it again externally.
@@ -378,7 +378,7 @@ type
     ///    table is keyed by the old value.
     /// 2) The old child text node list is freed and replaced with a single
     ///    new text node (only if <paramref name="Value"/> is non-empty).
-    /// 3) <c>ns</c> is re-derived from <c>parent.ns</c> — this assumes the
+    /// 3) <c>ns</c> is re-derived from <c>parent.ns</c> вЂ” this assumes the
     ///    attribute's effective namespace always matches its owning element's
     ///    default namespace, which is a simplification (it does not preserve
     ///    a previously distinct attribute namespace).
@@ -402,7 +402,7 @@ type
     property  NodeName: RawByteString read GetName;
     /// <summary>
     /// Attribute value as plain text. Reading assumes a "simple" attribute
-    /// with at most a single text/CDATA child node — attributes with mixed
+    /// with at most a single text/CDATA child node вЂ” attributes with mixed
     /// or entity-reference content are not fully supported and return an
     /// unassigned <c>Result</c> (empty string) in that branch.
     /// </summary>
@@ -438,7 +438,7 @@ type
     /// </summary>
     /// <remarks>
     /// Uses <c>XML_INPUT_BUF_STATIC</c>, meaning libxml2 does NOT copy or take
-    /// ownership of <paramref name="Data"/> — the caller must keep the buffer
+    /// ownership of <paramref name="Data"/> вЂ” the caller must keep the buffer
     /// alive for the duration of the parse call (it is not needed afterwards,
     /// since the parsed DOM owns its own copies of text content).
     /// </remarks>
@@ -456,7 +456,7 @@ type
     /// <param name="RootName">
     /// Root element name, optionally qualified as "prefix:local". If qualified,
     /// a NEW namespace declaration is always created with <paramref name="NamespaceURI"/>
-    /// bound to that prefix — this does not search for an existing namespace
+    /// bound to that prefix вЂ” this does not search for an existing namespace
     /// in scope (there can be none yet, since this is the root).
     /// </param>
     /// <param name="NamespaceURI">Namespace URI</param>
@@ -469,7 +469,7 @@ type
     /// <param name="Parent">Parent node, can be nil for create detached node</param>
     /// <param name="Name">Name of node, can be qualified name</param>
     /// <param name="NamespaceURI">Namespace URI</param>
-    /// <param name="ResolveNamespace">Currently unused by the implementation — reserved.</param>
+    /// <param name="ResolveNamespace">Currently unused by the implementation вЂ” reserved.</param>
     /// <param name="Content">Content if any.</param>
     function  CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString = ''; ResolveNamespace: Boolean = False; Content: RawByteString = ''): xmlNodePtr;
     procedure Free; inline;
@@ -518,7 +518,7 @@ type
     /// <remarks>
     /// Note: this inspects <c>stylesheet.encoding</c> (the source stylesheet
     /// document's encoding attribute), not the actual <c>xsl:output encoding="..."</c>
-    /// directive — for stylesheets where these differ, decoding may be incorrect.
+    /// directive вЂ” for stylesheets where these differ, decoding may be incorrect.
     /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
@@ -607,8 +607,8 @@ begin
   Result := False;
 
   style := ParseStylesheet(stylesheet);
-  if style = nil then   // критично: сигнализирует вызывающему коду, что стиль уже освобождён,
-    Exit;               // чтобы тот не выполнил повторный xsltFreeStylesheet(style)
+  if style = nil then   // РєСЂРёС‚РёС‡РЅРѕ: СЃРёРіРЅР°Р»РёР·РёСЂСѓРµС‚ РІС‹Р·С‹РІР°СЋС‰РµРјСѓ РєРѕРґСѓ, С‡С‚Рѕ СЃС‚РёР»СЊ СѓР¶Рµ РѕСЃРІРѕР±РѕР¶РґС‘РЅ,
+    Exit;               // С‡С‚РѕР±С‹ С‚РѕС‚ РЅРµ РІС‹РїРѕР»РЅРёР» РїРѕРІС‚РѕСЂРЅС‹Р№ xsltFreeStylesheet(style)
 
   var ctxt := xsltNewTransformContext(style, doc);
   if ctxt <> nil then
@@ -656,14 +656,14 @@ var
 begin
   if SplitXMLName(Name, Prefix, LocalName) then
   begin
-    Ns := xmlSearchNs(Doc, @Self, xmlCharPtr(Prefix));
+    Ns := xmlSearchNs(Doc, @Self, xmlStrPtr(Prefix));
     if Ns = nil then
-      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content))
+      Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(Name), xmlStrPtr(Content))
     else
-      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(LocalName), xmlCharPtr(Content))
+      Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(LocalName), xmlStrPtr(Content))
   end
   else
-    Result := xmlNewDocRawNode(doc, nil, xmlCharPtr(Name), xmlCharPtr(Content));
+    Result := xmlNewDocRawNode(doc, nil, xmlStrPtr(Name), xmlStrPtr(Content));
 
   if Result <> nil then
     AppendChild(Result);
@@ -673,22 +673,22 @@ function xmlNodeHelper.AddChildNs(const Name, NamespaceURI, Content: RawByteStri
 var
   Prefix, LocalName: RawByteString;
 begin
-  var Ns := xmlSearchNsByHRef(doc, @Self, xmlCharPtr(NamespaceURI));
+  var Ns := xmlSearchNsByHRef(doc, @Self, xmlStrPtr(NamespaceURI));
 
   if Ns = nil then
   begin
     if SplitXMLName(Name, Prefix, LocalName) then
     begin
-      Result := xmlNewDocRawNode(doc, nil, xmlCharPtr(LocalName), xmlCharPtr(Content));
+      Result := xmlNewDocRawNode(doc, nil, xmlStrPtr(LocalName), xmlStrPtr(Content));
 
-      Ns := xmlNewNs(Result, xmlCharPtr(NamespaceURI), xmlCharPtr(Prefix));
+      Ns := xmlNewNs(Result, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix));
       xmlSetNs(Result, ns);
     end
     else
-      Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content));
+      Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(Name), xmlStrPtr(Content));
   end
   else
-    Result := xmlNewDocRawNode(doc, Ns, xmlCharPtr(Name), xmlCharPtr(Content));
+    Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(Name), xmlStrPtr(Content));
 
   if Result <> nil then
     AppendChild(Result);
@@ -923,9 +923,9 @@ begin
       else
         Result := Result.parent;
 
-      if Result = nil then Exit(nil);    // защита от случая, когда Root
-                                         // не является предком стартового узла
-                                         // (например, узел был отсоединён от дерева)
+      if Result = nil then Exit(nil);    // Р·Р°С‰РёС‚Р° РѕС‚ СЃР»СѓС‡Р°СЏ, РєРѕРіРґР° Root
+                                         // РЅРµ СЏРІР»СЏРµС‚СЃСЏ РїСЂРµРґРєРѕРј СЃС‚Р°СЂС‚РѕРІРѕРіРѕ СѓР·Р»Р°
+                                         // (РЅР°РїСЂРёРјРµСЂ, СѓР·РµР» Р±С‹Р» РѕС‚СЃРѕРµРґРёРЅС‘РЅ РѕС‚ РґРµСЂРµРІР°)
     end;
   end;
 end;
@@ -1101,7 +1101,7 @@ end;
 
 function xmlNodeHelper.HasAttributeNs(const NamespaceURI, Name: RawByteString): Boolean;
 begin
-  Result := xmlHasNsProp(@Self, xmlCharPtr(Name), xmlCharPtr(NamespaceURI)) <> nil;
+  Result := xmlHasNsProp(@Self, xmlStrPtr(Name), xmlStrPtr(NamespaceURI)) <> nil;
 end;
 
 function xmlNodeHelper.HasAttributes: Boolean;
@@ -1275,16 +1275,16 @@ var
   Prefix, LocalName: RawByteString;
 begin
   if Name = 'xmlns' then
-    xmlSetNs(@Self, xmlNewNs(@Self, xmlCharPtr(Value), nil))
+    xmlSetNs(@Self, xmlNewNs(@Self, xmlStrPtr(Value), nil))
   else
   begin
     if SplitXMLName(Name, Prefix, LocalName) then
     begin
       if Prefix = 'xmlns' then
-        xmlNewNs(@Self, xmlCharPtr(Value), xmlCharPtr(LocalName))
+        xmlNewNs(@Self, xmlStrPtr(Value), xmlStrPtr(LocalName))
       else
       begin
-        var Ns := xmlSearchNs(doc, @Self, xmlCharPtr(Prefix));
+        var Ns := xmlSearchNs(doc, @Self, xmlStrPtr(Prefix));
         xmlSetNsProp(@Self, Ns, xmlStrPtr(LocalName), xmlStrPtr(Value));
       end;
     end
@@ -1503,7 +1503,7 @@ end;
 
 class function xmlDocHelper.Create(const Version: RawByteString): xmlDocPtr;
 begin
-  Result := xmlNewDoc(xmlCharPtr(Version));
+  Result := xmlNewDoc(xmlStrPtr(Version));
 end;
 
 class function xmlDocHelper.Create(const XML: RawByteString; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler): xmlDocPtr;
@@ -1550,6 +1550,7 @@ var
   input: xmlParserInputPtr;
   ecb: TXmlErrorCallback;
 begin
+  var Args: TXmlArgs;
   var ctx := xmlNewParserCtxt();
   if ctx = nil then
     Exit(nil);
@@ -1562,7 +1563,7 @@ begin
 
   xmlCtxtUseOptions(ctx, XmlParserOptions(Options) or XML_PARSE_UNZIP or XML_PARSE_NONET);
 
-  if xmlNewInputFromUrl(xmlCharPtr(Utf8Encode(filename)), 0, input) = XML_ERR_OK then
+  if xmlNewInputFromUrl(Args.StrPtr(filename), 0, input) = XML_ERR_OK then
   begin
     Result := xmlCtxtParseDocument(ctx, input);
     //xmlFreeInputStream(input);
@@ -1600,13 +1601,13 @@ var
   Prefix, LocalName: RawByteString;
 begin
   if SplitXMLName(RootName, Prefix, LocalName) then
-    ns := xmlNewNs(nil, xmlCharPtr(NamespaceURI), xmlCharPtr(Prefix))
+    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix))
   else if NamespaceURI <> '' then
-    ns := xmlNewNs(nil, xmlCharPtr(NamespaceURI), nil)
+    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), nil)
   else
     ns := nil;
 
-  Result := xmlNewDocRawNode(@Self, ns, xmlCharPtr(RootName), xmlCharPtr(content));
+  Result := xmlNewDocRawNode(@Self, ns, xmlStrPtr(RootName), xmlStrPtr(content));
 
   Doc.documentElement := Result;
 end;
@@ -1624,14 +1625,14 @@ begin
     if NamespaceURI = '' then
       ns := xmlSearchNsByHref(Parent.doc, Parent, Pointer(Prefix))
     else
-      ns := xmlNewNs(nil, xmlCharPtr(NamespaceURI), xmlCharPtr(Prefix))
+      ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix))
   end
   else if NamespaceURI <> '' then
-    ns := xmlNewNs(nil, xmlCharPtr(NamespaceURI), nil)
+    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), nil)
   else
     ns := nil;
 
-  Result := xmlNewDocRawNode(Parent.doc, ns, xmlCharPtr(LocalName), xmlCharPtr(Content));
+  Result := xmlNewDocRawNode(Parent.doc, ns, xmlStrPtr(LocalName), xmlStrPtr(Content));
   Parent.AppendChild(Result);
 end;
 
@@ -1652,7 +1653,8 @@ end;
 
 function xmlDocHelper.CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 begin
-  Result := xmlC14NDocSave(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), xmlCharPtr(Utf8Encode(FileName)), 0) = 0;
+  var Args: TXmlArgs;
+  Result := xmlC14NDocSave(Doc, nil, xmlC14NMode(Ord(Mode)), nil, Ord(Comments), Args.StrPtr(FileName), 0) = 0;
 end;
 
 function xmlDocHelper.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
@@ -1675,17 +1677,17 @@ end;
 
 function xmlDocHelper.CreateAttribute(const Name, Value: RawByteString): xmlAttrPtr;
 begin
-  Result := xmlNewDocProp(@Self, xmlCharPtr(Name), xmlCharPtr(Value));
+  Result := xmlNewDocProp(@Self, xmlStrPtr(Name), xmlStrPtr(Value));
 end;
 
 function xmlDocHelper.CreateCDATASection(const Data: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewCDataBlock(@Self, xmlCharPtr(Data), Length(Data));
+  Result := xmlNewCDataBlock(@Self, xmlStrPtr(Data), Length(Data));
 end;
 
 function xmlDocHelper.CreateComment(const Data: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocComment(@Self, xmlCharPtr(Data));
+  Result := xmlNewDocComment(@Self, xmlStrPtr(Data));
 end;
 
 function xmlDocHelper.CreateDocumentFragment: xmlNodePtr;
@@ -1695,28 +1697,28 @@ end;
 
 function xmlDocHelper.CreateElement(const Name: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocRawNode(@Self, nil, xmlCharPtr(Name), nil);
+  Result := xmlNewDocRawNode(@Self, nil, xmlStrPtr(Name), nil);
 end;
 
 function xmlDocHelper.CreateElementNs(const NamespaceURI, Name: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocRawNode(@Self, nil, xmlCharPtr(Name), nil);
-  xmlSetNs(Result, xmlNewNs(Result, xmlCharPtr(NamespaceURI), nil));
+  Result := xmlNewDocRawNode(@Self, nil, xmlStrPtr(Name), nil);
+  xmlSetNs(Result, xmlNewNs(Result, xmlStrPtr(NamespaceURI), nil));
 end;
 
 function xmlDocHelper.CreateEntityReference(const Name: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewReference(@Self, xmlCharPtr(Name));
+  Result := xmlNewReference(@Self, xmlStrPtr(Name));
 end;
 
 function xmlDocHelper.CreateProcessingInstruction(const Target, Data: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocPI(@Self, xmlCharPtr(Target), xmlCharPtr(Data));
+  Result := xmlNewDocPI(@Self, xmlStrPtr(Target), xmlStrPtr(Data));
 end;
 
 function xmlDocHelper.CreateTextNode(const Data: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocText(@Self,  xmlCharPtr(data));
+  Result := xmlNewDocText(@Self,  xmlStrPtr(data));
 end;
 
 function xmlDocHelper.DocType: xmlNodePtr;
@@ -1772,7 +1774,8 @@ end;
 
 function xmlDocHelper.Save(Stream: TStream; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
-  var ctx := xmlSaveToIO(IOWriteStream, nil, Stream, xmlStrPtr(Utf8Encode(Encoding)), XmlSaveOptions(Options));
+  var Args: TXmlArgs;
+  var ctx := xmlSaveToIO(IOWriteStream, nil, Stream, Args.StrPtr(Encoding), XmlSaveOptions(Options));
   xmlSaveDoc(ctx, @Self);
   Result := xmlSaveFinish(ctx) = XML_ERR_OK;
 end;
@@ -1789,7 +1792,8 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
+  var Args: TXmlArgs;
+  xmlDocDumpFormatMemoryEnc(doc, Data, Size, Args.StrPtr(Encoding), Ord(Format));
 
   if (Data = nil) or (Size = 0) then
   begin
@@ -1806,10 +1810,8 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  if Encoding = '' then
-    xmlDocDumpFormatMemoryEnc(doc, Data, Size, nil, Ord(Format))
-  else
-    xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
+  var Args: TXmlArgs;
+  xmlDocDumpFormatMemoryEnc(doc, Data, Size, Args.StrPtr(Encoding), Ord(Format));
 
   if (Data = nil) or (Size = 0) then
     Exit('');
@@ -1899,7 +1901,8 @@ var
   Data: Pointer;
   Size: Integer;
 begin
-  xmlDocDumpFormatMemoryEnc(doc, Data, Size, xmlCharPtr(Utf8Encode(Encoding)), Ord(Format));
+  var Args: TXmlArgs;
+  xmlDocDumpFormatMemoryEnc(doc, Data, Size, Args.StrPtr(Encoding), Ord(Format));
 
   if (Data = nil) or (Size = 0) then
     Exit(nil);
@@ -1911,7 +1914,8 @@ end;
 
 function xmlDocHelper.Save(const FileName: string; const Encoding: string; const Options: TxmlSaveOptions): Boolean;
 begin
-  var ctx := xmlSaveToFilename(xmlCharPtr(Utf8Encode(FileName)), xmlCharPtr(Utf8Encode(Encoding)), XmlSaveOptions(Options));
+  var Args: TXmlArgs;
+  var ctx := xmlSaveToFilename(Args.StrPtr(FileName), Args.StrPtr(Encoding), XmlSaveOptions(Options));
   xmlSaveDoc(ctx, @Self);
   Result := xmlSaveFinish(ctx) = XML_ERR_OK;
 end;

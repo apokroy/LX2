@@ -1,4 +1,4 @@
-unit LX2APITests;
+﻿unit LX2APITests;
 
 interface
 
@@ -36,8 +36,7 @@ const
 
 procedure TXMLHelpersTest.Setup;
 begin
-  if not LX2Lib.IsLoaded then
-    LX2Lib.Load('..\..\..\Binaries\Win64\libxml2.dll');
+  LX2Lib.Initialize; // static binding through LX2.Static in the project uses
 end;
 
 procedure TXMLHelpersTest.TestCreateEmptyDoc;
