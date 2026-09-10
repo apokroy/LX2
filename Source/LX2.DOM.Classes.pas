@@ -1,36 +1,34 @@
 ﻿/// <summary>
-/// COM/IDispatch-совместимая реализация MS XML DOM (MSXML2)-подобного API
-/// (<c>IXMLDocument</c>, <c>IXMLNode</c>, <c>IXMLElement</c> и т.д.) поверх
-/// нативных указателей libxml2 (<c>xmlNodePtr</c>, <c>xmlDocPtr</c>, <c>xmlNsPtr</c>).
+/// COM/IDispatch-compatible implementation of an MS XML DOM (MSXML2)-like API
+/// (<c>IXMLDocument</c>, <c>IXMLNode</c>, <c>IXMLElement</c> and so on) over the
+/// native libxml2 pointers (<c>xmlNodePtr</c>, <c>xmlDocPtr</c>, <c>xmlNsPtr</c>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Модель владения памятью (ключевая идея всего модуля):</b> каждый
-/// libxml2-узел (<c>xmlNodePtr</c>) имеет поле <c>_private: Pointer</c>,
-/// используемое здесь для хранения обратной ссылки на Delphi-обёртку
-/// (<c>TXMLNode</c> и потомки). Это даёт кэширование "один xmlNodePtr — одна
-/// Delphi-обёртка": функции <c>Cast(...)</c> (см. ниже) всегда сначала
-/// проверяют <c>Node._private</c> и возвращают существующую обёртку вместо
-/// создания новой. Без этого повторные вызовы <c>ParentNode.FirstChild</c>
-/// и т.п. создавали бы новый управляемый объект на каждое обращение.
+/// <b>Ownership model (the key idea of the whole unit):</b> every libxml2 node
+/// (<c>xmlNodePtr</c>) has a <c>_private: Pointer</c> field, used here to hold the back
+/// reference to the Delphi wrapper (<c>TXMLNode</c> and descendants). This caches
+/// "one xmlNodePtr, one Delphi wrapper": the <c>Cast(...)</c> functions (see below)
+/// always check <c>Node._private</c> first and return the existing wrapper instead of
+/// creating a new one. Without it, repeated calls such as <c>ParentNode.FirstChild</c>
+/// would create a new managed object on every access.
 /// </para>
 /// <para>
-/// <b>Взаимный refcounting документа и узлов:</b> каждый <c>TXMLNode</c>
-/// при создании увеличивает refcount владеющего его документа
-/// (<c>TXMLDocument._AddRef</c>), а при разрушении — уменьшает
-/// (<c>_Release</c>). Это гарантирует, что документ не будет уничтожен,
-/// пока жив хотя бы один DOM-объект, ссылающийся на его узлы, даже если
-/// пользовательский код полностью потерял ссылку на сам `IXMLDocument`.
-/// См. подробности в комментариях к <see cref="TXMLNode.Create"/> и
-/// <see cref="TXMLNode.Destroy"/>.
+/// <b>Mutual reference counting of the document and its nodes:</b> every
+/// <c>TXMLNode</c> increments the refcount of its owning document on creation
+/// (<c>TXMLDocument._AddRef</c>) and decrements it on destruction (<c>_Release</c>).
+/// This guarantees that the document is not destroyed while at least one DOM object
+/// referring to its nodes is alive, even when user code has lost every reference to the
+/// `IXMLDocument` itself. Details are in the comments on <see cref="TXMLNode.Create"/>
+/// and <see cref="TXMLNode.Destroy"/>.
 /// </para>
 /// <para>
-/// <b>Глобальный libxml2 node-deregister hook:</b> <see cref="NodeFreeCallback"/>
-/// регистрируется один раз через <c>xmlDeregisterNodeDefault</c> и вызывается
-/// libxml2 всякий раз, когда сам libxml2 (а не эта обёртка) физически
-/// освобождает <c>xmlNodePtr</c> — например, при слиянии соседних текстовых
-/// узлов внутри <c>xmlAddChild</c>. Это необходимо, чтобы Delphi-обёртка не
-/// осталась с "висящим" (dangling) указателем <c>NodePtr</c>.
+/// <b>Global libxml2 node-deregister hook:</b> <see cref="NodeFreeCallback"/> is
+/// registered once through <c>xmlDeregisterNodeDefault</c> and is invoked by libxml2
+/// whenever libxml2 itself (rather than this wrapper) physically frees an
+/// <c>xmlNodePtr</c>, for example when adjacent text nodes are merged inside
+/// <c>xmlAddChild</c>. It keeps the Delphi wrapper from being left with a dangling
+/// <c>NodePtr</c>.
 /// </para>
 /// </remarks>
 unit LX2.DOM.Classes;
@@ -262,23 +260,22 @@ type
   end;
 
   /// <summary>
-  /// MSXML-совместимое представление "всех атрибутов узла" как единой
-  /// коллекции <c>IXMLNodeList</c>/<c>IXMLNamedNodeMap</c>, скрывающее тот
-  /// факт, что в libxml2 это физически ДВА РАЗНЫХ связных списка узла:
-  /// <c>Node.nsDef</c> (объявления пространств имён, <c>xmlns:...</c>) и
-  /// <c>Node.properties</c> (обычные атрибуты).
+  /// MSXML-compatible view of "all attributes of a node" as a single
+  /// <c>IXMLNodeList</c>/<c>IXMLNamedNodeMap</c> collection, hiding the fact that in
+  /// libxml2 these are physically TWO DIFFERENT linked lists of the node:
+  /// <c>Node.nsDef</c> (namespace declarations, <c>xmlns:...</c>) and
+  /// <c>Node.properties</c> (ordinary attributes).
   /// </summary>
   /// <remarks>
-  /// Причина такого объединения — семантика MSXML DOM, где
-  /// <c>xmlns:prefix="uri"</c> трактуется как обычный атрибут элемента
-  /// (доступный через <c>Attributes.GetNamedItem('xmlns:prefix')</c>), тогда
-  /// как в модели libxml2 это отдельная, специализированная структура
-  /// <c>xmlNs</c>, физически не являющаяся <c>xmlAttrPtr</c>/<c>xmlNodePtr</c>.
-  /// Практически ВСЕ методы данного класса (<see cref="Get_Item"/>,
-  /// <see cref="Get_Length"/>, <see cref="ToArray"/>, и внутренний
-  /// <see cref="TEnumerator"/>) содержат парную логику: "сначала пройти весь
-  /// <c>nsDef</c>, затем весь <c>properties</c>" — т.е. namespace-декларации
-  /// всегда идут ПЕРЕД обычными атрибутами в индексации/порядке перечисления.
+  /// The reason for the merge is the MSXML DOM semantics, where
+  /// <c>xmlns:prefix="uri"</c> is treated as an ordinary attribute of the element
+  /// (available through <c>Attributes.GetNamedItem('xmlns:prefix')</c>), whereas in the
+  /// libxml2 model it is a separate, specialised <c>xmlNs</c> structure that is neither an
+  /// <c>xmlAttrPtr</c> nor an <c>xmlNodePtr</c>. Practically EVERY method of this class
+  /// (<see cref="Get_Item"/>, <see cref="Get_Length"/>, <see cref="ToArray"/> and the
+  /// internal <see cref="TEnumerator"/>) carries the paired logic "walk the whole
+  /// <c>nsDef</c> first, then the whole <c>properties</c>", so namespace declarations
+  /// always come BEFORE ordinary attributes in indexing and enumeration order.
   /// </remarks>
   TXMLAttributeList = class(TXMLBase, IXMLNodeList, IXMLNamedNodeMap)
   protected type
@@ -347,36 +344,32 @@ type
   end;
 
   /// <summary>
-  /// Реализация <c>getElementsByTagName</c>/<c>getElementsByTagNameNS</c>:
-  /// "живой" (вычисляемый лениво при каждом обходе, а не кэшируемый список)
-  /// набор элементов, отфильтрованных по имени тега (<see cref="Mask"/>) и,
-  /// опционально, обходящий либо только прямых потомков, либо всё поддерево
-  /// (<see cref="Recursive"/>).
+  /// Implementation of <c>getElementsByTagName</c>/<c>getElementsByTagNameNS</c>: a
+  /// "live" set of elements (computed lazily on every walk, not a cached list) filtered
+  /// by tag name (<see cref="Mask"/>) and, optionally, walking either the direct
+  /// children only or the whole subtree (<see cref="Recursive"/>).
   /// </summary>
   /// <remarks>
   /// <para>
-  /// <b>Диспетчеризация через <c>TMoveNext = function: Boolean of object</c>:</b>
-  /// вместо ветвления <c>if Recursive then ... if UseMask then ...</c> внутри
-  /// каждого вызова <c>MoveNext</c> (что означало бы 2 проверки условий на
-  /// каждый шаг итерации), нужная реализация обхода
-  /// (DoNextSibling/DoNextSiblingWithMask/DoNextRecursive/DoNextRecursiveWithMask)
-  /// выбирается ОДИН РАЗ в конструкторе и сохраняется как метод-указатель
-  /// <c>FDoMoveNext</c> — устраняя условные переходы из горячего пути
-  /// перечисления. Это особенно важно для <see cref="Get_Item"/>/
-  /// <see cref="Get_Length"/> (см. предупреждение о производительности ниже),
-  /// которые пересоздают перечислитель и полностью проходят его на каждый
-  /// вызов.
+  /// <b>Dispatch through <c>TMoveNext = function: Boolean of object</c>:</b> instead of
+  /// branching on <c>if Recursive then ... if UseMask then ...</c> inside every
+  /// <c>MoveNext</c> call (two condition checks per iteration step), the walk
+  /// implementation (DoNextSibling/DoNextSiblingWithMask/DoNextRecursive/
+  /// DoNextRecursiveWithMask) is chosen ONCE in the constructor and stored as the method
+  /// pointer <c>FDoMoveNext</c>, which removes the conditional jumps from the hot path
+  /// of enumeration. This matters most for <see cref="Get_Item"/>/<see cref="Get_Length"/>
+  /// (see the performance warning below), which recreate the enumerator and walk it to
+  /// the end on every call.
   /// </para>
   /// <para>
-  /// ⚠ <b>Предупреждение о производительности:</b> <see cref="Get_Item"/> и
-  /// <see cref="Get_Length"/> выполняют ПОЛНЫЙ обход (под)дерева документа на
-  /// КАЖДЫЙ вызов (пересоздавая <see cref="TEnumerator"/> с нуля), поскольку
-  /// результат обхода нигде не кэшируется. Типичный пользовательский цикл
-  /// <c>for I := 0 to List.Length - 1 do Process(List[I])</c> имеет,
-  /// следовательно, СЛОЖНОСТЬ O(n²) от размера документа вместо ожидаемого
-  /// O(n). Предпочитайте перечисление через <c>for..in</c> (единый проход,
-  /// использующий один и тот же <c>Enum.MoveNext</c>) или явный
-  /// <see cref="ToArray"/> вместо индексного доступа в цикле.
+  /// ⚠ <b>Performance warning:</b> <see cref="Get_Item"/> and <see cref="Get_Length"/>
+  /// perform a FULL walk of the document (sub)tree on EVERY call (recreating
+  /// <see cref="TEnumerator"/> from scratch), because the result of the walk is not
+  /// cached anywhere. The typical user loop
+  /// <c>for I := 0 to List.Length - 1 do Process(List[I])</c> is therefore O(n²) in the
+  /// size of the document instead of the expected O(n). Prefer enumeration through
+  /// <c>for..in</c> (a single pass over the same <c>Enum.MoveNext</c>) or an explicit
+  /// <see cref="ToArray"/> to indexed access in a loop.
   /// </para>
   /// </remarks>
   TXMLElementList = class(TXMLNodeNamedNodeMap)
@@ -585,37 +578,33 @@ type
     function  Get_OwnerElement: IXMLElement;
     function  Get_Value: string;
     /// <summary>
-    /// Заменяет значение атрибута, полностью пересобирая его список дочерних
-    /// узлов (<c>AttrPtr.children</c>) — в модели libxml2/DOM значение атрибута
-    /// физически хранится не как строковое поле, а как единственный текстовый
-    /// узел-потомок атрибута (аналогично тому, как значение текстового элемента
-    /// хранится в его дочерних текстовых узлах).
+    /// Replaces the attribute value by rebuilding its list of child nodes
+    /// (<c>AttrPtr.children</c>) from scratch: in the libxml2/DOM model the value of an
+    /// attribute is stored not as a string field but as the single text node child of the
+    /// attribute (the same way the value of a text element lives in its child text nodes).
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Порядок действий небанален и важен:</b>
+    /// <b>The order of the steps is not arbitrary:</b>
     /// <list type="number">
     /// <item><description>
-    /// Новый текстовый узел (<c>xmlNewDocText</c>) создаётся ПЕРВЫМ, ДО удаления
-    /// старого содержимого — если бы <c>AttrPtr.children</c> был очищен раньше,
-    /// а создание нового узла (теоретически) завершилось неудачей, атрибут
-    /// остался бы без значения вместо сохранения старого; текущий порядок
-    /// минимизирует окно, в котором операция может завершиться в
-    /// промежуточном состоянии.
+    /// The new text node (<c>xmlNewDocText</c>) is created FIRST, BEFORE the old content
+    /// is removed. Had <c>AttrPtr.children</c> been cleared first and the creation of the
+    /// new node (theoretically) failed, the attribute would be left without a value
+    /// instead of keeping the old one; the current order minimises the window in which
+    /// the operation can end in an intermediate state.
     /// </description></item>
     /// <item><description>
-    /// Если атрибут был ID-атрибутом (<c>AttrPtr.atype = XML_ATTRIBUTE_ID</c>),
-    /// он снимается с ID-индекса документа (<c>xmlRemoveID</c>) ДО изменения
-    /// значения — поскольку ID-индекс документа физически хранит пары
-    /// (значение → узел), и смена значения атрибута сделала бы старую запись в
-    /// индексе неверной, если бы не была удалена заранее.
+    /// If the attribute was an ID attribute (<c>AttrPtr.atype = XML_ATTRIBUTE_ID</c>), it
+    /// is removed from the document's ID index (<c>xmlRemoveID</c>) BEFORE the value
+    /// changes: the ID index stores (value → node) pairs, and changing the value would
+    /// leave a stale entry in the index unless it had been removed in advance.
     /// </description></item>
     /// <item><description>
-    /// Старый список дочерних узлов освобождается (<c>xmlFreeNodeList</c>)
-    /// целиком, хотя в подавляющем большинстве случаев там ровно один текстовый
-    /// узел — это защищает от редкого, но допустимого в XML случая, когда
-    /// значение атрибута представлено НЕСКОЛЬКИМИ узлами (текст +
-    /// entity-ссылки, например <c>attr="&amp;amp;foo"</c>).
+    /// The old child list is freed as a whole (<c>xmlFreeNodeList</c>), although in the
+    /// vast majority of cases it holds exactly one text node. This covers the rare but
+    /// legal XML case where the attribute value consists of SEVERAL nodes (text plus
+    /// entity references, for example <c>attr="&amp;amp;foo"</c>).
     /// </description></item>
     /// </list>
     /// </para>
@@ -701,85 +690,95 @@ type
 
   end;
 
+  /// <summary>
+  /// A set of XML Schema documents compiled into one libxml2 <c>xmlSchema</c>, modelled on
+  /// <c>XmlSchemaSet</c> in .NET: schemas are registered as in-memory documents
+  /// (<see cref="Add"/>), and the links between them are resolved by the collection, not by
+  /// the file system.
+  /// </summary>
+  /// <remarks>
+  /// <para>Rules for <c>xs:import</c>, <c>xs:include</c> and <c>xs:redefine</c> at compile time:</para>
+  /// <list type="bullet">
+  /// <item><description>An <c>xs:import</c> of a namespace registered in the collection leads
+  /// to the collection's schema; its <c>schemaLocation</c> is ignored.</description></item>
+  /// <item><description>Other locations are requested from the <see cref="IXMLResolver"/>
+  /// passed along with the document, or, when the document was loaded from a file, read from
+  /// disk relative to it. The document obtained is processed by the same rules.</description></item>
+  /// <item><description>An unresolved location is not an error: an <c>xs:include</c>/<c>xs:redefine</c>
+  /// is skipped, an <c>xs:import</c> loses its location, and a warning is recorded in
+  /// <see cref="Errors"/>. This way the documents of one namespace, added one by one, form a
+  /// single schema even when they refer to each other by file names that exist nowhere;
+  /// components that are really missing are reported by libxml2 as unresolved references.</description></item>
+  /// </list>
+  /// <para>Several documents of one namespace are joined by a wrapper schema made of
+  /// <c>xs:include</c>, so each keeps its own <c>elementFormDefault</c> and prefixes. Every
+  /// document reaches libxml2 from memory under a <c>lx2schema://schemas/N/name</c> address
+  /// through the global external entity loader: libxml2 does not pass the loader set on the
+  /// schema parser context (<c>xmlSchemaSetResourceLoader</c>) to the nested contexts, and an
+  /// include inside an imported schema would be read from disk. The compiled schema is cached
+  /// until the next <see cref="Add"/> or <see cref="Remove"/>; an instance is not meant to be
+  /// used from several threads at once.</para>
+  /// </remarks>
   TXMLSchemaCollection = class(TXMLBase, IXMLSchemaCollection)
   private const
     cImport = 'import';
     cInclude = 'include';
+    cRedefine = 'redefine';
+    cNamespace = 'namespace';
+    cSchemaLocation = 'schemaLocation';
     cSchemaNs = 'http://www.w3.org/2001/XMLSchema';
+    /// Target namespace of the root wrapper: only a schema that has a target namespace may
+    /// import a schema without one (src-import.1.2).
+    cRootNamespace = 'urn:lx2:schema-collection';
+    cResourcePrefix: RawByteString = 'lx2schema://schemas/';
   protected type
+    TSource = record
+      Doc: IXMLDocument;
+      Resolver: IXMLResolver;
+    end;
     TItem = class
       NamespaceURI: string;
-      Schema: xmlDocPtr;
-      Sources: TList<IXmlDocument>;
-      Imports: TStringList;
-      FileName: string;
+      Sources: TList<TSource>;
+      /// The merged document Get hands out when there are several sources; lives until Invalidate.
+      Merged: xmlDocPtr;
+      /// Resource indices for the duration of a compilation: the namespace wrapper and every source.
+      Resource: Integer;
+      SourceResources: TArray<Integer>;
       constructor Create;
       destructor Destroy; override;
+      procedure FreeMerged;
     end;
   private
-    FCompiled: Boolean;
-    FItems: TList<TItem>;
+    FItems: TObjectList<TItem>;
     FErrors: TXMLErrors;
-    FTempPath: string;
-    FSchemaRoot: xmlDocPtr;
-    procedure Cleanup;
+    FCompiled: Boolean;
+    FSchema: xmlSchemaPtr;
+    /// The root wrapper: the schema refers to its nodes, so the document lives as long as FSchema.
+    FRootDoc: xmlDocPtr;
+    FResources: TList<TBytes>;
+    FResourceUrls: TList<RawByteString>;
+    FLocations: TDictionary<string, Integer>;
+    FUnlocated: TDictionary<string, Boolean>;
+    procedure Invalidate;
+    function  ReserveResource(const Name: string): Integer;
+    function  ResourceUrl(Index: Integer): RawByteString;
+    function  AbsoluteLocation(const Location, BaseUrl: string): string;
+    function  ResolveLocation(const Location, BaseUrl: string; const Resolver: IXMLResolver): Integer;
+    procedure PrepareSchema(Index: Integer; Doc: xmlDocPtr; const BaseUrl: string; const Resolver: IXMLResolver);
+    procedure Unlocated(const Location, BaseUrl, Element: string);
+    procedure AddWarning(Code: Integer; const Text, Url: string);
+    function  LoadResource(const Url: PUTF8Char): xmlParserInputPtr;
+    function  MergedDoc(Item: TItem): xmlDocPtr;
   protected
-    property  Items: TList<TItem> read FItems;
+    property  Items: TObjectList<TItem> read FItems;
   public
     constructor Create;
     destructor Destroy; override;
     /// <summary>
-    /// Компилирует все зарегистрированные (через <see cref="Add"/>) исходные
-    /// XSD-документы, сгруппированные по целевому namespace, в единый набор
-    /// файлов на диске, объединяя множественные источники одного и того же
-    /// namespace в единый XSD-документ на файл и корректно перестраивая
-    /// <c>&lt;xs:import&gt;</c>/<c>&lt;xs:include&gt;</c> связи между ними.
+    /// Compiles the registered schemas into one; the diagnostics go to <see cref="Errors"/>.
+    /// <see cref="Validate"/> compiles on its own, a separate call is for checking the schemas
+    /// without a document.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>Почему временные файлы, а не документы в памяти:</b> согласно
-    /// комментарию в <see cref="Validate"/> ("custom ResourceLoader doesnt
-    /// called when not direct import in xsd"), механизм разрешения путей
-    /// libxml2 XML Schema для транзитивных (не прямых) <c>xs:import</c>
-    /// корректно работает только при загрузке схемы С ДИСКА через файловый
-    /// путь (<c>xmlSchemaNewParserCtxt</c> от имени файла), а не из документа,
-    /// уже находящегося в памяти — отсюда необходимость сохранения
-    /// скомпилированных схем во временную директорию (<c>FTempPath</c>) и
-    /// последующей повторной загрузки последнего файла (<c>FSchemaRoot</c>)
-    /// именно с диска.
-    /// </para>
-    /// <para>
-    /// <b>Обработка <c>xs:import</c> vs <c>xs:include</c> (вложенные функции
-    /// <c>IsImport</c>/<c>IsInclude</c>):</b>
-    /// <list type="bullet">
-    /// <item><description>
-    /// <c>xs:include</c>-элементы полностью УДАЛЯЮТСЯ из дерева (поскольку их
-    /// содержимое физически СЛИВАЕТСЯ в целевой документ через
-    /// AddSource — в один namespace может быть несколько
-    /// зарегистрированных исходных документов, объединяемых построчным клонированием
-    /// узлов <c>xmlDOMWrapCloneNode</c>).
-    /// </description></item>
-    /// <item><description>
-    /// <c>xs:import</c>-элементы также удаляются из исходного документа, но их
-    /// целевой namespace ЗАПОМИНАЕТСЯ (<c>Item.Imports.Add(...)</c>) и позже
-    /// заново синтезируется (второй проход <c>for I := 0 to Items.Count - 1</c>)
-    /// с корректным <c>schemaLocation</c>, указывающим на итоговый файл этого
-    /// импортируемого namespace (<c>Index.ToString + '.xsd'</c>) — поскольку
-    /// путь к файлу известен только ПОСЛЕ того, как все схемы скомпилированы и
-    /// сохранены, этот процесс не может быть выполнен за один проход.
-    /// </description></item>
-    /// </list>
-    /// </para>
-    /// <para>
-    /// <b>Почему <c>FSchemaRoot</c> — это именно <c>Items.Last</c>:</b> "корневой"
-    /// файл для финальной валидации выбирается как ПОСЛЕДНИЙ зарегистрированный
-    /// namespace — неявное допущение, что вызывающий код регистрирует основную
-    /// (целевую) схему последней через <see cref="Add"/>, а её зависимости
-    /// (импортируемые схемы) — раньше. Если это предположение нарушается
-    /// (основная схема добавлена не последней), валидация будет использовать
-    /// не тот корневой документ.
-    /// </para>
-    /// </remarks>
     procedure Compile;
     function  Validate(const Doc: IXMLDocument): Boolean;
     function  IndexOf(const NamespaceURI: string): NativeInt;
@@ -787,6 +786,7 @@ type
     procedure Remove(const NamespaceURI: string);
     function  Get_Length: NativeInt;
     function  Get_NamespaceURI(index: NativeInt): string;
+    function  Get_Errors: IXMLErrors;
     function  Get(const NamespaceURI: string): IXMLDocument;
     procedure AddCollection(const otherCollection: IXMLSchemaCollection);
     property  Errors: TXMLErrors read FErrors;
@@ -924,52 +924,44 @@ begin
 end;
 
 /// <summary>
-/// Callback, регистрируемый один раз глобально через
-/// <c>xmlDeregisterNodeDefault</c>, вызываемый libxml2 непосредственно
-/// перед физическим освобождением памяти любого <c>xmlNodePtr</c> —
-/// НЕЗАВИСИМО от того, инициировано ли освобождение из кода этой Delphi-
-/// обёртки или изнутри самого libxml2 (например, слияние соседних текстовых
-/// узлов внутри <c>xmlAddChild</c>, или каскадное удаление поддерева).
+/// Callback registered once, globally, through <c>xmlDeregisterNodeDefault</c>; libxml2
+/// invokes it right before it physically frees the memory of any <c>xmlNodePtr</c>,
+/// REGARDLESS of whether the release was initiated by this Delphi wrapper or from inside
+/// libxml2 itself (for example, merging adjacent text nodes inside <c>xmlAddChild</c>, or
+/// the cascading removal of a subtree).
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Почему это необходимо:</b> Delphi-обёртка (<c>TXMLNode</c>) хранит
-/// сырой указатель <c>NodePtr</c> на структуру libxml2. Если libxml2
-/// физически освободит эту структуру без ведома обёртки, <c>NodePtr</c>
-/// станет dangling-указателем, и любое последующее обращение к нему из
-/// Delphi-кода приведёт к неопределённому поведению (обычно — access
-/// violation при чтении освобождённой памяти, или ещё хуже — тихое чтение
-/// уже переиспользованной под другие данные памяти).
+/// <b>Why it is needed:</b> the Delphi wrapper (<c>TXMLNode</c>) holds a raw pointer
+/// <c>NodePtr</c> to the libxml2 structure. If libxml2 frees that structure without the
+/// wrapper knowing, <c>NodePtr</c> becomes a dangling pointer and any later access to it
+/// from Delphi code is undefined behaviour (usually an access violation on reading freed
+/// memory, or worse, a silent read of memory already reused for other data).
 /// </para>
 /// <para>
-/// <b>Что делает функция:</b> находит Delphi-обёртку через
-/// <c>Node._private</c> (если она существует — то есть если на этот узел
-/// когда-либо ссылался управляемый DOM-код) и:
+/// <b>What the function does:</b> finds the Delphi wrapper through <c>Node._private</c>
+/// (if it exists, that is, if managed DOM code ever referred to this node) and:
 /// <list type="number">
 /// <item><description>
-/// Обходит список объявленных на узле пространств имён (<c>nsDef</c>) и для
-/// каждого, у которого есть своя обёртка (<c>Ns._private &lt;&gt; nil</c>,
-/// т.е. на него ссылается объект <see cref="TXMLNsNode"/>), обнуляет его
-/// поле <c>NsPtr</c> — поскольку освобождение узла в libxml2 обычно влечёт и
-/// освобождение его <c>nsDef</c>-списка.
+/// Walks the namespaces declared on the node (<c>nsDef</c>) and, for each one that has a
+/// wrapper of its own (<c>Ns._private &lt;&gt; nil</c>, that is, a <see cref="TXMLNsNode"/>
+/// object refers to it), clears its <c>NsPtr</c> field, because freeing a node in libxml2
+/// normally frees its <c>nsDef</c> list as well.
 /// </description></item>
 /// <item><description>
-/// Обнуляет <c>NodePtr</c> самой обёртки узла, чтобы дальнейшие обращения к
-/// её свойствам (которые все читают <c>NodePtr.*</c>) как минимум не читали
-/// освобождённую память напрямую — хотя без дополнительных проверок
-/// <c>NodePtr = nil</c> в каждом геттере это всё равно приведёт к access
-/// violation при разыменовании <c>nil</c>, а не к тихой порче данных, что
-/// строго предпочтительнее.
+/// Clears <c>NodePtr</c> of the node wrapper itself, so that later accesses to its
+/// properties (all of which read <c>NodePtr.*</c>) at least do not read freed memory
+/// directly. Without an extra <c>NodePtr = nil</c> check in every getter this still ends
+/// in an access violation on dereferencing <c>nil</c>, but that is strictly preferable to
+/// silent data corruption.
 /// </description></item>
 /// </list>
 /// </para>
 /// <para>
-/// <b>Известное ограничение:</b> эта функция НЕ снимает ref-счётчик с
-/// владеющего документа, который был установлен в
-/// <see cref="TXMLNode.Create"/> — освобождение этого ref-а происходит
-/// только в <see cref="TXMLNode.Destroy"/>, которая, однако, к этому
-/// моменту уже не может прочитать <c>NodePtr.doc</c> (он уже <c>nil</c>).
-/// См. соответствующее примечание в <see cref="TXMLNode.Destroy"/>.
+/// <b>Known limitation:</b> this function does NOT release the reference on the owning
+/// document taken in <see cref="TXMLNode.Create"/>; that reference is released only in
+/// <see cref="TXMLNode.Destroy"/>, which by then can no longer read <c>NodePtr.doc</c>
+/// (it is already <c>nil</c>). See the corresponding note in <see cref="TXMLNode.Destroy"/>.
 /// </para>
 /// </remarks>
 procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
@@ -994,45 +986,40 @@ begin
 end;
 
 /// <summary>
-/// Разрешает "отложенное" (<c>Unlinked</c>) пространство имён атрибута в
-/// момент его фактического присоединения к дереву документа (см.
-/// <c>Cast(xmlAttrPtr, Prefix, NamespaceURI)</c> и общее замечание там же).
+/// Resolves the "deferred" (<c>Unlinked</c>) namespace of an attribute at the moment it is
+/// actually attached to the document tree (see <c>Cast(xmlAttrPtr, Prefix, NamespaceURI)</c>
+/// and the general note there).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Вызывается из <see cref="TXMLNode.AppendChild"/>,
-/// <see cref="TXMLNode.InsertBefore"/> и <see cref="TXMLAttributeList.SetNamedItem"/>
-/// непосредственно перед фактическим прикреплением атрибута к родительскому
-/// элементу — на этот момент уже известен конкретный узел дерева
-/// (<paramref name="Parent"/>), от которого можно оттолкнуться при поиске/
-/// создании подходящего <c>xmlNsPtr</c> через <c>xmlSearchNs</c>/
-/// <c>xmlSearchNsByHref</c>.
+/// Called from <see cref="TXMLNode.AppendChild"/>, <see cref="TXMLNode.InsertBefore"/> and
+/// <see cref="TXMLAttributeList.SetNamedItem"/> right before the attribute is attached to
+/// its parent element: at that point the concrete tree node (<paramref name="Parent"/>) is
+/// known, and the search for or creation of a suitable <c>xmlNsPtr</c> through
+/// <c>xmlSearchNs</c>/<c>xmlSearchNsByHref</c> can start from it.
 /// </para>
 /// <para>
-/// <b>Логика выбора стратегии поиска (три ветки if/elsif/else) — на первый
-/// взгляд неочевидна:</b>
+/// <b>The choice of search strategy (three if/elsif/else branches) is not obvious at
+/// first sight:</b>
 /// <list type="bullet">
 /// <item><description>
-/// Если задан ТОЛЬКО префикс (URI неизвестен/пуст) — ищем существующую
-/// декларацию namespace по префиксу (<c>xmlSearchNs</c>): предполагается,
-/// что вызывающий код полагается на то пространство имён, что уже объявлено
-/// в дереве под этим префиксом.
+/// If ONLY the prefix is given (the URI is unknown or empty), an existing namespace
+/// declaration is looked up by prefix (<c>xmlSearchNs</c>): the caller is assumed to rely
+/// on whatever namespace is already declared in the tree under that prefix.
 /// </description></item>
 /// <item><description>
-/// Если задан ТОЛЬКО URI (префикс неизвестен/пуст) — ищем по URI
-/// (<c>xmlSearchNsByHref</c>): находим ЛЮБОЙ существующий в области
-/// видимости префикс, под которым уже объявлен этот URI.
+/// If ONLY the URI is given (the prefix is unknown or empty), the lookup is by URI
+/// (<c>xmlSearchNsByHref</c>): ANY prefix in scope under which that URI is already
+/// declared will do.
 /// </description></item>
 /// <item><description>
-/// Если заданы ОБА (и префикс, и URI) — сначала ищем по префиксу, а затем
-/// ДОПОЛНИТЕЛЬНО проверяем, что найденная декларация действительно имеет
-/// именно этот URI (<c>xmlStrSame(...href)</c>); если URI не совпадает —
-/// откатываемся к <c>Ns := nil</c>, что ниже приведёт к созданию НОВОЙ
-/// namespace-декларации с этим префиксом и URI на самом узле
-/// <paramref name="Parent"/> (через <c>xmlNewNs</c>), даже если префикс уже
-/// использовался в дереве для другого URI — это соответствует ожидаемой
-/// семантике: точное соответствие (prefix, URI) имеет приоритет над простым
-/// совпадением одного из двух полей.
+/// If BOTH are given, the lookup is by prefix first, and the declaration found is
+/// ADDITIONALLY checked to carry exactly this URI (<c>xmlStrSame(...href)</c>); on a
+/// mismatch the code falls back to <c>Ns := nil</c>, which below creates a NEW namespace
+/// declaration with this prefix and URI on the <paramref name="Parent"/> node itself
+/// (through <c>xmlNewNs</c>), even if the prefix was already used in the tree for another
+/// URI. That is the expected semantics: an exact (prefix, URI) match takes precedence over
+/// a match on either field alone.
 /// </description></item>
 /// </list>
 /// </para>
@@ -1068,17 +1055,16 @@ begin
 end;
 
 /// <summary>
-/// Возвращает уже существующую Delphi-обёртку документа (через
-/// <c>Doc._private</c>), либо создаёт новую с флагом владения документом
-/// (<c>DocOwner = True</c>), если обёртки ещё нет.
+/// Returns the existing Delphi wrapper of the document (through <c>Doc._private</c>), or
+/// creates a new one that owns the document (<c>DocOwner = True</c>) when there is no
+/// wrapper yet.
 /// </summary>
 /// <remarks>
-/// <c>DocOwner = True</c> здесь означает, что созданная обёртка сама
-/// вызовет <c>xmlFreeDoc</c> в своём деструкторе — это корректно, поскольку
-/// единственный способ попасть в эту ветку "обёртки ещё нет" — это когда
-/// документ был создан напрямую через libxml2 API в обход этого враппера
-/// (например, документ трансформации XSLT), и теперь кто-то впервые
-/// обращается к нему через DOM-обёртку (см. <c>TXMLNode.Get_OwnerDocument</c>).
+/// <c>DocOwner = True</c> here means the wrapper created will call <c>xmlFreeDoc</c> in
+/// its destructor. That is correct because the only way into the "no wrapper yet" branch
+/// is a document created directly through the libxml2 API, bypassing this wrapper (for
+/// example, the result of an XSLT transformation), that is now accessed through the DOM
+/// for the first time (see <c>TXMLNode.Get_OwnerDocument</c>).
 /// </remarks>
 function Cast(const Doc: xmlDocPtr): TXMLDocument; overload;
 begin
@@ -1092,11 +1078,10 @@ begin
 end;
 
 /// <summary>
-/// Возвращает уже существующую обёртку узла, либо создаёт новую нужного
-/// конкретного класса на основе <c>Node.&amp;type</c> (диспетчеризация по
-/// <c>xmlElementType</c>: элемент → <see cref="TXMLElement"/>, текст →
-/// <see cref="TXMLText"/>, и т.д.). Для неизвестных/необрабатываемых типов
-/// узлов возвращается базовый <see cref="TXMLNode"/>.
+/// Returns the existing wrapper of the node, or creates a new one of the concrete class
+/// chosen by <c>Node.&amp;type</c> (dispatch on <c>xmlElementType</c>: element →
+/// <see cref="TXMLElement"/>, text → <see cref="TXMLText"/>, and so on). Unknown or
+/// unhandled node types get the base <see cref="TXMLNode"/>.
 /// </summary>
 function Cast(const Node: xmlNodePtr): TXMLNode; overload;
 begin
@@ -1121,7 +1106,7 @@ begin
   end;
 end;
 
-/// <summary>Атрибут-специфичная версия <see cref="Cast(xmlNodePtr)"/>, сокращающая явное приведение типа для вызывающего кода, ожидающего именно <see cref="TXMLAttribute"/>.</summary>
+/// <summary>Attribute-specific version of <see cref="Cast(xmlNodePtr)"/> that saves the caller expecting a <see cref="TXMLAttribute"/> an explicit type cast.</summary>
 function Cast(const Attr: xmlAttrPtr): TXMLAttribute; overload;
 begin
   if Attr = nil then
@@ -1133,20 +1118,17 @@ begin
 end;
 
 /// <summary>
-/// Специальная перегрузка для "отвязанного" (unlinked) атрибута — созданного
-/// в памяти, но ещё не подключённого к дереву документа, для которого
-/// префикс/URI пространства имён ещё не могут быть разрешены через
-/// <c>xmlSearchNs</c> (это возможно только после того, как атрибут будет
-/// физически прикреплён к родительскому элементу — см.
-/// <see cref="ResolveUnlinked"/>).
+/// Special overload for an unlinked attribute: one created in memory but not yet attached
+/// to the document tree, whose namespace prefix/URI cannot be resolved through
+/// <c>xmlSearchNs</c> yet (that becomes possible only once the attribute is physically
+/// attached to a parent element, see <see cref="ResolveUnlinked"/>).
 /// </summary>
 /// <remarks>
-/// Используется, например, при <c>CreateAttributeNS</c>, где вызывающий код
-/// указывает namespace URI ДО того, как атрибут присоединён к какому-либо
-/// элементу дерева — libxml2 не позволяет создать/найти <c>xmlNsPtr</c> без
-/// контекста конкретного узла дерева, поэтому запрос на разрешение
-/// пространства имён откладывается (<c>Attr.Unlinked := True</c>) до
-/// момента фактического присоединения атрибута к элементу.
+/// Used, for example, by <c>CreateAttributeNS</c>, where the caller names the namespace
+/// URI BEFORE the attribute is attached to any element of the tree. libxml2 cannot create
+/// or find an <c>xmlNsPtr</c> without the context of a concrete tree node, so the
+/// namespace resolution is deferred (<c>Attr.Unlinked := True</c>) until the attribute is
+/// actually attached to an element.
 /// </remarks>
 function Cast(const Attr: xmlAttrPtr; const Prefix, NamespaceURI: RawByteString): TXMLAttribute; overload;
 begin
@@ -1162,11 +1144,11 @@ begin
 end;
 
 /// <summary>
-/// Оборачивает <c>xmlNsPtr</c> (namespace-декларацию узла, физически не
-/// являющуюся отдельным DOM-узлом в libxml2) в MSXML-совместимый
-/// псевдо-узел-атрибут <see cref="TXMLNsAttribute"/>, поскольку MSXML DOM
-/// (в отличие от libxml2) трактует объявления <c>xmlns:prefix="uri"</c> как
-/// обычные атрибуты элемента — см. общее замечание к <see cref="TXMLNsNode"/>.
+/// Wraps an <c>xmlNsPtr</c> (a namespace declaration of a node, which is not a separate
+/// DOM node in libxml2) into the MSXML-compatible pseudo attribute node
+/// <see cref="TXMLNsAttribute"/>, because MSXML DOM, unlike libxml2, treats
+/// <c>xmlns:prefix="uri"</c> declarations as ordinary attributes of the element; see the
+/// general note on <see cref="TXMLNsNode"/>.
 /// </summary>
 function Cast(const Ns: xmlNsPtr; Parent: xmlNodePtr): TXMLNsAttribute; overload;
 begin
@@ -1179,21 +1161,19 @@ begin
 end;
 
 /// <summary>
-/// Отвязывает узел <paramref name="Ns"/> от односвязного списка namespace-
-/// деклараций <paramref name="List"/> (обычно — <c>Node.nsDef</c>),
-/// корректируя указатели соседних элементов списка.
+/// Unlinks <paramref name="Ns"/> from the singly linked list of namespace declarations
+/// <paramref name="List"/> (normally <c>Node.nsDef</c>), fixing up the pointers of the
+/// neighbouring entries.
 /// </summary>
-/// <returns><c>True</c>, если <paramref name="Ns"/> был найден и отвязан; <c>False</c>, если он не найден в списке (или <c>nil</c>).</returns>
+/// <returns><c>True</c> if <paramref name="Ns"/> was found and unlinked; <c>False</c> if it is not in the list (or is <c>nil</c>).</returns>
 /// <remarks>
-/// ⚠ Применять ТОЛЬКО к полям, реально являющимся головой связного списка
-/// (<c>Node.nsDef</c>), а не к одиночным ссылкам на namespace (например,
-/// <c>Node.ns</c> — используемое узлом пространство имён, а НЕ список его
-/// объявленных пространств имён). Для одиночных ссылок используйте
-/// <see cref="xmlClearNodeNsRef"/> — попытка передать <c>Node.ns</c> в
-/// качестве <paramref name="List"/> сюда семантически некорректна: функция
-/// присвоит полю значение <c>Ns.next</c> (следующий элемент ЧУЖОГО списка
-/// <c>nsDef</c>), а не <c>nil</c>, что приведёт к тихой порче ссылки узла на
-/// пространство имён.
+/// ⚠ Apply ONLY to fields that really are the head of a linked list (<c>Node.nsDef</c>),
+/// never to single namespace references such as <c>Node.ns</c>, the namespace the node
+/// uses, which is NOT the list of namespaces it declares. For single references use
+/// <see cref="xmlClearNodeNsRef"/>: passing <c>Node.ns</c> as <paramref name="List"/> is
+/// semantically wrong, the function would assign <c>Ns.next</c> (the next entry of SOME
+/// OTHER <c>nsDef</c> list) to the field instead of <c>nil</c>, silently corrupting the
+/// node's namespace reference.
 /// </remarks>
 function xmlUnlinkNs(var List: xmlNsPtr; Ns: xmlNsPtr): Boolean;
 begin
@@ -1223,11 +1203,9 @@ begin
 end;
 
 /// <summary>
-/// Корректно сбрасывает ОДИНОЧНУЮ ссылку узла на используемое им
-/// пространство имён (<c>Node.ns</c>) в <c>nil</c>, если она указывает
-/// именно на удаляемый <paramref name="Ns"/> — в отличие от
-/// <see cref="xmlUnlinkNs"/>, которая предназначена для работы со связными
-/// списками, а не с одиночными полями.
+/// Resets the SINGLE reference of a node to the namespace it uses (<c>Node.ns</c>) to
+/// <c>nil</c> when it points at the <paramref name="Ns"/> being removed, unlike
+/// <see cref="xmlUnlinkNs"/>, which works on linked lists rather than single fields.
 /// </summary>
 procedure xmlClearNodeNsRef(Node: xmlNodePtr; Ns: xmlNsPtr); inline;
 begin
@@ -1236,22 +1214,20 @@ begin
 end;
 
 /// <summary>
-/// Полностью удаляет namespace-декларацию <paramref name="Ns"/> с узла
-/// <paramref name="Node"/>: отвязывает её из <c>Node.nsDef</c> и обходит ВСЕ
-/// узлы поддерева (<c>Node</c> и все его потомки через
-/// <c>Node.GetNext(Node)</c> — обход всего поддерева в document order),
-/// сбрасывая у каждого из них ссылку <c>Node.ns</c>, если она указывала
-/// именно на удаляемое пространство имён.
+/// Removes the namespace declaration <paramref name="Ns"/> from <paramref name="Node"/>
+/// completely: unlinks it from <c>Node.nsDef</c> and walks EVERY node of the subtree
+/// (<c>Node</c> and all its descendants through <c>Node.GetNext(Node)</c>, a walk of the
+/// whole subtree in document order), resetting the <c>Node.ns</c> reference of each one
+/// that pointed at the namespace being removed.
 /// </summary>
 /// <remarks>
-/// Этот полный обход поддерева необходим, потому что удаление
-/// декларации пространства имён с элемента делает НЕВАЛИДНЫМИ все ссылки на
-/// него у потомков — в libxml2/XML нет отдельного шага "переобъявления"
-/// (в отличие от MSXML, где это иногда решается через
-/// <c>ReconciliateNs</c>) при удалении, поэтому явная очистка ссылок
-/// обязательна во избежание dangling-указателей <c>xmlNsPtr</c> у дочерних
-/// узлов. Сложность операции — O(размер поддерева), что стоит учитывать при
-/// частом удалении namespace-деклараций в больших документах.
+/// The full walk of the subtree is required because removing a namespace declaration
+/// from an element INVALIDATES every reference to it in the descendants; libxml2/XML has
+/// no separate "redeclare" step on removal (unlike MSXML, where <c>ReconciliateNs</c>
+/// sometimes takes care of it), so the references must be cleared explicitly to avoid
+/// dangling <c>xmlNsPtr</c> pointers in child nodes. The operation is O(size of the
+/// subtree), which matters when namespace declarations are removed often in large
+/// documents.
 /// </remarks>
 procedure xmlRemoveNsDef(Node: xmlNodePtr; Ns: xmlNsPtr);
 begin
@@ -2263,30 +2239,29 @@ end;
 { TXMLNode }
 
 /// <summary>
-/// Создаёт Delphi-обёртку над уже существующим <c>xmlNodePtr</c>,
-/// устанавливая двустороннюю связь через <c>Node._private := Self</c>
-/// (используется функциями <c>Cast(...)</c> для кэширования — см. замечание
-/// к модулю в целом) и, если применимо, увеличивает refcount документа-
-/// владельца.
+/// Creates the Delphi wrapper over an existing <c>xmlNodePtr</c>, establishing the
+/// two-way link through <c>Node._private := Self</c> (used by the <c>Cast(...)</c>
+/// functions for caching, see the note on the unit as a whole) and, where applicable,
+/// increments the refcount of the owning document.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Условие <c>FOwnerDocRefTaken</c>:</b>
+/// <b>The <c>FOwnerDocRefTaken</c> condition:</b>
 /// <c>(Node.doc &lt;&gt; nil) and (xmlNodePtr(Node.doc) &lt;&gt; Node) and (Node.doc._private &lt;&gt; nil)</c>.
-/// Третье условие в цепочке — <c>xmlNodePtr(Node.doc) &lt;&gt; Node</c> —
-/// исключает случай, когда сам создаваемый объект И ЕСТЬ обёртка документа
-/// (т.е. <c>TXMLDocument</c> унаследован от <c>TXMLNode</c> и вызывает этот
-/// же конструктор через <c>inherited Create(xmlNodePtr(doc))</c>) —
-/// документ не должен пытаться взять ref сам на себя, что привело бы к
-/// невозможности когда-либо снизить refcount до нуля и разрушить объект.
+/// The middle term, <c>xmlNodePtr(Node.doc) &lt;&gt; Node</c>, excludes the case where the
+/// object being created IS the document wrapper (<c>TXMLDocument</c> descends from
+/// <c>TXMLNode</c> and calls this very constructor through
+/// <c>inherited Create(xmlNodePtr(doc))</c>): a document must not take a reference on
+/// itself, or its refcount could never drop to zero and the object would never be
+/// destroyed.
 /// </para>
 /// <para>
-/// Флаг <see cref="FOwnerDocRefTaken"/> запоминается отдельным полем (а не
-/// вычисляется заново в <c>Destroy</c> из текущего состояния <c>NodePtr</c>),
-/// поскольку к моменту разрушения объекта <c>NodePtr.doc</c> может быть уже
-/// недоступен (см. <see cref="NodeFreeCallback"/>, обнуляющий <c>NodePtr</c>
-/// при внешнем освобождении узла) — без сохранённого флага невозможно
-/// достоверно узнать, был ли вообще взят ref в конструкторе.
+/// The <see cref="FOwnerDocRefTaken"/> flag is kept in a field of its own rather than
+/// recomputed in <c>Destroy</c> from the current state of <c>NodePtr</c>, because by the
+/// time the object is destroyed <c>NodePtr.doc</c> may no longer be reachable (see
+/// <see cref="NodeFreeCallback"/>, which clears <c>NodePtr</c> when the node is freed
+/// externally); without the stored flag there is no reliable way to tell whether the
+/// constructor took a reference at all.
 /// </para>
 /// </remarks>
 constructor TXMLNode.Create(Node: xmlNodePtr);
@@ -2708,9 +2683,8 @@ begin
       LX2InternalError;
   end;
 
-  // Снимаем старую запись из ID-таблицы документа ДО того, как физически
-  // изменится значение атрибута — иначе таблица будет содержать устаревшую
-  // пару (старое значение -> узел).
+  // The old entry leaves the document's ID table BEFORE the attribute value changes,
+  // otherwise the table would keep a stale (old value -> node) pair.
   if WasId then
     xmlRemoveID(AttrPtr.parent.doc, AttrPtr);
 
@@ -2732,16 +2706,15 @@ begin
     end;
   end;
 
-  // Регистрируем НОВОЕ значение в ID-таблице документа, если атрибут
-  // изначально был ID-атрибутом и получил непустое новое значение.
-  // Сигнатура: xmlAddID(ctxt, doc, value, attr) — ctxt=nil означает
-  // регистрацию без выполнения валидационных проверок уникальности,
-  // см. conclase.net.
+  // The NEW value is registered in the document's ID table when the attribute was an ID
+  // attribute to begin with and received a non-empty value. Signature:
+  // xmlAddID(ctxt, doc, value, attr); ctxt = nil registers without the uniqueness checks
+  // of validation.
   if WasId and (AttrValue <> '') then
   begin
-    AttrPtr.atype := XML_ATTRIBUTE_ID;   // xmlRemoveID могла сбросить/не менять atype — восстанавливаем явно
+    AttrPtr.atype := XML_ATTRIBUTE_ID;   // xmlRemoveID may have reset atype; restore it explicitly
     if xmlAddID(nil, AttrPtr.parent.doc, Args.StrPtr(AttrValue), AttrPtr) = nil then
-      LX2InternalError;   // например, дубликат ID в документе при включённой валидации
+      LX2InternalError;   // for example, a duplicate ID in the document with validation on
   end;
 end;
 
@@ -3226,7 +3199,9 @@ begin
   if NodePtr <> nil then
   begin
     if DocOwner then
-      xmlFreeDoc(xmlDocPtr(NodePtr));
+      xmlFreeDoc(xmlDocPtr(NodePtr))
+    else if NodePtr._private = Self then
+      NodePtr._private := nil;   // the document outlives this wrapper: Cast() must not find it again
     NodePtr := nil;
   end;
   inherited;
@@ -3360,10 +3335,12 @@ begin
         var Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlStrPtr(LocalName), nil);
         if HRef <> '' then
         begin
+          // xmlNewNs only declares the namespace on the node; the element is put
+          // into it by assigning Node.ns.
           if Prefix = '' then
-            xmlNewNs(Node, xmlStrPtr(HRef), nil)
+            Node.ns := xmlNewNs(Node, xmlStrPtr(HRef), nil)
           else
-            xmlNewNs(Node, xmlStrPtr(HRef), xmlStrPtr(Prefix));
+            Node.ns := xmlNewNs(Node, xmlStrPtr(HRef), xmlStrPtr(Prefix));
         end;
         Result := Cast(Node);
       end;
@@ -3733,50 +3710,94 @@ end;
 constructor TXMLSchemaCollection.TItem.Create;
 begin
   inherited Create;
-  Sources := TList<IXmlDocument>.Create;
-  Imports := TStringList.Create;
-  Imports.Sorted := True;
-  Imports.CaseSensitive := True;
+  Sources := TList<TSource>.Create;
+  Resource := -1;
 end;
 
 destructor TXMLSchemaCollection.TItem.Destroy;
 begin
-  if Schema <> nil then
-  begin
-    xmlFreeDoc(Schema);
-    Schema := nil;
-  end;
+  FreeMerged;
   FreeAndNil(Sources);
-  FreeAndNil(Imports);
   inherited;
+end;
+
+procedure TXMLSchemaCollection.TItem.FreeMerged;
+begin
+  if Merged <> nil then
+  begin
+    xmlFreeDoc(Merged);
+    Merged := nil;
+  end;
 end;
 
 { TXMLSchemaCollection }
 
-/// <summary>
-/// Мост между структурированными XML Schema ошибками libxml2 (вызываемыми
-/// НАПРЯМУЮ из C-кода libxml2 через указатель функции, зарегистрированный
-/// через <c>xmlSchemaSetParserStructuredErrors</c>/<c>SetValidStructuredErrors</c>)
-/// и управляемым Delphi-обработчиком ошибок документа.
-/// </summary>
-/// <remarks>
-/// Обёрнут в <c>try..except</c>, ПОЛНОСТЬЮ поглощающий любое исключение —
-/// это необходимо, поскольку данная функция вызывается напрямую из
-/// нативного C-кода libxml2 (объявлена <c>cdecl</c>), у которого нет
-/// механизма Pascal-исключений/finally-блоков в стеке вызовов: если бы
-/// Delphi-исключение "просочилось" через границу C-вызова обратно в
-/// libxml2, это привело бы к неопределённому поведению/аварийному
-/// завершению процесса, а не к корректной обработке ошибки на стороне
-/// Pascal-кода.
-/// </remarks>
-procedure SchemaParserErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
+threadvar
+  /// The collection being compiled in this thread: it alone answers lx2schema:// addresses.
+  /// Compilation is synchronous, so a per-thread pointer is enough, and the global libxml2
+  /// loader stays shared by all threads.
+  CurrentSchemaLoader: TXMLSchemaCollection;
+
+var
+  DefaultEntityLoader: xmlExternalEntityLoader;
+
+/// Structured libxml2 errors (schema parsing and document validation) are collected into
+/// the TXMLErrors passed as userData. Called from C code: no exception may escape.
+procedure SchemaErrorCallback(userData: Pointer; const error: xmlErrorPtr); cdecl;
 begin
   try
-    var Err := TXMLError.Create(TXmlParseError.Create(error^)) as IXMLParseError;
-    TXMLDocument(userData).Errors.FList.Add(Err);
+    TXMLErrors(userData).FList.Add(TXMLError.Create(TXmlParseError.Create(error^)) as IXMLParseError);
   except
-    // No exception, becouse libxml2 is plain c, without try catch
   end;
+end;
+
+/// Global libxml2 external entity loader: the resource addresses of the collection being
+/// compiled are served from memory, everything else goes to the loader installed before it.
+function SchemaEntityLoader(const URL, ID: PUTF8Char; context: xmlParserCtxtPtr): xmlParserInputPtr; cdecl;
+begin
+  Result := nil;
+  try
+    if (CurrentSchemaLoader <> nil) and (URL <> nil) then
+      Result := CurrentSchemaLoader.LoadResource(URL);
+    if (Result = nil) and Assigned(DefaultEntityLoader) then
+      Result := DefaultEntityLoader(URL, ID, context);
+  except
+    Result := nil;
+  end;
+end;
+
+/// Puts SchemaEntityLoader in front of the libxml2 loader. Checked before every compilation:
+/// after the library is unloaded and loaded again, libxml2 is back to its own loader.
+procedure InstallSchemaEntityLoader;
+begin
+  var Current := xmlGetExternalEntityLoader();
+  if Pointer(@Current) = Pointer(@SchemaEntityLoader) then
+    Exit;
+
+  TMonitor.Enter(GlobalLock);
+  try
+    Current := xmlGetExternalEntityLoader();
+    if Pointer(@Current) <> Pointer(@SchemaEntityLoader) then
+    begin
+      DefaultEntityLoader := Current;
+      xmlSetExternalEntityLoader(SchemaEntityLoader);
+    end;
+  finally
+    TMonitor.Exit(GlobalLock);
+  end;
+end;
+
+/// The tail of a resource address, safe for xmlCanonicPath and xmlBuildURI: characters
+/// outside the RFC 3986 unreserved set become underscores. The tail only makes the
+/// diagnostics readable, the resource is found by its number.
+function ResourceUrlTail(const Name: string): RawByteString;
+begin
+  SetLength(Result, System.Length(Name));
+  for var I := 1 to System.Length(Name) do
+    if CharInSet(Name[I], ['A'..'Z', 'a'..'z', '0'..'9', '.', '-', '_', '~', ':', '/']) then
+      Result[I] := AnsiChar(Name[I])
+    else
+      Result[I] := '_';
 end;
 
 constructor TXMLSchemaCollection.Create;
@@ -3789,244 +3810,469 @@ end;
 
 destructor TXMLSchemaCollection.Destroy;
 begin
-  Cleanup;
-
+  Invalidate;
   FreeAndNil(FItems);
   FErrors._Release;
   inherited;
 end;
 
-procedure TXMLSchemaCollection.Cleanup;
+procedure TXMLSchemaCollection.Invalidate;
 begin
-  for var I := 0 to Items.Count - 1 do
-    if Items[I].Schema <> nil then
-    begin
-      xmlFreeDoc(Items[I].Schema);
-      Items[I].Schema := nil;
-    end;
-
-  if FTempPath <> '' then
-    TDirectory.Delete(FTempPath, True);
+  FCompiled := False;
+  // The schema holds pointers into the root wrapper: the schema goes first, then the document.
+  if FSchema <> nil then
+  begin
+    xmlSchemaFree(FSchema);
+    FSchema := nil;
+  end;
+  if FRootDoc <> nil then
+  begin
+    xmlFreeDoc(FRootDoc);
+    FRootDoc := nil;
+  end;
+  for var Item in FItems do
+    Item.FreeMerged;
+  FErrors.Clear;
 end;
 
 procedure TXMLSchemaCollection.AddCollection(const otherCollection: IXMLSchemaCollection);
 begin
+  if otherCollection = nil then
+    Exit;
+
   var Src := TXMLSchemaCollection(otherCollection);
-  for var I := 0 to Src.Items.Count - 1 do
-    for var J := 0 to Src.Items[I].Sources.Count - 1 do
-      Add(Src.Items[I].NamespaceURI, Src.Items[I].Sources[J]);
+  if Src = Self then
+    Exit;
+
+  for var Item in Src.FItems do
+    for var Source in Item.Sources do
+      Add(Item.NamespaceURI, Source.Doc, Source.Resolver);
 end;
 
 procedure TXMLSchemaCollection.Add(const NamespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver);
 var
   Item: TItem;
+  Source: TSource;
 begin
+  if Doc = nil then
+    raise EArgumentNilException.Create('Doc');
+
   var Index := IndexOf(NamespaceURI);
   if Index >= 0 then
-    Item := Items[Index]
+    Item := FItems[Index]
   else
   begin
     Item := TItem.Create;
     Item.NamespaceURI := NamespaceURI;
-    Items.Add(Item);
+    FItems.Add(Item);
   end;
 
-  // Prevent re-adding doc
-  for var I := 0 to Item.Sources.Count - 1 do
-    if TXmlDocument(Item.Sources[I]).NodePtr = TXmlDocument(Doc).NodePtr then
+  for var Existing in Item.Sources do
+    if TXMLDocument(Existing.Doc).NodePtr = TXMLDocument(Doc).NodePtr then
       Exit;
 
-  Item.Sources.Add(Doc);
+  Source.Doc := Doc;
+  Source.Resolver := Resolver;
+  Item.Sources.Add(Source);
 
-  FCompiled := False;
+  Invalidate;
+end;
+
+function TXMLSchemaCollection.ReserveResource(const Name: string): Integer;
+begin
+  Result := FResources.Add(nil);
+  FResourceUrls.Add(cResourcePrefix + RawByteString(IntToStr(Result)) + '/' + ResourceUrlTail(Name));
+end;
+
+function TXMLSchemaCollection.ResourceUrl(Index: Integer): RawByteString;
+begin
+  Result := FResourceUrls[Index];
+end;
+
+function TXMLSchemaCollection.AbsoluteLocation(const Location, BaseUrl: string): string;
+var
+  Args: TXmlArgs;
+begin
+  if BaseUrl = '' then
+    Exit(Location);
+
+  var Uri := xmlBuildURI(Args.StrPtr(Location), Args.StrPtr(BaseUrl));
+  if Uri = nil then
+    Exit(Location);
+
+  Result := UTF8ToString(Uri);
+  xmlFree(Uri);
+end;
+
+procedure TXMLSchemaCollection.AddWarning(Code: Integer; const Text, Url: string);
+var
+  Err: xmlError;
+begin
+  var Msg := UTF8Encode(Text);
+  var Source := UTF8Encode(Url);
+  FillChar(Err, SizeOf(Err), 0);
+  Err.domain := Ord(XML_FROM_SCHEMASP);
+  Err.code := Code;
+  Err.level := XML_ERR_WARNING;
+  Err.message := Pointer(Msg);
+  Err.&file := Pointer(Source);
+  FErrors.FList.Add(TXMLError.Create(TXmlParseError.Create(Err)) as IXMLParseError);
+end;
+
+procedure TXMLSchemaCollection.Unlocated(const Location, BaseUrl, Element: string);
+begin
+  var Absolute := AbsoluteLocation(Location, BaseUrl);
+  if FUnlocated.ContainsKey(Absolute) then
+    Exit;
+  FUnlocated.Add(Absolute, True);
+  AddWarning(Ord(XML_SCHEMAP_WARN_UNLOCATED_SCHEMA),
+    Format('Failed to locate a schema at location ''%s''. Skipping the %s', [Absolute, Element]), BaseUrl);
+end;
+
+function TXMLSchemaCollection.ResolveLocation(const Location, BaseUrl: string; const Resolver: IXMLResolver): Integer;
+var
+  Data: TBytes;
+begin
+  var Absolute := AbsoluteLocation(Location, BaseUrl);
+  if FLocations.TryGetValue(Absolute, Result) then
+    Exit;
+
+  if Resolver <> nil then
+    Data := Resolver.Resolve(Absolute);
+  // A document loaded from a file pulls its neighbours from disk, as libxml2 itself would.
+  // A document from memory has no base address, so there is nowhere to look for a relative one.
+  if (Data = nil) and (BaseUrl <> '') and FileExists(Absolute) then
+    Data := TFile.ReadAllBytes(Absolute);
+  if Data = nil then
+    Exit(-1);
+
+  // The slot is taken before the document is processed: circular includes find it taken.
+  Result := ReserveResource(Absolute);
+  FLocations.Add(Absolute, Result);
+
+  var Doc := xmlDoc.Create(Data, DefaultParserOptions);
+  if Doc = nil then
+  begin
+    // libxml2 reports the syntax error while parsing the schema, with the resource address and line.
+    FResources[Result] := Data;
+    Exit;
+  end;
+
+  try
+    PrepareSchema(Result, Doc, Absolute, Resolver);
+  finally
+    xmlFreeDoc(Doc);
+  end;
+end;
+
+procedure TXMLSchemaCollection.PrepareSchema(Index: Integer; Doc: xmlDocPtr; const BaseUrl: string; const Resolver: IXMLResolver);
+begin
+  var Root := Doc.documentElement;
+  if Root <> nil then
+  begin
+    // xs:import, xs:include and xs:redefine appear only among the direct children of xs:schema.
+    var Elem := Root.FirstElementChild;
+    while Elem <> nil do
+    begin
+      var Next := Elem.NextElementSibling;
+      if Elem.NamespaceURI = cSchemaNs then
+      begin
+        var Name := Elem.LocalName;
+        if Name = cImport then
+        begin
+          var Target := IndexOf(UTF8ToString(Elem.GetAttribute(cNamespace)));
+          if Target >= 0 then
+            Elem.SetAttribute(cSchemaLocation, ResourceUrl(FItems[Target].Resource))
+          else if Elem.HasAttribute(cSchemaLocation) then
+          begin
+            var Location := UTF8ToString(Elem.GetAttribute(cSchemaLocation));
+            var Found := ResolveLocation(Location, BaseUrl, Resolver);
+            if Found >= 0 then
+              Elem.SetAttribute(cSchemaLocation, ResourceUrl(Found))
+            else
+            begin
+              // An import without a location is merely noted by libxml2: references to the
+              // namespace stay legal, and its components come from other parts of the set.
+              Elem.RemoveAttribute(cSchemaLocation);
+              Unlocated(Location, BaseUrl, cImport);
+            end;
+          end;
+        end
+        else if (Name = cInclude) or (Name = cRedefine) then
+        begin
+          // An empty location is left to libxml2: the missing mandatory schemaLocation is its error.
+          var Location := UTF8ToString(Elem.GetAttribute(cSchemaLocation));
+          if Location <> '' then
+          begin
+            var Found := ResolveLocation(Location, BaseUrl, Resolver);
+            if Found >= 0 then
+              Elem.SetAttribute(cSchemaLocation, ResourceUrl(Found))
+            else
+            begin
+              xmlUnlinkNode(Elem);
+              xmlFreeNode(Elem);
+              Unlocated(Location, BaseUrl, UTF8ToString(Name));
+            end;
+          end;
+        end;
+      end;
+      Elem := Next;
+    end;
+  end;
+
+  FResources[Index] := Doc.ToBytes('UTF-8');
+end;
+
+function TXMLSchemaCollection.LoadResource(const Url: PUTF8Char): xmlParserInputPtr;
+begin
+  Result := nil;
+  if FResources = nil then
+    Exit;
+
+  var P := Url;
+  var Prefix := PUTF8Char(cResourcePrefix);
+  while Prefix^ <> #0 do
+  begin
+    if P^ <> Prefix^ then
+      Exit;
+    Inc(P);
+    Inc(Prefix);
+  end;
+
+  var Index := 0;
+  var Digits := 0;
+  while CharInSet(P^, ['0'..'9']) do
+  begin
+    Index := Index * 10 + Ord(P^) - Ord('0');
+    Inc(P);
+    Inc(Digits);
+  end;
+  if (Digits = 0) or (Digits > 9) or (Index >= FResources.Count) then
+    Exit;
+
+  var Data := FResources[Index];
+  if Data = nil then
+    Exit;
+
+  // Flags 0: libxml2 copies the buffer and does not depend on the lifetime of the TBytes.
+  Result := xmlNewInputFromMemory(Url, @Data[0], System.Length(Data), xmlParserInputFlags(0));
 end;
 
 procedure TXMLSchemaCollection.Compile;
 
-  function IsImport(const Node: xmlNodePtr): Boolean; inline;
+  function AttrValue(const Value: string): RawByteString;
   begin
-    Result := (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cImport);
-  end;
-
-  function IsInclude(const Node: xmlNodePtr): Boolean; inline;
-  begin
-    Result := (Node.NamespaceURI = cSchemaNs) and (Node.LocalName = cInclude);
-  end;
-
-  procedure ProcessImports(Item: TItem; Doc: xmlDocPtr);
-  var
-    Elem: xmlNodePtr;
-  begin
-    Elem := Doc.documentElement.FirstElementChild;
-    while Elem <> nil do
-    begin
-      if IsImport(Elem) then
-      begin
-        var Import := Elem;
-        Elem := Elem.NextElementSibling;
-        Item.Imports.Add(Utf8ToString(Import.GetAttribute('namespace')));
-
-        Import.parent.RemoveChild(Import);
-      end
-      else if IsInclude(Elem) then
-      begin
-        var Temp := Elem;
-        Elem := Elem.NextElementSibling;
-        Temp.parent.RemoveChild(Temp);
-      end
-      else
-        Elem := Elem.NextElementSibling;
-    end;
-  end;
-
-  procedure AddSource(Item: TItem; Doc: xmlDocPtr);
-  var
-    Elem, NewNode: xmlNodePtr;
-  begin
-    Elem := Doc.documentElement.FirstElementChild;
-    while Elem <> nil do
-    begin
-      if IsImport(Elem) then
-        Item.Imports.Add(UTF8ToString(Elem.GetAttribute('namespace')))
-      else if IsInclude(Elem) then
-        Elem := Elem.NextElementSibling
-      else
-      begin
-        if xmlDOMWrapCloneNode(nil, Elem.doc, Elem, NewNode, Item.Schema, nil, 1, 0) = 0 then
-          Item.Schema.documentElement.AppendChild(NewNode);
-      end;
-      Elem := Elem.NextElementSibling;
-    end;
+    Result := xmlEscapeString(UTF8Encode(Value));
   end;
 
 var
-  Source: xmlDocPtr;
-  I, J: NativeInt;
-  Item: TItem;
+  Wrapper, Root: RawByteString;
 begin
-  //Cleanup;
+  Invalidate;
 
-  FTempPath := TPath.GetTempPath + TPath.GetGUIDFileName + PathDelim;
-  TDirectory.CreateDirectory(FTempPath);
-
-  for I := 0 to Items.Count - 1 do
-  begin
-    Item := Items[I];
-
-    if Item.Schema <> nil then
-      xmlFreeDoc(Item.Schema);
-
-    Source := xmlDocPtr(TXmlDocument(Item.Sources[0]).NodePtr);
-    Item.Schema := xmlDoc.Create(Source.ToBytes, DefaultParserOptions);
-    ProcessImports(Item, Item.Schema);
-
-    for J := 1 to Item.Sources.Count - 1 do
-      AddSource(Item, xmlDocPtr(TXmlDocument(Item.Sources[J]).NodePtr));
-  end;
-
-  for I := 0 to Items.Count - 1 do
-  begin
-    Item := Items[I];
-
-    var ns := Item.Schema.documentElement.nsDef;
-    while ns <> nil do
+  FResources := TList<TBytes>.Create;
+  FResourceUrls := TList<RawByteString>.Create;
+  FLocations := TDictionary<string, Integer>.Create;
+  FUnlocated := TDictionary<string, Boolean>.Create;
+  try
+    // The slots of the wrappers and sources are taken up front: an import of a namespace of
+    // the collection and an include of a document loaded from a file refer to them before
+    // the documents themselves are processed, mutual references included.
+    for var Item in FItems do
     begin
-      if xmlStrSame(ns.href, cSchemaNs) then
-        Break;
-      ns := ns.next;
-    end;
-
-    for J := 0 to Item.Imports.Count - 1 do
-    begin
-      var Index := IndexOf(Item.Imports[J]);
-      if Index >= 0 then
+      if Item.NamespaceURI <> '' then
+        Item.Resource := ReserveResource(Item.NamespaceURI)
+      else
+        Item.Resource := ReserveResource('no-namespace');
+      SetLength(Item.SourceResources, Item.Sources.Count);
+      for var I := 0 to Item.Sources.Count - 1 do
       begin
-        var Import := xmlNewDocNode(Item.Schema, ns, 'import', nil);
-        Import.SetAttribute('namespace', Utf8Encode(Item.Imports[J]));
-        Import.SetAttribute('schemaLocation', Utf8Encode(Index.ToString + '.xsd'));
-        Item.Schema.documentElement.InsertBefore(Import, Item.Schema.documentElement.FirstElementChild);
+        var Url := Item.Sources[I].Doc.Url;
+        if Url <> '' then
+        begin
+          Item.SourceResources[I] := ReserveResource(Url);
+          FLocations.AddOrSetValue(Url, Item.SourceResources[I]);
+        end
+        else
+          Item.SourceResources[I] := ReserveResource(Item.NamespaceURI + '/source' + IntToStr(I));
       end;
     end;
-    Item.FileName := FTempPath + I.ToString + '.xsd';
-    Item.Schema.Save(Item.FileName);
-  end;
 
-  if FSchemaRoot <> nil then
-  begin
-    xmlFreeDoc(FSchemaRoot);
-    FSchemaRoot := nil;
-  end;
+    for var Item in FItems do
+    begin
+      Wrapper := '<xs:schema xmlns:xs="' + cSchemaNs + '"';
+      if Item.NamespaceURI <> '' then
+        Wrapper := Wrapper + ' targetNamespace="' + AttrValue(Item.NamespaceURI) + '"';
+      Wrapper := Wrapper + '>';
+      for var I := 0 to Item.Sources.Count - 1 do
+      begin
+        var Source := Item.Sources[I];
+        var Copy := xmlDocPtr(TXMLDocument(Source.Doc).NodePtr).Clone(True);
+        try
+          PrepareSchema(Item.SourceResources[I], Copy, Source.Doc.Url, Source.Resolver);
+        finally
+          xmlFreeDoc(Copy);
+        end;
+        Wrapper := Wrapper + '<xs:include schemaLocation="' + ResourceUrl(Item.SourceResources[I]) + '"/>';
+      end;
+      Wrapper := Wrapper + '</xs:schema>';
+      FResources[Item.Resource] := BytesOf(Wrapper);
+    end;
 
-  FSchemaRoot := xmlDoc.CreateFromFile(Items.Last.FileName, DefaultParserOptions);
+    Root := '<xs:schema xmlns:xs="' + cSchemaNs + '" targetNamespace="' + cRootNamespace + '">';
+    for var Item in FItems do
+    begin
+      Root := Root + '<xs:import';
+      if Item.NamespaceURI <> '' then
+        Root := Root + ' namespace="' + AttrValue(Item.NamespaceURI) + '"';
+      Root := Root + ' schemaLocation="' + ResourceUrl(Item.Resource) + '"/>';
+    end;
+    Root := Root + '</xs:schema>';
+    FRootDoc := xmlDoc.Create(Root, DefaultParserOptions);
+
+    InstallSchemaEntityLoader;
+    var ctxt := xmlSchemaNewDocParserCtxt(FRootDoc);
+    xmlSchemaSetParserStructuredErrors(ctxt, SchemaErrorCallback, FErrors);
+    var Previous := CurrentSchemaLoader;
+    CurrentSchemaLoader := Self;
+    try
+      FSchema := xmlSchemaParse(ctxt);
+    finally
+      CurrentSchemaLoader := Previous;
+      xmlSchemaFreeParserCtxt(ctxt);
+    end;
+  finally
+    FreeAndNil(FResources);
+    FreeAndNil(FResourceUrls);
+    FreeAndNil(FLocations);
+    FreeAndNil(FUnlocated);
+  end;
 
   FCompiled := True;
 end;
 
 function TXMLSchemaCollection.Validate(const Doc: IXMLDocument): Boolean;
-var
-  vctxt: xmlSchemaValidCtxtPtr;
-  SchemaDoc: xmlDocPtr;
 begin
-  Doc.errors.clear;
+  if Doc = nil then
+    raise EArgumentNilException.Create('Doc');
 
-  if (Items.Count = 1) and (Items[0].Sources.Count = 1) then
-  begin
-    // Typical situation - one schema file
-    SchemaDoc := xmlDocPtr(TXmlDocument(Items[0].Sources[0]).NodePtr);
-  end
-  else
-  begin
-    // We save compiled schema to files & load last one again, that allows resolve paths by libxml
-    // custom ResourceLoader doesnt called when not direct import in xsd
-    if not FCompiled then
-      Compile;
+  var Document := TXMLDocument(Doc);
+  Document.Errors.Clear;
 
-    SchemaDoc := FSchemaRoot;
+  if not FCompiled then
+    Compile;
+
+  if FSchema = nil then
+  begin
+    // The schema did not compile: the document is not at fault, but the caller looks at its ParseError.
+    for var I := 0 to FErrors.Count - 1 do
+      Document.Errors.FList.Add(FErrors[I]);
+    Exit(False);
   end;
 
-  var ctxt := xmlSchemaNewDocParserCtxt(SchemaDoc);
-  xmlSchemaSetParserStructuredErrors(ctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
-
-  var schema := xmlSchemaParse(ctxt);
-  if schema = nil then
-  begin
-    xmlSchemaFreeParserCtxt(ctxt);
+  var vctxt := xmlSchemaNewValidCtxt(FSchema);
+  if vctxt = nil then
     Exit(False);
-  end
-  else
+  try
+    xmlSchemaSetValidStructuredErrors(vctxt, SchemaErrorCallback, Document.Errors);
+    Result := xmlSchemaValidateDoc(vctxt, xmlDocPtr(Document.NodePtr)) = 0;
+  finally
+    xmlSchemaFreeValidCtxt(vctxt);
+  end;
+end;
+
+function TXMLSchemaCollection.MergedDoc(Item: TItem): xmlDocPtr;
+
+  function IsLink(const Node: xmlNodePtr): Boolean;
   begin
-    vctxt := xmlSchemaNewValidCtxt(schema);
-    if vctxt = nil then
+    Result := (Node.NamespaceURI = cSchemaNs) and ((Node.LocalName = cInclude) or (Node.LocalName = cImport));
+  end;
+
+  function HasImport(const Root: xmlNodePtr; const Namespace: RawByteString): Boolean;
+  begin
+    var Elem := Root.FirstElementChild;
+    while Elem <> nil do
     begin
-      xmlSchemaFree(schema);
-      xmlSchemaFreeParserCtxt(ctxt);
-      Exit(False);
+      if (Elem.NamespaceURI = cSchemaNs) and (Elem.LocalName = cImport) and (Elem.GetAttribute(cNamespace) = Namespace) then
+        Exit(True);
+      Elem := Elem.NextElementSibling;
+    end;
+    Result := False;
+  end;
+
+var
+  Copy: xmlNodePtr;
+begin
+  if Item.Merged <> nil then
+    Exit(Item.Merged);
+
+  // The declarations of every source under the header of the first one; includes are not
+  // needed, their content is already here, imports are carried over one per namespace.
+  var Doc := xmlDocPtr(TXMLDocument(Item.Sources[0].Doc).NodePtr).Clone(True);
+  var Root := Doc.documentElement;
+  if Root <> nil then
+  begin
+    var Link := Root.FirstElementChild;
+    while Link <> nil do
+    begin
+      var Next := Link.NextElementSibling;
+      if (Link.NamespaceURI = cSchemaNs) and (Link.LocalName = cInclude) then
+      begin
+        xmlUnlinkNode(Link);
+        xmlFreeNode(Link);
+      end;
+      Link := Next;
+    end;
+
+    for var I := 1 to Item.Sources.Count - 1 do
+    begin
+      var Source := xmlDocPtr(TXMLDocument(Item.Sources[I].Doc).NodePtr);
+      if Source.documentElement = nil then
+        Continue;
+      var Elem := Source.documentElement.FirstElementChild;
+      while Elem <> nil do
+      begin
+        if not IsLink(Elem) then
+        begin
+          if xmlDOMWrapCloneNode(nil, Source, Elem, Copy, Doc, nil, 1, 0) = 0 then
+            Root.AppendChild(Copy);
+        end
+        else if (Elem.LocalName = cImport) and not HasImport(Root, Elem.GetAttribute(cNamespace)) then
+        begin
+          if xmlDOMWrapCloneNode(nil, Source, Elem, Copy, Doc, nil, 1, 0) = 0 then
+            Root.InsertBefore(Copy, Root.FirstElementChild);
+        end;
+        Elem := Elem.NextElementSibling;
+      end;
     end;
   end;
 
-  xmlSchemaSetValidStructuredErrors(vctxt, SchemaParserErrorCallback, TXmlDocument(Doc));
-
-  var DocPtr := xmlDocPtr(TXMLDocument(Doc).NodePtr);
-  Result := xmlSchemaValidateDoc(vctxt, DocPtr) = 0;
-  //TODO: Временная заглушка, пока не научимся нормально схемы обрабатывать
-  if not Result and (Doc.Errors.Count > 0) then
-    Result := Doc.Errors[0].ErrorCode = 1845;
-
-  xmlSchemaFreeValidCtxt(vctxt);
-  xmlSchemaFree(schema);
-  xmlSchemaFreeParserCtxt(ctxt);
+  Item.Merged := Doc;
+  Result := Doc;
 end;
 
 function TXMLSchemaCollection.Get(const NamespaceURI: string): IXMLDocument;
 begin
-  if not FCompiled then
-    Compile;
-
   var Index := IndexOf(NamespaceURI);
-  if Index >= 0 then
-    Result := Cast(FItems[Index].Schema)
+  if Index < 0 then
+    Exit(nil);
+
+  var Item := FItems[Index];
+  if Item.Sources.Count = 1 then
+    Exit(Item.Sources[0].Doc);
+
+  // The merged document belongs to the collection: the wrapper must not free it, and Cast()
+  // would create an owning one.
+  var Merged := MergedDoc(Item);
+  if Merged._private <> nil then
+    Result := TXMLDocument(Merged._private)
   else
-    Result := nil;
+    Result := TXMLDocument.Create(Merged, False);
+end;
+
+function TXMLSchemaCollection.Get_Errors: IXMLErrors;
+begin
+  Result := FErrors;
 end;
 
 function TXMLSchemaCollection.Get_Length: NativeInt;
@@ -4041,12 +4287,9 @@ end;
 
 function TXMLSchemaCollection.IndexOf(const NamespaceURI: string): NativeInt;
 begin
-  Result := 0;
-  while Result < FItems.Count do
-    if FItems[Result].NamespaceURI = NamespaceURI then
-      Exit
-    else
-      Inc(Result);
+  for var I := 0 to FItems.Count - 1 do
+    if FItems[I].NamespaceURI = NamespaceURI then
+      Exit(I);
   Result := -1;
 end;
 
@@ -4054,7 +4297,10 @@ procedure TXMLSchemaCollection.Remove(const NamespaceURI: string);
 begin
   var Index := IndexOf(NamespaceURI);
   if Index >= 0 then
+  begin
+    Invalidate;
     FItems.Delete(Index);
+  end;
 end;
 
 { TXMLNsNode }

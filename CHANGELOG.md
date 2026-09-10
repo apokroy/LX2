@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.0.3 — 2026-09-09
+
+### Fixed
+
+- Validation through `IXMLSchemaCollection` with a schema split over several documents
+  held in memory. The collection wrote merged copies to temporary files, reloaded the last
+  one and treated "no matching global declaration available for the validation root" as
+  success, so a document checked against a multi-file schema passed whether it was valid
+  or not. The set is now compiled the way `XmlSchemaSet` does in .NET: an `xs:import` of
+  a namespace present in the collection is served from the collection regardless of its
+  `schemaLocation`; other `xs:include`/`xs:import`/`xs:redefine` locations go through the
+  `IXMLResolver` passed to `Add` (which was accepted and ignored before) or, for a document
+  loaded from a file, to the file next to it; a location that resolves nowhere is skipped
+  with a warning instead of an error, so the documents of one namespace added one by one
+  form a single schema even when they include each other by file names. Every document of
+  a namespace keeps its own `elementFormDefault` and prefixes: they are joined by an
+  `xs:include` wrapper, not by copying nodes. All parts reach libxml2 from memory through
+  the global external entity loader, because the resource loader set on the schema parser
+  context is not passed to the nested contexts libxml2 creates for imported documents.
+  A document whose root element no schema declares is now reported as invalid.
+- The compiled schema is cached until the next `Add` or `Remove` instead of being rebuilt
+  on every `Validate`.
+
+### Added
+
+- `IXMLSchemaCollection.Errors`: the diagnostics of the last compilation, warnings included.
+  When the schema does not compile, `Validate` returns `False` and copies them into the
+  document's `Errors` as well.
+
 ## v1.0.2 — 2026-09-06
 
 ### Fixed

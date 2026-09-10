@@ -576,11 +576,179 @@ begin
   end;
 end;
 
-procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr); cdecl {$IFDEF CPUX64} varargs{$ENDIF};
+function IsUtf8EncodingName(const Name: string): Boolean;
+begin
+  Result := (Name = '') or SameText(Name, 'UTF-8') or SameText(Name, 'UTF8');
+end;
+
+/// <summary>
+/// Windows code page for a libxml2 encoding name ('windows-1251', 'KOI8-R', ...),
+/// CP_UTF8 for UTF-8 or no name, 0 when the RTL does not know the name.
+/// </summary>
+function EncodingCodePage(const Name: string): Word;
+begin
+  if IsUtf8EncodingName(Name) then
+    Exit(CP_UTF8);
+  try
+    var Enc := TEncoding.GetEncoding(Name);
+    try
+      Result := Enc.CodePage;
+    finally
+      if not TEncoding.IsStandardEncoding(Enc) then
+        Enc.Free;
+    end;
+  except
+    Result := 0;
+  end;
+end;
+
+/// <summary>
+/// Decodes a libxml2 dump made in the named encoding. Only UTF-8 may be read back
+/// directly; anything else goes through TEncoding, unknown names fall back to UTF-8.
+/// A leading BOM (UTF-16 dumps carry one) is dropped.
+/// </summary>
+function DecodeDump(Data: Pointer; Size: Integer; const Encoding: string): string;
+var
+  Bytes: TBytes;
+begin
+  if not IsUtf8EncodingName(Encoding) then
+  try
+    var Enc := TEncoding.GetEncoding(Encoding);
+    try
+      SetLength(Bytes, Size);
+      Move(Data^, Pointer(Bytes)^, Size);
+      Result := Enc.GetString(Bytes);
+      if (Result <> '') and (Result[1] = #$FEFF) then
+        Delete(Result, 1, 1);
+      Exit;
+    finally
+      if not TEncoding.IsStandardEncoding(Enc) then
+        Enc.Free;
+    end;
+  except
+    // unknown encoding name: read as UTF-8 below
+  end;
+  Result := xmlCharToStr(PAnsiChar(Data), Size);
+end;
+
+/// <summary>
+/// Expands a printf-style message the way libxslt would: %s, %d/%i, %u, %x/%X, %c,
+/// %p and %% with optional flags, width, precision and length modifiers. Floating
+/// conversions cannot be recovered (their values travel in XMM registers) and are
+/// emitted verbatim.
+/// </summary>
+function FormatCMessage(const Fmt: xmlCharPtr; const Args: array of NativeUInt): string;
+var
+  ArgIndex: Integer;
+
+  function NextArg: NativeUInt;
+  begin
+    if ArgIndex <= High(Args) then
+    begin
+      Result := Args[ArgIndex];
+      Inc(ArgIndex);
+    end
+    else
+      Result := 0;
+  end;
+
+  procedure SkipDigitsOrStar(var P: PAnsiChar);
+  begin
+    while CharInSet(P^, ['0'..'9', '*']) do
+    begin
+      if P^ = '*' then
+        NextArg;
+      Inc(P);
+    end;
+  end;
+
+begin
+  Result := '';
+  if Fmt = nil then
+    Exit;
+
+  ArgIndex := 0;
+  var Start := PAnsiChar(Fmt);
+  var P := Start;
+  while P^ <> #0 do
+  begin
+    if P^ <> '%' then
+    begin
+      Inc(P);
+      Continue;
+    end;
+
+    Result := Result + xmlCharToStr(xmlCharPtr(Start), P - Start);
+    Inc(P);
+    while CharInSet(P^, ['-', '+', ' ', '#', '0']) do
+      Inc(P);
+    SkipDigitsOrStar(P);
+    if P^ = '.' then
+    begin
+      Inc(P);
+      SkipDigitsOrStar(P);
+    end;
+    var Wide := False;
+    while CharInSet(P^, ['l', 'h', 'z', 'j', 't', 'L', 'q']) do
+    begin
+      if CharInSet(P^, ['z', 'j', 't', 'q']) or ((P^ = 'l') and ((P + 1)^ = 'l')) then
+        Wide := True;
+      Inc(P);
+    end;
+
+    case P^ of
+      #0:
+        Break;
+      's':
+        begin
+          var S := xmlCharPtr(NextArg);
+          if S = nil then
+            Result := Result + '(null)'
+          else
+            Result := Result + xmlCharToStr(S);
+        end;
+      'd', 'i':
+        if Wide then
+          Result := Result + IntToStr(NativeInt(NextArg))
+        else
+          Result := Result + IntToStr(Integer(NextArg));
+      'u':
+        if Wide then
+          Result := Result + UIntToStr(NextArg)
+        else
+          Result := Result + UIntToStr(Cardinal(NextArg));
+      'x':
+        Result := Result + LowerCase(IntToHex(Cardinal(NextArg), 1));
+      'X':
+        Result := Result + IntToHex(Cardinal(NextArg), 1);
+      'p':
+        Result := Result + IntToHex(NextArg, SizeOf(Pointer) * 2);
+      'c':
+        Result := Result + Char(AnsiChar(NextArg));
+      '%':
+        Result := Result + '%';
+    else
+      NextArg;
+      Result := Result + '%' + Char(P^);
+    end;
+    Inc(P);
+    Start := P;
+  end;
+  Result := Result + xmlCharToStr(xmlCharPtr(Start), P - Start);
+end;
+
+{ libxslt reports errors printf-style: msg is the format and the values follow as
+  C varargs. A Delphi routine cannot receive varargs, so the callback declares the
+  next six argument slots explicitly: with cdecl they sit exactly where a C callee
+  reads them (r8, r9 and the stack on x64; the stack on x86). Slots past the real
+  arguments hold caller stack garbage and are touched only if the format asks. }
+procedure xsltErrorCallback(ctx: Pointer; const msg: xmlCharPtr; a1, a2, a3, a4, a5, a6: NativeUInt); cdecl;
 begin
   if ctx <> nil then
-  begin
-    PXsltErrorCallback(ctx).Handler(xmlCharToStr(msg));
+  try
+    PXsltErrorCallback(ctx).Handler(FormatCMessage(msg, [a1, a2, a3, a4, a5, a6]));
+  except
+    // an exception must not unwind through libxslt frames
   end;
 end;
 
@@ -607,8 +775,12 @@ begin
   Result := False;
 
   style := ParseStylesheet(stylesheet);
-  if style = nil then   // критично: сигнализирует вызывающему коду, что стиль уже освобождён,
-    Exit;               // чтобы тот не выполнил повторный xsltFreeStylesheet(style)
+  if style = nil then   // tells the caller the stylesheet is already freed,
+    Exit;               // so it does not call xsltFreeStylesheet(style) again
+
+  // xsltApplyStylesheetUser takes the address of params as a NULL-terminated
+  // name/value array: the first entry must be NULL, not whatever the stack holds.
+  params := nil;
 
   var ctxt := xsltNewTransformContext(style, doc);
   if ctxt <> nil then
@@ -618,7 +790,7 @@ begin
     if Assigned(errorHandler) then
     begin
       ecb.Handler := errorHandler;
-      xsltSetTransformErrorFunc(ctxt, @ecb, xsltErrorCallback);
+      xsltSetTransformErrorFunc(ctxt, @ecb, xmlGenericErrorFunc(@xsltErrorCallback));
     end;
     output := xsltApplyStylesheetUser(style, doc, params, nil, nil, ctxt);
     Result := output <> nil;
@@ -923,9 +1095,8 @@ begin
       else
         Result := Result.parent;
 
-      if Result = nil then Exit(nil);    // защита от случая, когда Root
-                                         // не является предком стартового узла
-                                         // (например, узел был отсоединён от дерева)
+      if Result = nil then Exit(nil);    // Root is not an ancestor of the start node
+                                         // (for example, the node was detached from the tree)
     end;
   end;
 end;
@@ -1825,9 +1996,15 @@ begin
 
   if (Data = nil) or (Size = 0) then
     Exit('');
-  Result := xmlCharToStr(PAnsiChar(Data), Size);
-
-  XmlFree(Data);
+  try
+    // The dump is in Encoding, or in the document's own encoding when none is given
+    if Encoding <> '' then
+      Result := DecodeDump(Data, Size, Encoding)
+    else
+      Result := DecodeDump(Data, Size, xmlCharToStr(Self.encoding));
+  finally
+    XmlFree(Data);
+  end;
 end;
 
 function xmlDocHelper.ToUtf8(const Format: Boolean): RawByteString;
@@ -1866,6 +2043,11 @@ begin
     if xsltSaveResultToString(text, len, output, style) = 0 then
     begin
       SetString(S, text, len);
+      // The bytes are in the xsl:output encoding (UTF-8 when it names none); tagging
+      // the string with that code page makes a later string(S) convert correctly.
+      var CodePage := EncodingCodePage(xmlCharToStr(style.encoding));
+      if CodePage <> 0 then
+        SetCodePage(S, CodePage, False);
       Result := True;
       xmlFree(text);
     end;
@@ -1880,12 +2062,7 @@ var
 begin
   Result := Transform(stylesheet, Text, errorHandler);
   if Result then
-  begin
-    if AnsiSameText(string(stylesheet.encoding), 'utf-8') then
-      S := UTF8ToUnicodeString(Text)
-    else
-      S := string(Text);
-  end;
+    S := string(Text);   // converts from the code page set by the RawByteString overload
 end;
 
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler): Boolean;

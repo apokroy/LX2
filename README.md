@@ -363,6 +363,17 @@ if (Err <> nil) and (Err.ErrorCode <> 0) then
   Writeln(Err.Reason, ' at ', Err.Line, ':', Err.LinePos);
 ```
 
+`IXMLSchemaCollection` compiles everything added to it into one schema set, the way
+`XmlSchemaSet` does in .NET, and the documents never have to exist on disk. An `xs:import`
+of a namespace that is in the collection is served from the collection whatever its
+`schemaLocation` says. Other locations are fetched through the `IXMLResolver` passed to
+`Add` (or read next to the file when the document was loaded from one), and what comes
+back is processed by the same rules. A location that resolves nowhere is skipped with a
+warning in `Schemas.Errors`, so the parts of one namespace added one by one form a single
+schema even when they include each other by file names; components that are really
+missing surface as unresolved references. The compiled schema is cached until the next
+`Add` or `Remove`.
+
 ## LX2.SAX
 
 Three levels, pick one:

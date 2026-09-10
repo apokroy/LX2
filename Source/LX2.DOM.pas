@@ -675,11 +675,14 @@ type
     procedure Remove(const namespaceURI: string);
     function  Get_length: NativeInt;
     function  Get_namespaceURI(index: NativeInt): string;
+    function  Get_Errors: IXMLErrors;
     function  Get(const namespaceURI: string): IXMLDocument;
     function  Validate(const Doc: IXMLDocument): Boolean;
     procedure AddCollection(const otherCollection: IXMLSchemaCollection);
     property  Length: NativeInt read Get_length;
     property  NamespaceURI[index: NativeInt]: string read Get_NamespaceURI; default;
+    /// <summary>Schema compilation diagnostics: the errors and warnings of the last build of the set.</summary>
+    property  Errors: IXMLErrors read Get_Errors;
   end;
 
   IXMLDocument = interface(IXMLNode)
