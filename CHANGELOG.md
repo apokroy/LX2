@@ -1,5 +1,61 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Text with non-ASCII characters stays on the fast path of the libxml2 parser
+  (`Native\Patches\010-chardata-utf8-fast-path.patch`, the first local patch to the
+  imported sources; `Native\Patches.ps1` applies and verifies them). Before, the first
+  byte of a Cyrillic letter sent the rest of the text node to the character-by-character
+  path, which took about 40 % of a SAX parse of a Russian document.
+- Single-byte code pages convert through tables built at `iconv_open` instead of
+  `MultiByteToWideChar`/`WideCharToMultiByte` per 1024 characters: saving a document as
+  windows-1251 no longer costs twice a save as UTF-8.
+- `DefaultParserOptions` includes `xmlParseCompact` (new member of `TXmlParserOption`,
+  `XML_PARSE_COMPACT`): text shorter than 16 bytes is stored inside the node, one
+  allocation less per number, code or date.
+
+### Fixed
+
+- XPath queries whose results need sorting were quadratic in documents with thousands of
+  sibling elements: without an index libxml2 finds the order of two elements by walking
+  the tree, and `//*[not(*)]` on a 7.6 MB payment packet took 26 seconds. The first query
+  now indexes the elements in document order (`xmlXPathOrderDocElems`, 9 ms on that
+  document, the same query 56 ms after it); `xmlDocHelper.OrderElements`,
+  `ElementsChanged` and `ElementsOrdered` expose the mechanism. The helpers and the DOM
+  layer drop the index when a node that may carry one is attached elsewhere, so a moved
+  element cannot leave a stale order behind; after moving elements through libxml2
+  directly, call `ElementsChanged`.
+
+### Added
+
+- `Native\Pgo.ps1`: profile-guided build of the objects with another LLVM (upstream or
+  the one of Visual Studio) over a corpus of documents; `Build.ps1 -Clang`/`-Profile`
+  underneath it. Measured on real documents: DOM parse −10 %, push parse −30 %, C14N −20 %.
+- `Tests\LX2Bench`: the throughput benchmark (`Bench.ps1`), with a `--verify` mode that
+  two builds of the objects must agree on.
+
+- `LX2Lib.Load` no longer installs the libxml2 debug allocator in release builds: the
+  library keeps the C runtime heap, and `LX2Lib.UseHostMemoryManager := True` before
+  `Initialize` hands it to the Delphi memory manager instead (`xmlMemSetup` with wrappers
+  over `GetMem`/`ReallocMem`/`FreeMem`). The debug allocator, with its per-block header
+  and a global mutex on every call, stays only in builds with `DEBUG` defined, where
+  `xmlMemUsed` feeds the leak tests. On a 31 MB document the release build parses 1.2×
+  faster on the C heap and 1.5× on FastMM5, evaluates XPath and validates against a
+  schema up to 2× faster; with four threads parsing at once the debug allocator had
+  serialized them to an eighth of the single-thread throughput, and the Delphi manager
+  scales worse than the C heap there, which is why the C heap is the default.
+
+- The static Win64 build of libxml2 no longer includes RelaxNG, Schematron, XPointer,
+  XInclude and the debug dumps: the binding exposes none of them, and dcc links every
+  object whole, so `xmlreader` and `xmlschemas` dragged them into each executable. The
+  code linked from `LX2.Static` shrinks by about a tenth. `xmlTextReaderRelaxNGSetSchema`,
+  `xmlTextReaderRelaxNGValidate`, `xmlTextReaderRelaxNGValidateCtxt` and `xmlSchemaDump`
+  stay `nil` in the static build; `XML_PARSE_XINCLUDE` and `xsltSetXIncludeDefault` are
+  accepted and do nothing. A DLL built with these features still works through
+  `LX2Lib.Load`.
+
 ## v1.0.3 — 2026-09-09
 
 ### Fixed

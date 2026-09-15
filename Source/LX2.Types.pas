@@ -86,7 +86,11 @@ type
     xmlParseUnzip,
     xmlParseNoSysCatalog,
     xmlParseNoCatalogPI,
-    xmlParseBigLines
+    xmlParseBigLines,
+    /// <summary>Short text nodes keep their content inside the node instead of a
+    /// separately allocated string (<c>XML_PARSE_COMPACT</c>): fewer allocations for
+    /// numbers, codes and dates. Node contents are read through libxml2 either way.</summary>
+    xmlParseCompact
   );
 
   TXmlParserOptions = set of TXmlParserOption;
@@ -124,11 +128,12 @@ type
 const
   /// <summary>
   /// Reasonable default parser options for general-purpose document loading:
-  /// substitutes entities, loads DTD attribute defaults, and relaxes libxml2's
+  /// substitutes entities, loads DTD attribute defaults, relaxes libxml2's
   /// line-number/node-size limits (<c>xmlParseBigLines</c>, <c>xmlParseHuge</c>)
-  /// to support large real-world documents without spurious errors.
+  /// to support large real-world documents without spurious errors, and keeps
+  /// short text inside the nodes (<c>xmlParseCompact</c>).
   /// </summary>
-  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines, xmlParseHuge];
+  DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines, xmlParseHuge, xmlParseCompact];
 
 type
   TXmlParseErrors = class;
@@ -1306,7 +1311,8 @@ const
     XML_PARSE_UNZIP,
     XML_PARSE_NO_SYS_CATALOG,
     XML_PARSE_NO_CATALOG_PI,
-    XML_PARSE_BIG_LINES
+    XML_PARSE_BIG_LINES,
+    XML_PARSE_COMPACT
   );
 begin
   Result := 0;

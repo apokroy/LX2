@@ -33,6 +33,16 @@
     After the build, compile Tests\LX2StaticSmoke.dpr with dcc64 and run it.
 .PARAMETER SkipBuild
     Do not compile the objects: only generate LX2.Static.pas and run the tests.
+.PARAMETER Clang
+    Path to a clang.exe of another LLVM (upstream, or the one of Visual Studio) to compile
+    the objects with instead of bcc64x, same target and flags; the headers still come from
+    RAD Studio. Pgo.ps1 uses it: bcc64x builds instrumented code but does not read the
+    profiles back.
+.PARAMETER Profile
+    An indexed profile (llvm-profdata merge) to compile with -fprofile-instr-use; needs
+    -Clang.
+.PARAMETER HeadersOnly
+    Only generate the headers in Gen (Pgo.ps1 needs them before the build).
 
 .EXAMPLE
     .\Build.ps1 -Test
@@ -42,7 +52,10 @@ param(
     [string]$StudioRoot,
     [string]$BdsVersion = '37.0',
     [switch]$Test,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$Clang,
+    [string]$Profile,
+    [switch]$HeadersOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +82,28 @@ foreach ($tool in $Bcc, $Nm, $Objdump) {
 }
 $StudioShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($StudioRoot).ShortPath
 
+# Another clang compiles the same sources for the same target with the headers of RAD
+# Studio: its own system include directories are replaced by the two bcc64x uses, and
+# __CODEGEARC__ takes the header branches bcc64x takes (the mingw headers otherwise ask
+# for an SDK file Studio does not ship); _CRTIMP empty keeps the C runtime references
+# plain names instead of __imp_ imports, which is what LX2.Static.pas declares.
+$Compiler = $Bcc
+$ForeignFlags = @()
+$ProfileFlags = @()
+if ($Clang) {
+    if (-not (Test-Path $Clang)) { throw "Not found: $Clang" }
+    $Compiler = $Clang
+    $ForeignFlags = @('-nostdlibinc', ('-isystem' + (Join-Path $StudioRoot 'include\windows\sdk')),
+                      ('-isystem' + (Join-Path $StudioRoot 'include\x86_64-w64-mingw32')),
+                      '-D__CODEGEARC__=0x0780', '-D_CRTIMP=')
+}
+if ($Profile) {
+    if (-not $Clang) { throw 'bcc64x does not read profiles: -Profile needs -Clang' }
+    if (-not (Test-Path $Profile)) { throw "Not found: $Profile" }
+    $ProfileFlags = @("-fprofile-instr-use=$Profile", '-Wno-profile-instr-unprofiled',
+                      '-Wno-profile-instr-out-of-date', '-Wno-backend-plugin')
+}
+
 # ---------------------------------------------------------------------------
 # Library features and generated headers
 # ---------------------------------------------------------------------------
@@ -76,12 +111,20 @@ $StudioShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($Stu
 # libxml2 feature set (xmlversion.h). HTTP, modules, zlib and lzma are off: documents come
 # from memory and streams, LX2 needs neither compressed files nor network loading, and each
 # of these features pulls in its own library or a DLL load.
+# RelaxNG, Schematron, XPointer, XInclude and the debug dumps are off as well: the binding
+# exposes none of them, but dcc links every object whole, and xmlreader pulled RelaxNG and
+# XInclude in on its own. xmlWriter stays: xmlTextReaderReadInnerXml/ReadOuterXml are built
+# on it. HTML stays because libxslt calls htmlNewDoc and htmlDocContentDumpFormatOutput
+# unconditionally (xsl:output method="html"). ISO8859X is meaningless with iconv on:
+# encoding.c drops the tables whenever iconv is available.
+# Import.ps1 skips the modules of every feature that is off here, so a feature switched back
+# on needs its module re-imported first.
 $LibXml2Features = @{
     WITH_THREADS = 1; WITH_THREAD_ALLOC = 0; WITH_OUTPUT = 1; WITH_PUSH = 1; WITH_READER = 1
     WITH_PATTERN = 1; WITH_WRITER = 1; WITH_SAX1 = 1; WITH_HTTP = 0; WITH_VALID = 1; WITH_HTML = 1
-    WITH_LEGACY = 0; WITH_C14N = 1; WITH_CATALOG = 1; WITH_XPATH = 1; WITH_XPTR = 1
-    WITH_XINCLUDE = 1; WITH_ICONV = 1; WITH_ICU = 0; WITH_ISO8859X = 1; WITH_DEBUG = 1
-    WITH_REGEXPS = 1; WITH_RELAXNG = 1; WITH_SCHEMAS = 1; WITH_SCHEMATRON = 1
+    WITH_LEGACY = 0; WITH_C14N = 1; WITH_CATALOG = 1; WITH_XPATH = 1; WITH_XPTR = 0
+    WITH_XINCLUDE = 0; WITH_ICONV = 1; WITH_ICU = 0; WITH_ISO8859X = 0; WITH_DEBUG = 0
+    WITH_REGEXPS = 1; WITH_RELAXNG = 0; WITH_SCHEMAS = 1; WITH_SCHEMATRON = 0
     WITH_MODULES = 0; WITH_ZLIB = 0; WITH_LZMA = 0
 }
 $LibXsltFeatures = @{
@@ -151,13 +194,13 @@ function Write-GeneratedHeaders {
 $CommonFlags = @('--target=x86_64-w64-windows-gnu', '-std=c11', '-O3', '-fno-math-errno', '-DNDEBUG',
                  '-DLIBXML_STATIC', '-DLIBXSLT_STATIC', '-DHAVE_CONFIG_H', '-fno-zero-initialized-in-bss',
                  '-Wno-deprecated-declarations', '-Wno-unused-parameter',
-                 ('-I' + (Join-Path $Root 'Source\shim')))
+                 ('-I' + (Join-Path $Root 'Source\shim'))) + $ForeignFlags + $ProfileFlags
 $LibXml2Include = @(('-I' + (Join-Path $Gen 'libxml2')), ('-I' + (Join-Path $Root 'Source\libxml2\include')), ('-I' + (Join-Path $Root 'Source\libxml2')))
 $LibXsltInclude = @(('-I' + (Join-Path $Gen 'libxslt')), ('-I' + (Join-Path $Root 'Source')), ('-I' + (Join-Path $Root 'Source\libxslt'))) + $LibXml2Include
 
 function Invoke-Bcc([string[]]$Arguments) {
-    $out = & $Bcc @Arguments 2>&1 | Where-Object { $_ -notmatch '^Embarcadero C\+\+' }
-    if ($LASTEXITCODE -ne 0) { throw "bcc64x exited with code $LASTEXITCODE`n$($out -join "`n")" }
+    $out = & $Compiler @Arguments 2>&1 | Where-Object { $_ -notmatch '^Embarcadero C\+\+' }
+    if ($LASTEXITCODE -ne 0) { throw "$(Split-Path $Compiler -Leaf) exited with code $LASTEXITCODE`n$($out -join "`n")" }
     if ($out) { $out | ForEach-Object { Write-Host "  $_" } }
 }
 
@@ -388,9 +431,12 @@ function Write-StaticUnit($Symbols) {
 # ---------------------------------------------------------------------------
 
 if (-not $SkipBuild) {
+    Write-Host '== patches ==' -ForegroundColor Cyan
+    & (Join-Path $Root 'Patches.ps1') -Check
     Write-Host '== headers ==' -ForegroundColor Cyan
     Write-GeneratedHeaders
-    Write-Host '== compile ==' -ForegroundColor Cyan
+    if ($HeadersOnly) { Write-Host 'Done (headers only).' -ForegroundColor Green; return }
+    Write-Host "== compile ($(Split-Path $Compiler -Leaf)$(if ($Profile) { ', profile-guided' })) ==" -ForegroundColor Cyan
     if (Test-Path $Lib) { Remove-Item (Join-Path $Lib '*.o') -Force }
     New-Item -ItemType Directory -Force $Lib | Out-Null
     Build-Group 'xml'  'Source\libxml2' $LibXml2Include

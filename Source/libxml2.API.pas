@@ -79,6 +79,12 @@ type
     /// <summary>Binder for a statically linked library (the LX2.Static unit): when assigned,
     /// Load calls it instead of loading the library file.</summary>
     class var StaticBinder: TProcedure;
+    /// <summary>When True before Initialize, libxml2 takes its memory from the Delphi
+    /// memory manager (FastMM5 and the like) instead of the C runtime heap. Faster in a
+    /// single thread; the C runtime heap scales better when several threads parse at
+    /// once. Ignored by builds with DEBUG defined, which keep the library's debug
+    /// allocator for xmlMemUsed.</summary>
+    class var UseHostMemoryManager: Boolean;
     class procedure Initialize; static;
     class procedure Load(const LibraryFileName: string = libxml2); static;
     class procedure Unload; static;
@@ -4673,11 +4679,69 @@ var
 
 implementation
 
+{$IFNDEF DEBUG}
+uses
+  System.AnsiStrings;
+{$ENDIF}
+
 {$IFDEF MSWINDOWS}
 
 function SafeLoadLibrary(const LibraryFileName: string): THandle;
 begin
   Result := System.SysUtils.SafeLoadLibrary(LibraryFileName);
+end;
+
+{$ENDIF}
+
+{$IFNDEF DEBUG}
+
+// With UseHostMemoryManager every libxml2 allocation goes to the Delphi memory manager,
+// whatever the host installed (FastMM5 in the applications). The wrappers keep the
+// contract of the C runtime that libxml2 relies on: a zero size still returns a block,
+// strdup(NULL) is NULL, and an allocation failure comes back as NULL rather than
+// EOutOfMemory, which must never unwind through the C frames of the library.
+
+function RtlMalloc(size: size_t): Pointer; cdecl;
+begin
+  if size = 0 then
+    size := 1;
+  try
+    GetMem(Result, size);
+  except
+    Result := nil;
+  end;
+end;
+
+function RtlRealloc(mem: Pointer; size: size_t): Pointer; cdecl;
+begin
+  if size = 0 then
+    size := 1;
+  Result := mem;
+  try
+    ReallocMem(Result, size);
+  except
+    Result := nil;
+  end;
+end;
+
+procedure RtlFree(mem: Pointer); cdecl;
+begin
+  FreeMem(mem);
+end;
+
+function RtlStrdup(const str: PAnsiChar): PAnsiChar; cdecl;
+var
+  Size: NativeUInt;
+begin
+  if str = nil then
+    Exit(nil);
+  Size := NativeUInt(System.AnsiStrings.StrLen(str)) + 1;
+  try
+    GetMem(Result, Size);
+  except
+    Exit(nil);
+  end;
+  Move(str^, Result^, Size);
 end;
 
 {$ENDIF}
@@ -5425,7 +5489,20 @@ begin
 {$endregion}
   end;
 
+  // The allocator goes in before xmlSchemaInitTypes and any parsing: libxml2 frees every
+  // block with the functions that were current when it was allocated, so the choice is
+  // made once per process. By default the library keeps the C runtime heap (malloc of
+  // ucrtbase), which scales across threads parsing at once; UseHostMemoryManager hands
+  // it to the Delphi memory manager, which wins in a single thread. Debug builds keep
+  // the library's own debug allocator: it accounts every byte the library holds
+  // (xmlMemUsed), which the leak tests rely on, at the price of a header per block and
+  // a global mutex on every call.
+{$IFDEF DEBUG}
   xmlMemSetup(xmlMemFree, xmlMemMalloc, xmlMemRealloc, xmlMemoryStrdup);
+{$ELSE}
+  if UseHostMemoryManager then
+    xmlMemSetup(RtlFree, RtlMalloc, RtlRealloc, RtlStrdup);
+{$ENDIF}
 
   xmlMemGet(xmlFree, xmlMalloc, xmlRealloc, xmlStrdup);
 

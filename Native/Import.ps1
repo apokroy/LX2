@@ -6,7 +6,8 @@
     The release archives are taken by tag from the GNOME mirrors on GitHub
     (github.com/GNOME/libxml2, github.com/GNOME/libxslt). From libxml2 the library proper is
     copied: the modules of LIBXML2_SRCS in the release's CMakeLists.txt minus those that
-    serve features disabled in Build.ps1 (HTTP, dynamic modules, lzma), the headers of
+    serve features disabled in Build.ps1 (HTTP, dynamic modules, lzma, RelaxNG, Schematron,
+    XPointer, XInclude, debug dumps), the headers of
     include\libxml and include\private, the internal headers of the root, Copyright and
     VERSION. From libxslt the libxslt\ directory (the library itself, without libexslt and
     xsltproc) and Copyright; VERSION is written from the m4_define lines of configure.ac
@@ -46,10 +47,11 @@ $Root = $PSScriptRoot
 $Headers = @{ 'User-Agent' = 'LX2-Import' }
 $Series = @{ libxml2 = '2.15'; libxslt = '1.1' }
 
-# Modules that implement the features disabled in Build.ps1 (HTTP, dynamic modules, lzma);
-# the rest of the module list is read from the release's CMakeLists.txt, as it changes from
-# version to version.
-$LibXml2Excluded = @('nanohttp.c', 'xmlmodule.c', 'xzlib.c')
+# Modules that implement the features disabled in Build.ps1 (HTTP, dynamic modules, lzma,
+# RelaxNG, Schematron, XPointer, XInclude, debug dumps); the rest of the module list is read
+# from the release's CMakeLists.txt, as it changes from version to version.
+$LibXml2Excluded = @('nanohttp.c', 'xmlmodule.c', 'xzlib.c',
+                     'relaxng.c', 'schematron.c', 'xpointer.c', 'xinclude.c', 'debugXML.c')
 
 function Get-LibXml2Sources([string]$Src) {
     $cm = Get-Content (Join-Path $Src 'CMakeLists.txt') -Raw
@@ -131,6 +133,11 @@ try {
     $stamp = $parts -join '.'
     if ($stamp -ne $LibXslt) { throw "libxslt configure.ac says version $stamp, expected $LibXslt" }
     Set-Content -Path (Join-Path $dst 'VERSION') -Value $stamp -NoNewline -Encoding ASCII
+
+    # ---- local patches (Patches\*.patch): a release that moved the patched code fails here,
+    # and the patch is redone against the new source before the import is complete.
+    Write-Host 'patches:'
+    & (Join-Path $Root 'Patches.ps1') -Apply
 
     Write-Host "Imported libxml2 $LibXml2 and libxslt $LibXslt. Next: .\Build.ps1 -Test" -ForegroundColor Green
 }

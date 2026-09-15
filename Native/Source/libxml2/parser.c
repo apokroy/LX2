@@ -4566,6 +4566,49 @@ xmlCharacters(xmlParserCtxtPtr ctxt, const xmlChar *buf, int size,
  * @param ctxt  an XML parser context
  * @param partial  buffer may contain partial UTF-8 sequences
  */
+/**
+ * Length of the UTF-8 sequence starting at `in` (first byte >= 0x80) if it
+ * is complete within `avail` bytes and encodes a Char: no overlong forms,
+ * no surrogates, not U+FFFE or U+FFFF, nothing above U+10FFFF. Returns 0
+ * otherwise, and the caller falls back to xmlParseCharDataComplex, which
+ * reports the error or waits for more input.
+ *
+ * @param in  the first byte of the sequence
+ * @param avail  number of bytes available at `in`
+ * @returns 2, 3 or 4 for a Char, 0 otherwise
+ */
+static int
+xmlCharDataUtf8Len(const xmlChar *in, size_t avail) {
+    unsigned c = in[0];
+
+    if (c < 0xE0) {
+        if ((c < 0xC2) || (avail < 2) || ((in[1] & 0xC0) != 0x80))
+            return(0);
+        return(2);
+    }
+    if (c < 0xF0) {
+        if ((avail < 3) ||
+            ((in[1] & 0xC0) != 0x80) || ((in[2] & 0xC0) != 0x80))
+            return(0);
+        if (((c == 0xE0) && (in[1] < 0xA0)) ||
+            ((c == 0xED) && (in[1] >= 0xA0)) ||
+            ((c == 0xEF) && (in[1] == 0xBF) && (in[2] >= 0xBE)))
+            return(0);
+        return(3);
+    }
+    if (c < 0xF5) {
+        if ((avail < 4) ||
+            ((in[1] & 0xC0) != 0x80) || ((in[2] & 0xC0) != 0x80) ||
+            ((in[3] & 0xC0) != 0x80))
+            return(0);
+        if (((c == 0xF0) && (in[1] < 0x90)) ||
+            ((c == 0xF4) && (in[1] >= 0x90)))
+            return(0);
+        return(4);
+    }
+    return(0);
+}
+
 static void
 xmlParseCharDataInternal(xmlParserCtxtPtr ctxt, int partial) {
     const xmlChar *in;
@@ -4606,8 +4649,24 @@ get_more_space:
 
 get_more:
         ccol = ctxt->input->col;
-        while (test_char_data[*in]) {
-            in++;
+        while (1) {
+            int len;
+
+            while (test_char_data[*in]) {
+                in++;
+                ccol++;
+            }
+            /*
+             * Multi-byte characters stay on the fast path as long as the
+             * sequence is complete and encodes a Char. Anything else is
+             * left to xmlParseCharDataComplex, which reports it.
+             */
+            if (*in < 0x80)
+                break;
+            len = xmlCharDataUtf8Len(in, ctxt->input->end - in);
+            if (len == 0)
+                break;
+            in += len;
             ccol++;
         }
         ctxt->input->col = ccol;

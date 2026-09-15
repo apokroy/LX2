@@ -24,7 +24,6 @@ uses
 {$L ..\Native\Lib\Win64\xml_c14n.o}
 {$L ..\Native\Lib\Win64\xml_catalog.o}
 {$L ..\Native\Lib\Win64\xml_chvalid.o}
-{$L ..\Native\Lib\Win64\xml_debugXML.o}
 {$L ..\Native\Lib\Win64\xml_dict.o}
 {$L ..\Native\Lib\Win64\xml_encoding.o}
 {$L ..\Native\Lib\Win64\xml_entities.o}
@@ -37,14 +36,11 @@ uses
 {$L ..\Native\Lib\Win64\xml_parser.o}
 {$L ..\Native\Lib\Win64\xml_parserInternals.o}
 {$L ..\Native\Lib\Win64\xml_pattern.o}
-{$L ..\Native\Lib\Win64\xml_relaxng.o}
 {$L ..\Native\Lib\Win64\xml_SAX2.o}
-{$L ..\Native\Lib\Win64\xml_schematron.o}
 {$L ..\Native\Lib\Win64\xml_threads.o}
 {$L ..\Native\Lib\Win64\xml_tree.o}
 {$L ..\Native\Lib\Win64\xml_uri.o}
 {$L ..\Native\Lib\Win64\xml_valid.o}
-{$L ..\Native\Lib\Win64\xml_xinclude.o}
 {$L ..\Native\Lib\Win64\xml_xlink.o}
 {$L ..\Native\Lib\Win64\xml_xmlIO.o}
 {$L ..\Native\Lib\Win64\xml_xmlmemory.o}
@@ -56,7 +52,6 @@ uses
 {$L ..\Native\Lib\Win64\xml_xmlstring.o}
 {$L ..\Native\Lib\Win64\xml_xmlwriter.o}
 {$L ..\Native\Lib\Win64\xml_xpath.o}
-{$L ..\Native\Lib\Win64\xml_xpointer.o}
 {$L ..\Native\Lib\Win64\xslt_attributes.o}
 {$L ..\Native\Lib\Win64\xslt_attrvt.o}
 {$L ..\Native\Lib\Win64\xslt_documents.o}
@@ -118,6 +113,7 @@ procedure getenv; cdecl; external 'ucrtbase.dll';
 procedure log10; cdecl; external 'ucrtbase.dll';
 procedure malloc; cdecl; external 'ucrtbase.dll';
 procedure memchr; cdecl; external 'ucrtbase.dll';
+procedure memcmp; cdecl; external 'ucrtbase.dll';
 procedure memcpy; cdecl; external 'ucrtbase.dll';
 procedure memmove; cdecl; external 'ucrtbase.dll';
 procedure memset; cdecl; external 'ucrtbase.dll';
@@ -240,7 +236,6 @@ procedure xmlAddRef; cdecl; external;
 procedure xmlAttrNormalize; cdecl; external;
 procedure xmlAutomataCompile; cdecl; external;
 procedure xmlAutomataGetInitState; cdecl; external;
-procedure xmlAutomataIsDeterminist; cdecl; external;
 procedure xmlAutomataNewAllTrans; cdecl; external;
 procedure xmlAutomataNewCountedTrans; cdecl; external;
 procedure xmlAutomataNewCounter; cdecl; external;
@@ -253,7 +248,6 @@ procedure xmlAutomataNewState; cdecl; external;
 procedure xmlAutomataNewTransition; cdecl; external;
 procedure xmlAutomataNewTransition2; cdecl; external;
 procedure xmlAutomataSetFinalState; cdecl; external;
-procedure xmlAutomataSetFlags; cdecl; external;
 procedure xmlBufAdd; cdecl; external;
 procedure xmlBufAddLen; cdecl; external;
 procedure xmlBufAttrSerializeTxtContent; cdecl; external;
@@ -277,7 +271,6 @@ procedure xmlCharEncInput; cdecl; external;
 procedure xmlCharEncOutput; cdecl; external;
 procedure xmlCharInRange; cdecl; external;
 procedure xmlCharStrdup; cdecl; external;
-procedure xmlCheckUTF8; cdecl; external;
 procedure xmlCleanupCatalogInternal; cdecl; external;
 procedure xmlCleanupCharEncodingHandlers; cdecl; external;
 procedure xmlCleanupDictInternal; cdecl; external;
@@ -285,7 +278,6 @@ procedure xmlCleanupGlobalsInternal; cdecl; external;
 procedure xmlCleanupMemoryInternal; cdecl; external;
 procedure xmlCleanupMutex; cdecl; external;
 procedure xmlCleanupRandom; cdecl; external;
-procedure xmlCleanupRelaxNGInternal; cdecl; external;
 procedure xmlCleanupRMutex; cdecl; external;
 procedure xmlCleanupSchemasTypesInternal; cdecl; external;
 procedure xmlCopyAttributeTable; cdecl; external;
@@ -307,16 +299,12 @@ procedure xmlCtxtPushInput; cdecl; external;
 procedure xmlCtxtReadMemory; cdecl; external;
 procedure xmlCtxtVErr; cdecl; external;
 procedure xmlCurrentChar; cdecl; external;
-procedure xmlDebugDumpAttr; cdecl; external;
-procedure xmlDebugDumpOneNode; cdecl; external;
-procedure xmlDebugDumpString; cdecl; external;
 procedure xmlDefaultSAXHandler; cdecl; external;
 procedure xmlDefaultSAXLocator; cdecl; external;
 procedure xmlDetectEncoding; cdecl; external;
 procedure xmlDictCombineHash; cdecl; external;
 procedure xmlDictComputeHash; cdecl; external;
 procedure xmlDictLookupHashed; cdecl; external;
-procedure xmlDocDump; cdecl; external;
 procedure xmlEncInputChunk; cdecl; external;
 procedure xmlErrString; cdecl; external;
 procedure xmlEscapeFormatString; cdecl; external;
@@ -340,7 +328,6 @@ procedure xmlGetLocalRngState; cdecl; external;
 procedure xmlGetNoNsProp; cdecl; external;
 procedure xmlGetUTF8Char; cdecl; external;
 procedure xmlGlobalRandom; cdecl; external;
-procedure xmlGrowArray; cdecl; external;
 procedure xmlHashAdd; cdecl; external;
 procedure xmlHashAdd2; cdecl; external;
 procedure xmlHashAdd3; cdecl; external;
@@ -374,7 +361,6 @@ procedure xmlInitMemoryInternal; cdecl; external;
 procedure xmlInitMutex; cdecl; external;
 procedure xmlInitParser; cdecl; external;
 procedure xmlInitRandom; cdecl; external;
-procedure xmlInitRelaxNGInternal; cdecl; external;
 procedure xmlInitRMutex; cdecl; external;
 procedure xmlInitSchemasTypesInternal; cdecl; external;
 procedure xmlInitXPathInternal; cdecl; external;
@@ -446,7 +432,6 @@ procedure xmlRaiseError; cdecl; external;
 procedure xmlRaiseMemoryError; cdecl; external;
 procedure xmlRandom; cdecl; external;
 procedure xmlRealloc; cdecl; external;
-procedure xmlRegExecClearErrors; cdecl; external;
 procedure xmlRegExecErrInfo; cdecl; external;
 procedure xmlRegExecNextValues; cdecl; external;
 procedure xmlRegExecPushString; cdecl; external;
@@ -458,20 +443,6 @@ procedure xmlRegFreeExecCtxt; cdecl; external;
 procedure xmlRegFreeRegexp; cdecl; external;
 procedure xmlRegisterCallbacks; cdecl; external;
 procedure xmlRegNewExecCtxt; cdecl; external;
-procedure xmlRelaxNGCleanupTypes; cdecl; external;
-procedure xmlRelaxNGFree; cdecl; external;
-procedure xmlRelaxNGFreeParserCtxt; cdecl; external;
-procedure xmlRelaxNGFreeValidCtxt; cdecl; external;
-procedure xmlRelaxNGNewParserCtxt; cdecl; external;
-procedure xmlRelaxNGNewValidCtxt; cdecl; external;
-procedure xmlRelaxNGParse; cdecl; external;
-procedure xmlRelaxNGSetParserStructuredErrors; cdecl; external;
-procedure xmlRelaxNGSetResourceLoader; cdecl; external;
-procedure xmlRelaxNGSetValidStructuredErrors; cdecl; external;
-procedure xmlRelaxNGValidateFullElement; cdecl; external;
-procedure xmlRelaxNGValidatePopElement; cdecl; external;
-procedure xmlRelaxNGValidatePushCData; cdecl; external;
-procedure xmlRelaxNGValidatePushElement; cdecl; external;
 procedure xmlRMutexLock; cdecl; external;
 procedure xmlRMutexUnlock; cdecl; external;
 procedure xmlSaveFormatFileTo; cdecl; external;
@@ -480,7 +451,6 @@ procedure xmlSaveNotationTable; cdecl; external;
 procedure xmlSAX2EndElement; cdecl; external;
 procedure xmlSAX2StartElement; cdecl; external;
 procedure xmlScanName; cdecl; external;
-procedure xmlSchemaCheckFacet; cdecl; external;
 procedure xmlSchemaCleanupTypes; cdecl; external;
 procedure xmlSchemaCollapseString; cdecl; external;
 procedure xmlSchemaCompareValues; cdecl; external;
@@ -499,7 +469,6 @@ procedure xmlSchemaIsBuiltInTypeFacet; cdecl; external;
 procedure xmlSchemaNewFacet; cdecl; external;
 procedure xmlSchemaNewNOTATIONValue; cdecl; external;
 procedure xmlSchemaNewQNameValue; cdecl; external;
-procedure xmlSchemaValidateFacet; cdecl; external;
 procedure xmlSchemaValidateFacetWhtsp; cdecl; external;
 procedure xmlSchemaValidateLengthFacetWhtsp; cdecl; external;
 procedure xmlSchemaValidateListSimpleTypeFacet; cdecl; external;
@@ -515,10 +484,8 @@ procedure xmlSearchNsSafe; cdecl; external;
 procedure xmlSerializeText; cdecl; external;
 procedure xmlSetDeclaredEncoding; cdecl; external;
 procedure xmlSetTreeDoc; cdecl; external;
-procedure xmlSnprintfElementContent; cdecl; external;
 procedure xmlSplitQName2; cdecl; external;
 procedure xmlSplitQName4; cdecl; external;
-procedure xmlStaticCopyNode; cdecl; external;
 procedure xmlStaticCopyNodeList; cdecl; external;
 procedure xmlStrcasecmp; cdecl; external;
 procedure xmlStrcasestr; cdecl; external;
@@ -530,7 +497,6 @@ procedure xmlStreamPop; cdecl; external;
 procedure xmlStreamPush; cdecl; external;
 procedure xmlStreamPushAttr; cdecl; external;
 procedure xmlStrEqual; cdecl; external;
-procedure xmlStringComment; cdecl; external;
 procedure xmlStringText; cdecl; external;
 procedure xmlStringTextNoenc; cdecl; external;
 procedure xmlStrlen; cdecl; external;
@@ -563,19 +529,6 @@ procedure xmlValidCtxtNormalizeAttributeValue; cdecl; external;
 procedure xmlVPrintErrorMessage; cdecl; external;
 procedure xmlVRaiseError; cdecl; external;
 procedure xmlWarningMsg; cdecl; external;
-procedure xmlXIncludeFreeContext; cdecl; external;
-procedure xmlXIncludeGetLastError; cdecl; external;
-procedure xmlXIncludeNewContext; cdecl; external;
-procedure xmlXIncludeProcessFlags; cdecl; external;
-procedure xmlXIncludeProcessNode; cdecl; external;
-procedure xmlXIncludeSetErrorHandler; cdecl; external;
-procedure xmlXIncludeSetFlags; cdecl; external;
-procedure xmlXIncludeSetResourceLoader; cdecl; external;
-procedure xmlXIncludeSetStreamingMode; cdecl; external;
-procedure xmlXPathDebugDumpObject; cdecl; external;
-procedure xmlXPathErrMemory; cdecl; external;
-procedure xmlXPathPErrMemory; cdecl; external;
-procedure xmlXPtrEval; cdecl; external;
 procedure xslDebugStatus; cdecl; external;
 procedure xsltAddKey; cdecl; external;
 procedure xsltAddTemplate; cdecl; external;
@@ -1130,7 +1083,6 @@ procedure xmlSAX2StartElementNs(ctx: Pointer; const localname, prefix, URI: xmlC
 procedure xmlSAX2UnparsedEntityDecl(ctx: Pointer; const name, publicId, systemId, notationName: xmlCharPtr); cdecl; external;
 function xmlSAXDefaultVersion(version: Integer): Integer; cdecl; external;
 function xmlSAXVersion(hdlr: xmlSAXHandlerPtr; version: Integer): Integer; cdecl; external;
-procedure xmlSchemaDump(ctxt: xmlSchemaParserCtxtPtr); cdecl; external;
 procedure xmlSchemaFree(schema: xmlSchemaPtr); cdecl; external;
 procedure xmlSchemaFreeParserCtxt(ctxt: xmlSchemaParserCtxtPtr); cdecl; external;
 procedure xmlSchemaFreeValidCtxt(ctxt: xmlSchemaValidCtxtPtr); cdecl; external;
@@ -1233,9 +1185,6 @@ function xmlTextReaderReadInnerXml(reader: xmlTextReaderPtr): xmlCharPtr; cdecl;
 function xmlTextReaderReadOuterXml(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
 function xmlTextReaderReadState(reader: xmlTextReaderPtr): Integer; cdecl; external;
 function xmlTextReaderReadString(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
-function xmlTextReaderRelaxNGSetSchema(reader: xmlTextReaderPtr; schema: xmlRelaxNGPtr): Integer; cdecl; external;
-function xmlTextReaderRelaxNGValidate(reader: xmlTextReaderPtr; rng: xmlCharPtr): Integer; cdecl; external;
-function xmlTextReaderRelaxNGValidateCtxt(reader: xmlTextReaderPtr; ctxt: xmlRelaxNGValidCtxtPtr; options: Integer): Integer; cdecl; external;
 function xmlTextReaderSchemaValidate(reader: xmlTextReaderPtr; xsd: PUTF8Char): Integer; cdecl; external;
 function xmlTextReaderSchemaValidateCtxt(reader: xmlTextReaderPtr; ctxt: xmlSchemaValidCtxtPtr; options: Integer): Integer; cdecl; external;
 procedure xmlTextReaderSetErrorHandler(reader: xmlTextReaderPtr; f: xmlTextReaderErrorFunc; arg: Pointer); cdecl; external;
@@ -1828,7 +1777,6 @@ begin
   libxml2.API.xmlSAX2UnparsedEntityDecl := @xmlSAX2UnparsedEntityDecl;
   libxml2.API.xmlSAXDefaultVersion := @xmlSAXDefaultVersion;
   libxml2.API.xmlSAXVersion := @xmlSAXVersion;
-  libxml2.API.xmlSchemaDump := @xmlSchemaDump;
   libxml2.API.xmlSchemaFree := @xmlSchemaFree;
   libxml2.API.xmlSchemaFreeParserCtxt := @xmlSchemaFreeParserCtxt;
   libxml2.API.xmlSchemaFreeValidCtxt := @xmlSchemaFreeValidCtxt;
@@ -1931,9 +1879,6 @@ begin
   libxml2.API.xmlTextReaderReadOuterXml := @xmlTextReaderReadOuterXml;
   libxml2.API.xmlTextReaderReadState := @xmlTextReaderReadState;
   libxml2.API.xmlTextReaderReadString := @xmlTextReaderReadString;
-  libxml2.API.xmlTextReaderRelaxNGSetSchema := @xmlTextReaderRelaxNGSetSchema;
-  libxml2.API.xmlTextReaderRelaxNGValidate := @xmlTextReaderRelaxNGValidate;
-  libxml2.API.xmlTextReaderRelaxNGValidateCtxt := @xmlTextReaderRelaxNGValidateCtxt;
   libxml2.API.xmlTextReaderSchemaValidate := @xmlTextReaderSchemaValidate;
   libxml2.API.xmlTextReaderSchemaValidateCtxt := @xmlTextReaderSchemaValidateCtxt;
   libxml2.API.xmlTextReaderSetErrorHandler := @xmlTextReaderSetErrorHandler;

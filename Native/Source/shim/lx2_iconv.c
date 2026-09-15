@@ -4,7 +4,9 @@
  * libxml2 opens every descriptor with UTF-8 on one side and converts the document
  * encoding to or from it, so the implementation is UTF-8 <-> Windows code page through
  * UTF-16 with MultiByteToWideChar/WideCharToMultiByte, plus UTF-16/UTF-32 handled
- * directly. Semantics follow POSIX iconv as libxml2 relies on them:
+ * directly. Single-byte code pages (windows-1251, KOI8-R, ISO-8859-x, ...) go through
+ * tables built once at iconv_open from the same Windows mapping, so the conversion loop
+ * itself makes no API calls. Semantics follow POSIX iconv as libxml2 relies on them:
  *   - input is consumed in whole characters; an incomplete trailing sequence stops the
  *     conversion with EINVAL, the converted part is already in the output;
  *   - an invalid or unmappable character stops with EILSEQ and *inbuf pointing at it
@@ -31,7 +33,169 @@ typedef struct {
     unsigned from;   /* code page of the input */
     unsigned to;     /* code page of the output */
     int from_sbcs;   /* every input byte is one character: no lead-byte probing needed */
+
+    /* A single-byte code page against UTF-8 converts through tables built at open time
+     * instead of the Windows converter: fast is 1 for code page -> UTF-8, 2 for
+     * UTF-8 -> code page, 0 when the descriptor takes the generic path. */
+    int fast;
+    unsigned char utf8[256][4];   /* byte -> UTF-8 sequence, [3] is its length, 0 = unmapped */
+    unsigned char low[0x800];     /* code point 0x80..0x7FF -> byte, 0 = unmapped */
+    struct { unsigned short cp; unsigned char b; } high[128];  /* code points >= 0x800, sorted */
+    int nhigh;
 } lx2_iconv;
+
+/* Tables for the single-byte code page cp: one MultiByteToWideChar per byte. Returns 0
+ * if the page is not ASCII-compatible (EBCDIC and the like), which keeps the generic path. */
+static int lx2_sbcs_tables(lx2_iconv *cd, unsigned cp)
+{
+    memset(cd->utf8, 0, sizeof(cd->utf8));
+    memset(cd->low, 0, sizeof(cd->low));
+    cd->nhigh = 0;
+    for (unsigned b = 0; b < 256; b++) {
+        char in = (char)b;
+        wchar_t w;
+        unsigned u;
+        unsigned char *s = cd->utf8[b];
+
+        if (MultiByteToWideChar(cp, MB_ERR_INVALID_CHARS, &in, 1, &w, 1) != 1)
+            continue;
+        u = (unsigned)w;
+        if (b < 0x80) {
+            if (u != b)
+                return 0;
+            s[0] = (unsigned char)b; s[3] = 1;
+            continue;
+        }
+        if (u < 0x80 || (u >= 0xD800 && u <= 0xDFFF))
+            continue;
+        if (u < 0x800) {
+            s[0] = (unsigned char)(0xC0 | (u >> 6)); s[1] = (unsigned char)(0x80 | (u & 0x3F)); s[3] = 2;
+            if (cd->low[u] == 0)
+                cd->low[u] = (unsigned char)b;
+        } else {
+            int i, j;
+            s[0] = (unsigned char)(0xE0 | (u >> 12)); s[1] = (unsigned char)(0x80 | ((u >> 6) & 0x3F));
+            s[2] = (unsigned char)(0x80 | (u & 0x3F)); s[3] = 3;
+            /* insertion into the sorted list; a code point already present keeps its first byte */
+            for (i = 0; i < cd->nhigh && cd->high[i].cp < u; i++) ;
+            if (i < cd->nhigh && cd->high[i].cp == u)
+                continue;
+            if (cd->nhigh == (int)(sizeof(cd->high) / sizeof(cd->high[0])))
+                return 0;
+            for (j = cd->nhigh; j > i; j--)
+                cd->high[j] = cd->high[j - 1];
+            cd->high[i].cp = (unsigned short)u; cd->high[i].b = (unsigned char)b;
+            cd->nhigh++;
+        }
+    }
+    return 1;
+}
+
+/* Byte for the code point u in the code page of the tables, 0 if it has none. */
+static unsigned lx2_sbcs_byte(const lx2_iconv *cd, unsigned u)
+{
+    int lo = 0, hi = cd->nhigh - 1;
+
+    if (u < 0x800)
+        return cd->low[u];
+    while (lo <= hi) {
+        int mid = (lo + hi) >> 1;
+        if (cd->high[mid].cp < u) lo = mid + 1;
+        else if (cd->high[mid].cp > u) hi = mid - 1;
+        else return cd->high[mid].b;
+    }
+    return 0;
+}
+
+/* Single-byte code page -> UTF-8. Stops with EILSEQ at a byte the page does not define
+ * and with E2BIG before a character that does not fit. */
+static size_t lx2_sbcs_to_utf8(const lx2_iconv *cd, const unsigned char **inp, size_t *inleft,
+                               unsigned char **outp, size_t *outleft)
+{
+    const unsigned char *in = *inp;
+    unsigned char *out = *outp;
+    size_t il = *inleft, ol = *outleft;
+    int err = 0;
+
+    while (il > 0) {
+        unsigned b = *in;
+
+        if (b < 0x80) {
+            size_t n = 0, max = il < ol ? il : ol;
+            while (n < max && in[n] < 0x80)
+                n++;
+            memcpy(out, in, n);
+            in += n; il -= n; out += n; ol -= n;
+            if (il > 0 && ol == 0) { err = E2BIG; break; }
+            continue;
+        } else {
+            const unsigned char *s = cd->utf8[b];
+            unsigned n = s[3];
+
+            if (n == 0) { err = EILSEQ; break; }
+            if (ol < n) { err = E2BIG; break; }
+            out[0] = s[0]; out[1] = s[1];
+            if (n == 3) out[2] = s[2];
+            in++; il--; out += n; ol -= n;
+        }
+    }
+    *inp = in; *inleft = il; *outp = out; *outleft = ol;
+    if (err) { errno = err; return (size_t)-1; }
+    return 0;
+}
+
+/* UTF-8 -> single-byte code page. A malformed sequence and a code point without a byte
+ * stop with EILSEQ at the character, a truncated trailing sequence with EINVAL. */
+static size_t lx2_utf8_to_sbcs(const lx2_iconv *cd, const unsigned char **inp, size_t *inleft,
+                               unsigned char **outp, size_t *outleft)
+{
+    const unsigned char *in = *inp;
+    unsigned char *out = *outp;
+    size_t il = *inleft, ol = *outleft;
+    int err = 0;
+
+    while (il > 0) {
+        unsigned c = *in, u, b;
+        int len;
+
+        if (c < 0x80) {
+            size_t n = 0, max = il < ol ? il : ol;
+            while (n < max && in[n] < 0x80)
+                n++;
+            memcpy(out, in, n);
+            in += n; il -= n; out += n; ol -= n;
+            if (il > 0 && ol == 0) { err = E2BIG; break; }
+            continue;
+        }
+        if (c < 0xC2) { err = EILSEQ; break; }
+        len = c < 0xE0 ? 2 : c < 0xF0 ? 3 : c < 0xF8 ? 4 : 0;
+        if (len == 0) { err = EILSEQ; break; }
+        if ((size_t)len > il) {
+            /* the bytes present must still look like a sequence, as lx2_charlen requires */
+            err = EINVAL;
+            for (size_t i = 1; i < il; i++)
+                if ((in[i] & 0xC0) != 0x80) { err = EILSEQ; break; }
+            break;
+        }
+        if (((in[1] & 0xC0) != 0x80) ||
+            (len >= 3 && (in[2] & 0xC0) != 0x80) ||
+            (len == 4 && (in[3] & 0xC0) != 0x80)) { err = EILSEQ; break; }
+        if (len == 2)
+            u = ((c & 0x1F) << 6) | (in[1] & 0x3F);
+        else if (len == 3)
+            u = ((c & 0x0F) << 12) | ((in[1] & 0x3F) << 6) | (in[2] & 0x3F);
+        else
+            u = 0x110000;   /* supplementary planes have no byte in any single-byte page */
+        b = lx2_sbcs_byte(cd, u);
+        if (b == 0) { err = EILSEQ; break; }
+        if (ol == 0) { err = E2BIG; break; }
+        *out++ = (unsigned char)b; ol--;
+        in += len; il -= (size_t)len;
+    }
+    *inp = in; *inleft = il; *outp = out; *outleft = ol;
+    if (err) { errno = err; return (size_t)-1; }
+    return 0;
+}
 
 /* Single-byte code pages (the ANSI, OEM, ISO and KOI8 families) have MaxCharSize 1;
  * the Unicode pseudo code pages and the DBCS/MBCS pages are probed per character. */
@@ -124,6 +288,11 @@ iconv_t iconv_open(const char *tocode, const char *fromcode)
     cd->from = from;
     cd->to = to;
     cd->from_sbcs = lx2_is_sbcs(from);
+    cd->fast = 0;
+    if (cd->from_sbcs && to == LX2_CP_UTF8)
+        cd->fast = lx2_sbcs_tables(cd, from) ? 1 : 0;
+    else if (from == LX2_CP_UTF8 && lx2_is_sbcs(to))
+        cd->fast = lx2_sbcs_tables(cd, to) ? 2 : 0;
     return (iconv_t)cd;
 }
 
@@ -283,6 +452,14 @@ size_t iconv(iconv_t cdp, char **inbuf, size_t *inbytesleft, char **outbuf, size
     inleft = *inbytesleft;
     out = (unsigned char *)*outbuf;
     outleft = *outbytesleft;
+
+    if (cd->fast) {
+        size_t r = (cd->fast == 1) ? lx2_sbcs_to_utf8(cd, &in, &inleft, &out, &outleft)
+                                   : lx2_utf8_to_sbcs(cd, &in, &inleft, &out, &outleft);
+        *inbuf = (char *)in; *inbytesleft = inleft;
+        *outbuf = (char *)out; *outbytesleft = outleft;
+        return r;
+    }
 
     while (inleft > 0) {
         unsigned char tmp[LX2_CHUNK_CHARS * 4];

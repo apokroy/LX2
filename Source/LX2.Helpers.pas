@@ -316,6 +316,13 @@ type
     /// <c>xmlXPathFreeObject</c> unless consumed by <see cref="SelectNodes"/>.
     /// </returns>
     function  XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
+    /// <summary>
+    /// Whether attaching this node elsewhere can leave the document order index of the
+    /// document stale (see <c>xmlDocHelper.OrderElements</c>): an element that already
+    /// carries an index is being moved, and a fragment or any other container may hold
+    /// such elements. A fresh element and text-like nodes cannot.
+    /// </summary>
+    function  CarriesElementOrder: Boolean;
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
@@ -417,8 +424,13 @@ type
   xmlDocHelper = record helper for xmlDoc
   private type
     TSelf = type xmlDoc;
+  private const
+    /// <summary>Bit of <c>properties</c> that marks a document whose elements carry the
+    /// order index; libxml2 uses the low byte (<c>XML_DOC_*</c>) and nothing above.</summary>
+    LX2_DOC_ELEMENTS_ORDERED = 1 shl 24;
   private
     function  GetDocumentElement: xmlNodePtr; inline;
+    function  GetElementsOrdered: Boolean; inline;
     function  GetUrl: RawByteString; inline;
     function  GetXml: RawByteString;
     /// <summary>
@@ -525,6 +537,23 @@ type
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil; ResourceLoader: xmlResourceLoader = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
+    /// <summary>
+    /// Indexes the elements in document order (<c>xmlXPathOrderDocElems</c>). XPath sorts
+    /// its results in document order, and without the index the order of two elements is
+    /// found by walking the tree: among 10 000 sibling records that is 10 000 steps per
+    /// comparison, and a query like <c>//*[not(*)]</c> takes seconds instead of
+    /// milliseconds. <see cref="xmlNodeHelper.XPathEval"/> calls this on demand, so a
+    /// document is indexed once; the mutators of the helpers and of the DOM layer call
+    /// <see cref="ElementsChanged"/> when a node that may carry an index is attached, and
+    /// the next query indexes again. The index lives in the <c>content</c> field of element
+    /// nodes, which libxml2 keeps free for it (libxslt does the same). Moving elements
+    /// through libxml2 directly leaves the index stale: call ElementsChanged after that.
+    /// </summary>
+    procedure OrderElements;
+    /// <summary>Drops the mark set by <see cref="OrderElements"/>: the next XPath query
+    /// indexes the elements again.</summary>
+    procedure ElementsChanged; inline;
+    property  ElementsOrdered: Boolean read GetElementsOrdered;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
     property  URL: RawByteString read GetURL;
     property  Xml: RawByteString read GetXml;
@@ -868,9 +897,14 @@ end;
 
 function xmlNodeHelper.AppendChild(const NewChild: xmlNodePtr): xmlNodePtr;
 begin
+  var Moved := NewChild.CarriesElementOrder;
   Result := xmlAddChild(@Self, newChild);
   if Result <> nil then
+  begin
     xmlReconciliateNs(doc, Result);
+    if Moved and (doc <> nil) then
+      doc.ElementsChanged;
+  end;
 end;
 
 function xmlNodeHelper.ChildElementCount: NativeInt;
@@ -1287,12 +1321,17 @@ end;
 
 function xmlNodeHelper.InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
 begin
+  var Moved := NewChild.CarriesElementOrder;
   if RefChild = nil then
     Result := xmlAddChild(@Self, NewChild)
   else
     Result := xmlAddPrevSibling(RefChild, NewChild);
   if Result <> nil then
+  begin
     xmlReconciliateNs(doc, Result);
+    if Moved and (doc <> nil) then
+      doc.ElementsChanged;
+  end;
 end;
 
 function xmlNodeHelper.IsBlank: Boolean;
@@ -1355,14 +1394,34 @@ end;
 
 function xmlNodeHelper.ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
 begin
+  var Moved := NewChild.CarriesElementOrder;
   Result := xmlReplaceNode(OldChild, NewChild);
   xmlReconciliateNs(doc, @Self);
+  if Moved and (doc <> nil) then
+    doc.ElementsChanged;
+end;
+
+function xmlNodeHelper.CarriesElementOrder: Boolean;
+begin
+  case &type of
+    XML_ELEMENT_NODE:
+      Result := content <> nil;
+    XML_TEXT_NODE, XML_CDATA_SECTION_NODE, XML_COMMENT_NODE, XML_PI_NODE, XML_ATTRIBUTE_NODE:
+      Result := False;
+  else
+    Result := True;
+  end;
 end;
 
 function xmlNodeHelper.XPathEval(const queryString: RawByteString; const namespaces: xmlNamespaces; ErrorHandler: xmlDocErrorHandler): xmlXPathObjectPtr;
 var
   ecb: TXmlErrorCallback;
 begin
+  // Results are sorted in document order, and without the index the order of two
+  // elements is found by walking the tree: quadratic in a document of wide siblings.
+  if (doc <> nil) and not doc.ElementsOrdered then
+    doc.OrderElements;
+
   var ctx := xmlXPathNewContext(doc);
   try
     xmlXPathSetContextNode(@Self, ctx);
@@ -1961,11 +2020,30 @@ begin
   Result := xmlSaveFinish(ctx) = XML_ERR_OK;
 end;
 
+function xmlDocHelper.GetElementsOrdered: Boolean;
+begin
+  Result := properties and LX2_DOC_ELEMENTS_ORDERED <> 0;
+end;
+
+procedure xmlDocHelper.OrderElements;
+begin
+  xmlXPathOrderDocElems(@Self);
+  properties := properties or LX2_DOC_ELEMENTS_ORDERED;
+end;
+
+procedure xmlDocHelper.ElementsChanged;
+begin
+  properties := properties and not LX2_DOC_ELEMENTS_ORDERED;
+end;
+
 procedure xmlDocHelper.SetDocumentElement(const Value: xmlNodePtr);
 begin
+  var Moved := (Value <> nil) and Value.CarriesElementOrder;
   var Old := xmlDocSetRootElement(@Self, Value);
   if Old <> nil then
     xmlFreeNode(Old);
+  if Moved then
+    ElementsChanged;
 end;
 
 function xmlDocHelper.ToAnsi(const Encoding: string; const Format: Boolean): RawByteString;

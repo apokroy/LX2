@@ -257,7 +257,19 @@ Everything the upper layers share:
 Record helpers for `xmlDoc`, `xmlNode`, `xmlAttr` and `xmlNamespaces`. A helper adds no
 state: `xmlDocPtr` stays a plain pointer, memory is owned by libxml2 and released with
 `Doc.Free` (`xmlFreeDoc`). This is the layer to use when performance matters or when the
-code already thinks in libxml2 terms.
+code already thinks in libxml2 terms. The first XPath query on a document indexes its
+elements in document order (`xmlXPathOrderDocElems`; `OrderElements`, `ElementsChanged`
+and `ElementsOrdered` on `xmlDoc`): without the index libxml2 sorts results by walking
+the tree, which is quadratic among thousands of sibling elements. The helpers and the DOM
+layer drop the index when an indexed element is moved; after moving elements through
+libxml2 directly, call `ElementsChanged`. The blocks themselves come from the C runtime heap
+by default; `LX2Lib.UseHostMemoryManager := True` before `Initialize` points libxml2 at
+`GetMem`/`ReallocMem`/`FreeMem` instead, so a document lives in the same heap as the
+strings around it and a faster manager installed by the host (FastMM5 and the like)
+serves the parser: 20–35 % faster in a single thread, but the C heap scales better when
+several threads parse at once, so a server is better off with the default. Builds with
+`DEBUG` defined use the library's own debug allocator either way, so that `xmlMemUsed`
+reports what the library holds.
 
 Creating and loading:
 

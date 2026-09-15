@@ -1582,13 +1582,18 @@ begin
   if (NewNode.doc <> nil) and (Parent.doc <> NewNode.doc) and (NewNode.doc._private <> nil) then
     TXmlDocument(NewNode.doc._private)._Release;
 
+  var Moved := NewNode.CarriesElementOrder;
   if AfterNode = nil then
     Result := xmlAddChild(Parent, NewNode)
   else
     Result := xmlAddNextSibling(NewNode, AfterNode);
 
   if Result <> nil then
+  begin
     xmlReconciliateNs(Result.doc, Result);
+    if Moved and (Result.doc <> nil) then
+      Result.doc.ElementsChanged;
+  end;
 
   if DocChanged and (Result.doc <> nil) and (Result.doc._private <> nil) then
     TXmlDocument(Result.doc._private)._AddRef;

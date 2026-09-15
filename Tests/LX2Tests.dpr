@@ -5,8 +5,12 @@ program LX2Tests;
 {$ENDIF}
 {$STRONGLINKTYPES ON}
 uses
+  {$IFDEF DEBUG}
+  // Leak monitoring is a debug affair: RAD Studio ships the FastMM4 monitor of DUnitX
+  // as a debug DCU only, and a release build runs the tests without it.
   FastMM4,
   DUnitX.MemoryLeakMonitor.FastMM4,
+  {$ENDIF}
   System.SysUtils,
   {$IFDEF TESTINSIGHT}
   TestInsight.DUnitX,

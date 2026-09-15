@@ -27,6 +27,10 @@ type
     [Test]
     procedure TestSelectSingleNodeEmptyResultDoesNotLeak;
     [Test]
+    procedure TestXPathIndexesElementsOnDemand;
+    [Test]
+    procedure TestXPathOrderSurvivesMovedElements;
+    [Test]
     procedure TestSelectSingleNodeResolvesNamespacesInScope;
     [Test]
     procedure TestGetElementsByTagNameWalksTheWholeSubtree;
@@ -181,10 +185,15 @@ begin
 end;
 
 // Issue #5: an XPath query that is valid but selects nothing left the xmlXPathObject
-// unreleased. LX2Lib.Load installs the libxml2 debug allocator, so xmlMemUsed counts
-// every byte the library holds: it must not grow across a query with an empty result.
+// unreleased. In a debug build LX2Lib.Load installs the libxml2 debug allocator, so
+// xmlMemUsed counts every byte the library holds: it must not grow across a query with
+// an empty result. A release build routes the library to the Delphi memory manager and
+// xmlMemUsed stays 0, so the check has nothing to measure there.
 procedure TXMLHelpersTest.TestSelectSingleNodeEmptyResultDoesNotLeak;
 begin
+{$IFNDEF DEBUG}
+  Assert.Pass('xmlMemUsed accounts only for the debug allocator of a debug build');
+{$ENDIF}
   var doc := xmlDoc.Create('<root><item id="1"/><item id="2"/></root>', []);
   Assert.AreNotEqual<Pointer>(doc, nil);
   try
@@ -392,6 +401,48 @@ begin
 end;
 
 { TXMLDOMTest }
+
+// The elements are indexed in document order by the first XPath query, once: the index
+// is what keeps the sorting of results linear in documents of thousands of siblings.
+procedure TXMLHelpersTest.TestXPathIndexesElementsOnDemand;
+begin
+  var doc := xmlDoc.Create('<r><a/><b/><c/></r>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    Assert.IsFalse(doc.ElementsOrdered, 'a fresh document is not indexed');
+    Assert.AreEqual<Integer>(4, Length(doc.documentElement.SelectNodes('//*')));
+    Assert.IsTrue(doc.ElementsOrdered, 'the first query indexes the document');
+    Assert.IsTrue(NativeInt(doc.documentElement.content) < 0, 'the index is a negative number in content');
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// Moving an element that carries an index drops the mark, so the next query indexes the
+// document again and reports the new order; a stale index would have kept the old one.
+procedure TXMLHelpersTest.TestXPathOrderSurvivesMovedElements;
+begin
+  var doc := xmlDoc.Create('<r><a/><b/><c/></r>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    var root := doc.documentElement;
+    var a := root.children;
+    var b := a.next;
+    var c := b.next;
+    Assert.AreEqual<Integer>(3, Length(root.SelectNodes('/r/*')));   // indexes a, b, c
+    root.AppendChild(root.RemoveChild(a));                            // b, c, a
+    Assert.IsFalse(doc.ElementsOrdered, 'moving an indexed element drops the mark');
+    var nodes := root.SelectNodes('/r/*');
+    Assert.AreEqual<Integer>(3, Length(nodes));
+    Assert.AreEqual<Pointer>(b, nodes[0]);
+    Assert.AreEqual<Pointer>(c, nodes[1]);
+    Assert.AreEqual<Pointer>(a, nodes[2]);
+    Assert.AreEqual<Pointer>(a, root.SelectSingleNode('(//*)[last()]'));
+    Assert.IsTrue(doc.ElementsOrdered, 'the query after the move indexed again');
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
 
 procedure TXMLDOMTest.Setup;
 begin
