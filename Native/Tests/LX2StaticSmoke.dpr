@@ -9,6 +9,8 @@ program LX2StaticSmoke;
 
 uses
   System.SysUtils,
+  System.Classes,
+  System.IOUtils,
   libxml2.API,
   libxslt.API,
   LX2.Static;
@@ -154,13 +156,49 @@ begin
     xmlFreeDoc(Doc);
 end;
 
+// Loading by file name goes through the stat() of the C runtime (on Linux the statx shim):
+// an existing file loads, a directory and a missing file are refused.
+procedure TestFile;
+var
+  Dir, Name: string;
+  Doc: xmlDocPtr;
+  Bytes: TBytes;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath, 'lx2smoke-' + IntToStr(Random(MaxInt)));
+  TDirectory.CreateDirectory(Dir);
+  try
+    Name := TPath.Combine(Dir, 'doc.xml');
+    Bytes := TEncoding.UTF8.GetBytes('<root><a/></root>');
+    TFile.WriteAllBytes(Name, Bytes);
+
+    Doc := xmlReadFile(PUTF8Char(UTF8Encode(Name)), nil, 0);
+    Check(Doc <> nil, 'xmlReadFile loads an existing file');
+    if Doc <> nil then
+      xmlFreeDoc(Doc);
+
+    Doc := xmlReadFile(PUTF8Char(UTF8Encode(Dir)), nil, XML_PARSE_NOERROR or XML_PARSE_NOWARNING);
+    Check(Doc = nil, 'xmlReadFile refuses a directory');
+    if Doc <> nil then
+      xmlFreeDoc(Doc);
+
+    Doc := xmlReadFile(PUTF8Char(UTF8Encode(Name + '.missing')), nil, XML_PARSE_NOERROR or XML_PARSE_NOWARNING);
+    Check(Doc = nil, 'xmlReadFile refuses a missing file');
+    if Doc <> nil then
+      xmlFreeDoc(Doc);
+  finally
+    TDirectory.Delete(Dir, True);
+  end;
+end;
+
 begin
   try
+    Randomize;
     TestLoad;
     TestParseAndEncodings;
     TestXPath;
     TestXslt;
     TestParseError;
+    TestFile;
     LX2Lib.Unload;
     Writeln(Format('passed %d, failed %d', [Passed, Failed]));
     if Failed > 0 then

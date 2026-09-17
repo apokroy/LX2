@@ -44,6 +44,13 @@ interface
 {$RANGECHECKS OFF}
 {$OVERFLOWCHECKS OFF}
 
+// The SSE2 routines are written against the Win64 calling convention
+// (RCX, RDX, R8) and need the inline assembler, which the LLVM-based
+// compilers do not have; every other target takes the Pascal path.
+{$IF Defined(CPUX64) and Defined(MSWINDOWS) and Defined(ASSEMBLER) and not Defined(PUREPASCAL)}
+  {$DEFINE LX2_ASM_WIN64}
+{$ENDIF}
+
 uses
   {$IFDEF MSWINDOWS}
    Winapi.Windows,
@@ -758,7 +765,7 @@ begin
   end;
 end;
 
-{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+{$IFDEF LX2_ASM_WIN64}
 /// <summary>SSE2 UTF-16 code unit count over whole 16-byte blocks.</summary>
 /// <remarks><paramref name="Size"/> must be a multiple of 16; the caller keeps the tail.</remarks>
 function Utf8toUtf16CountBlocks(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
@@ -814,7 +821,7 @@ end;
 {$ENDIF}
 
 function Utf8toUtf16Count(Input: PUtf8Char; Size: NativeUInt): NativeUInt;
-{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+{$IFDEF LX2_ASM_WIN64}
 var
   Blocks: NativeUInt;
 begin
@@ -906,7 +913,7 @@ begin
   Result := Utf8toUtf16CountAndLen(Input, ByteLen);
 end;
 
-{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+{$IFDEF LX2_ASM_WIN64}
 function xmlStrLen(S: xmlCharPtr): NativeUInt;
 asm
       TEST     RCX, RCX
@@ -1050,7 +1057,7 @@ begin
   Move(Name^, (PByte(Result) + L1 + 1)^, L2);
 end;
 
-{$IF Defined(CPUX64) and not Defined(PUREPASCAL)}
+{$IFDEF LX2_ASM_WIN64}
 /// <summary>
 /// Narrows leading ASCII UTF-16 units to bytes, 16 at a time, and returns how
 /// many were converted; stops at the first block holding a unit above $7F.

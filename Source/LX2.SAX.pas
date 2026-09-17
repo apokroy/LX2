@@ -33,6 +33,9 @@ uses
   {$IFDEF MSWINDOWS}
   Winapi.Windows,
   {$ENDIF}
+  {$IFDEF POSIX}
+  Posix.Unistd,
+  {$ENDIF}
   System.SysUtils, System.Classes,
   libxml2.API, LX2.Types, RttiDispatch;
 

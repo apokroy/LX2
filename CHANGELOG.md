@@ -18,6 +18,11 @@
 
 ### Fixed
 
+- `LX2.Types` did not compile for Linux64: the SSE2 routines are inline assembler written
+  against the Win64 calling convention, and they were guarded by `CPUX64` alone. They are
+  now compiled only for Win64 with the inline assembler available; every other target takes
+  the Pascal path. `LX2.SAX` names `Posix.Unistd` on POSIX, which removes the H2443 hint
+  about `FileClose`.
 - XPath queries whose results need sorting were quadratic in documents with thousands of
   sibling elements: without an index libxml2 finds the order of two elements by walking
   the tree, and `//*[not(*)]` on a 7.6 MB payment packet took 26 seconds. The first query
@@ -30,6 +35,23 @@
 
 ### Added
 
+- Static build for Linux64: `Native\Build.ps1 -Platforms Linux64` compiles libxml2 and
+  libxslt for `x86_64-linux-gnu` into `Native\Lib\Linux64\liblx2native.a`, and
+  `LX2.Static.pas` gets a Linux half that declares the entry points as
+  `external 'liblx2native.a'`. With `LX2.Static` in a uses clause a Linux executable needs
+  neither `libxml2.so.16` nor `libxslt.so`; the application puts `Native\Lib\Linux64` on its
+  library path. The same set of entry points is bound as on Win64. `-Test` links the smoke
+  test with dcclinux64 and runs it in WSL.
+- The Linux archive runs on glibc 2.28 and later (Ubuntu 20.04 has 2.31). The objects are
+  built with `-std=gnu11` and without `_GNU_SOURCE`: with it the headers of glibc 2.38
+  redirect `sscanf` and `strtoul` to `__isoc23_*`, and the executable stops loading on
+  older distributions. `stat()` goes through `Native\Source\shim_linux` (`lx2_stat` on top
+  of `statx`), because `stat64` is a function only since glibc 2.33. `Build.ps1` keeps a
+  closed list of the glibc names the objects may reference. An application for the oldest
+  target still has to be linked against that target's SDK: the symbol versions of the RTL
+  calls come from there.
+- `LX2StaticSmoke` loads a document by file name and checks that a directory and a missing
+  file are refused; the file path of the C runtime was not covered before.
 - `Native\Pgo.ps1`: profile-guided build of the objects with another LLVM (upstream or
   the one of Visual Studio) over a corpus of documents; `Build.ps1 -Clang`/`-Profile`
   underneath it. Measured on real documents: DOM parse −10 %, push parse −30 %, C14N −20 %.
