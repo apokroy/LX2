@@ -8,8 +8,6 @@ the library follows the W3C DOM model, and where the two disagree, MSXML compati
 MIT licensed. libxml2 and libxslt keep their own MIT-style licences (`LIBXML2.COPYRIGHT`,
 `LIBXSLT.COPYRIGHT`).
 
-> [!IMPORTANT]
-> **Starting with this release libxml2 and libxslt are linked statically on Windows x64.**
 > The libraries are compiled into COFF objects that ship with the repository
 > (`Native\Lib\Win64`) and are linked into your executable by the `LX2.Static` unit.
 > `libxml2.dll` and `libxslt.dll` are no longer required and no longer have to be
@@ -446,4 +444,4 @@ every minor libxml2 release changes the API; upstream maintains only the newest 
 - The binding has been exercised by synthetic tests and the DUnitX suite in `Tests`, and
   the static build on Windows x64 is what the author's own applications use.
 - Win32 has not been tested.
-- Planned: XML documentation for all significant sources; wrappers for the reader API.
+- Planned: wrappers for the reader API.
