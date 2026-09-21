@@ -73,6 +73,7 @@ type
     property  Line: Integer read Get_line;
     property  LinePos: Integer read Get_linepos;
     property  FilePos: Integer read Get_filepos;
+    property  Level: xmlErrorLevel read Get_Level;
   end;
 
   TXMLErrors = class(TDispatchInvokable, IXMLErrors)
@@ -101,7 +102,10 @@ type
     procedure Reset;
     function  MainError: IXMLParseError;
     function  GetEnumerator: IXMLErrorEnumerator;
+    property  _newEnum: IXMLErrorEnumerator read Get__newEnum;
+    property  Next: IXMLParseError read Get_next;
     property  Count: NativeInt read Get_Count;
+    property  Item[Index: NativeInt]: IXMLParseError read Get_Item;
     property  Items[Index: NativeInt]: IXMLParseError read Get_Item; default;
   end;
 
@@ -137,6 +141,7 @@ type
     procedure Clear;
     function  GetEnumerator: IXSLTErrorEnumerator;
     property  Count: NativeInt read Get_Count;
+    property  Item[Index: NativeInt]: IXSLTError read Get_Item;
     property  Items[Index: NativeInt]: IXSLTError read Get_Item; default;
   end;
 
@@ -167,7 +172,7 @@ type
     { Delphi enumerable }
     function  GetEnumerator: IXMLEnumerator;
     function  ToArray: TArray<IXMLNode>; virtual;
-    property  Items[Index: NativeInt]: IXMLNode read Get_Item; default;
+    property  Item[Index: NativeInt]: IXMLNode read Get_Item; default;
     property  Length: NativeInt read Get_Length;
   end;
 
@@ -561,6 +566,7 @@ type
     function  Get_Value: string;
     procedure Set_Value(const Value: string);
     property  Name: string read Get_Name;
+    property  OwnerElement: IXMLElement read Get_OwnerElement;
     property  Value: string read Get_Value write Set_value;
   end;
 
@@ -611,6 +617,7 @@ type
     /// </remarks>
     procedure Set_Value(const attrValue: string);
     property  Name: string read Get_Name;
+    property  OwnerElement: IXMLElement read Get_OwnerElement;
     property  Value: string read Get_Value write Set_value;
   public
     destructor Destroy; override;
@@ -863,11 +870,14 @@ type
     property  ValidateOnParse: Boolean read Get_ValidateOnParse write Set_ValidateOnParse;
     property  ResolveExternals: Boolean read Get_ResolveExternals write Set_ResolveExternals;
     property  PreserveWhiteSpace: Boolean read Get_PreserveWhiteSpace write Set_PreserveWhiteSpace;
+    property  Schemas: IXMLSchemaCollection read Get_Schemas write Set_Schemas;
   public
     constructor Create; overload;
     constructor Create(doc: xmlDocPtr; DocOwner: Boolean); overload;
     destructor Destroy; override;
 
+    function  LoadXML(const XML: RawByteString): Boolean; overload;
+    function  LoadXML(const XML: string): Boolean; overload;
     function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean; overload;
     function  LoadXML(const XML: string; const Options: TXmlParserOptions): Boolean; overload;
     function  LoadFromBytes(const Data: TBytes): Boolean;
@@ -2368,7 +2378,11 @@ begin
       TXmlDocument(NewNode.NodePtr.doc._private)._Release;
 
     ResolveUnlinked(NodePtr, NewNode);
-    var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, TXMLNode(RefChild).NodePtr);
+    // A nil RefChild means "append", as in DOM: insertBefore(x, parent.firstChild) on an empty parent
+    var RefNode: xmlNodePtr := nil;
+    if RefChild <> nil then
+      RefNode := TXMLNode(RefChild).NodePtr;
+    var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, RefNode);
     Result := Cast(AddedNode);
 
     if DocChanged and (AddedNode.doc <> nil) and (AddedNode.doc._private <> nil) then
@@ -3519,6 +3533,16 @@ begin
   Result := SetNewDoc(xmlDoc.Create(Stream, Options, Encoding, ErrorCallback)) <> nil;
   if Result and FValidateOnParse and (FSchemas <> nil) then
     Result := FSchemas.Validate(Self);
+end;
+
+function TXMLDocument.LoadXML(const XML: RawByteString): Boolean;
+begin
+  Result := LoadXML(XML, DefaultParserOptions);
+end;
+
+function TXMLDocument.LoadXML(const XML: string): Boolean;
+begin
+  Result := LoadXML(XML, DefaultParserOptions);
 end;
 
 function TXMLDocument.LoadXML(const XML: string; const Options: TXmlParserOptions): Boolean;

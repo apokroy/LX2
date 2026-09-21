@@ -1,6 +1,6 @@
-# Changelog
+﻿# Changelog
 
-## Unreleased
+## v1.1.0 — 2026-09-21
 
 ### Changed
 
@@ -18,6 +18,41 @@
 
 ### Fixed
 
+- `SelectSingleNode` with a path made of names only (`a`, `a/b`, `/a/b`, `//a/b`) did not
+  follow XPath: the fast evaluator matched the first step against the context node itself,
+  so `element.SelectSingleNode('child')` returned nil while `SelectNodes('child')` found the
+  node; an absolute path started at the context node instead of the document; `//a/b` missed a
+  match nested in another `a` and could return a node that is not the first in document
+  order. The evaluator is rewritten: a relative path starts at the children of the context
+  node, `/` and `//` at its document, and steps after a `//` are checked against the ancestors
+  of every candidate in document order. A test compares it with libxml2 over a set of paths
+  and context nodes. Parsing no longer writes into the query string, and a path ending with
+  `/` goes to libxml2. The namespace rule is unchanged: a name without a prefix fits any
+  namespace.
+- Late-bound calls (`IDispatch`) took the first method of the name whatever the arguments:
+  `setAttribute(name, 42)`, `toString(True)`, `save(path)` reached the wrong overload or
+  failed with "Wrong parameter count". The overload is now chosen by the number and types of
+  the arguments. `IXMLDocument.LoadXML` has forms without `Options` instead of a default
+  value, which RTTI does not keep: `doc.loadXML(text)` works late-bound. Reading a plain
+  property with a bare method call no longer ends in "Method not found".
+- Late-bound callers (`IDispatch`, a `Variant` in a script) could not reach members that the
+  implementing class declared under another name than the interface, or not at all: interface
+  properties carry no RTTI, so dispatch names come from the class. `item` of every node list
+  but the attribute list (the class called it `Items`), `schemas` of a document,
+  `ownerElement` of an attribute, `level` of a parse error, `next` and `_newEnum` of the error
+  collection failed with a member-not-found error. `IXMLErrors` and `IXSLTErrors` gained `Item`
+  next to the default `Items`, the MSXML name. A test now checks that every `Get_X`/`Set_X` of
+  an implemented interface resolves as `X`.
+- A property of a class type (`TXMLDocument.Errors`) came back to a late-bound caller as a
+  value that could not be called; objects that implement `IDispatch` are now returned as
+  `IDispatch`, like interfaces.
+- A simple path (`//name`, `/a/b`, no predicates) queried on a document crashed with an
+  access violation when the document had been parsed from memory, and an absolute path
+  (`/a/b`) found nothing on any document: the fast evaluator compared the document node
+  itself with the first step, and a document parsed from memory has no name. A query on a
+  document now starts at its root element, and only elements are ever compared with a step.
+- `IXMLNode.InsertBefore` with a nil reference node crashed instead of appending; the usual
+  source of the nil is `parent.FirstChild` of an empty parent.
 - `LX2.Types` did not compile for Linux64: the SSE2 routines are inline assembler written
   against the Win64 calling convention, and they were guarded by `CPUX64` alone. They are
   now compiled only for Win64 with the inline assembler available; every other target takes
@@ -42,14 +77,13 @@
   neither `libxml2.so.16` nor `libxslt.so`; the application puts `Native\Lib\Linux64` on its
   library path. The same set of entry points is bound as on Win64. `-Test` links the smoke
   test with dcclinux64 and runs it in WSL.
-- The Linux archive runs on glibc 2.28 and later (Ubuntu 20.04 has 2.31). The objects are
-  built with `-std=gnu11` and without `_GNU_SOURCE`: with it the headers of glibc 2.38
-  redirect `sscanf` and `strtoul` to `__isoc23_*`, and the executable stops loading on
-  older distributions. `stat()` goes through `Native\Source\shim_linux` (`lx2_stat` on top
-  of `statx`), because `stat64` is a function only since glibc 2.33. `Build.ps1` keeps a
-  closed list of the glibc names the objects may reference. An application for the oldest
-  target still has to be linked against that target's SDK: the symbol versions of the RTL
-  calls come from there.
+- The Linux archive runs on glibc 2.33 and later (`stat64` is a function only since then);
+  the oldest system it is meant for is Ubuntu 22.04 with glibc 2.35. The objects are built
+  with `-std=gnu11` and without `_GNU_SOURCE`: with it the headers of glibc 2.38 redirect
+  `sscanf` and `strtoul` to `__isoc23_*`, and the executable stops loading on older
+  distributions. `Build.ps1` keeps a closed list of the glibc names the objects may
+  reference. An application still has to be linked against the SDK of the oldest system it
+  runs on: the symbol versions of the RTL calls come from there.
 - `LX2StaticSmoke` loads a document by file name and checks that a directory and a missing
   file are refused; the file path of the C runtime was not covered before.
 - `Native\Pgo.ps1`: profile-guided build of the objects with another LLVM (upstream or

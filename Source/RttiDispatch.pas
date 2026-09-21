@@ -235,6 +235,8 @@ type
     TRttiInfo = record
       Name: string;
       Method: TRttiMethod;
+      // Every method of that name in the class: a late-bound call picks one by its arguments.
+      Overloads: TArray<TRttiMethod>;
       Prop: TRttiProperty;
       IndexedProp: TRttiIndexedProperty;
     end;
@@ -255,6 +257,7 @@ type
     Rtti: PClassRtti;
   protected
     procedure InitRtti;
+    class function FindOverload(const Info: TRttiInfo; const Params: TDispParams): TRttiMethod; static;
   protected
     function  GetTypeInfoCount(out Count: Integer): HResult; stdcall;
     function  GetTypeInfo(Index, LocaleID: Integer; out TypeInfo): HResult; stdcall;
@@ -335,6 +338,31 @@ begin
   Result := Result.Cast(Typ.Handle);
 end;
 
+// An object or an interface reaches a late-bound caller as IDispatch: in any other form
+// the caller cannot go on calling its members.
+function VariantFromValue(const Value: TValue): Variant;
+var
+  Disp: IDispatch;
+begin
+  if Value.Kind = tkClass then
+  begin
+    if Supports(Value.AsObject, IDispatch, Disp) then
+      Exit(Disp);
+  end;
+
+  Result := Value.AsVariant;
+  if TVarData(Result).VType = varUnknown then
+  begin
+    if Supports(IUnknown(TVarData(Result).VUnknown), IDispatch, Disp) then
+      Result := Disp;
+  end
+  else if TVarData(Result).VType = (varUnknown or varByRef) then
+  begin
+    if Supports(IUnknown(TVarData(Result).VPointer^), IDispatch, Disp) then
+      Result := Disp;
+  end;
+end;
+
 { TDispatchInvokable }
 
 class constructor TDispatchInvokable.Create;
@@ -391,8 +419,19 @@ begin
       var Methods := Intrfs[I].GetDeclaredMethods;
       for var Method in Methods do
       begin
+        var Known := False;
+        for var Member in Rtti.Members do
+          if SameText(Member.Name, Method.Name) then
+          begin
+            Known := True;
+            Break;
+          end;
+        if Known then
+          Continue;
+
         Info.Name := Method.Name;
         Info.Method := Typ.GetMethod(Method.Name);
+        Info.Overloads := Typ.GetMethods(Method.Name);
         Info.Prop := nil;
         Info.IndexedProp := nil;
         Rtti.Members := Rtti.Members + [Info];
@@ -406,6 +445,7 @@ begin
       begin
         Info.Name := Prop.Name;
         Info.Method := nil;
+        Info.Overloads := nil;
         Info.IndexedProp := nil;
         Info.Prop := Prop;
         Rtti.Members := Rtti.Members + [Info];
@@ -416,6 +456,7 @@ begin
       begin
         Info.Name := Prop.Name;
         Info.Method := nil;
+        Info.Overloads := nil;
         Info.Prop := nil;
         Info.IndexedProp := Prop;
         Rtti.Members := Rtti.Members + [Info];
@@ -425,6 +466,109 @@ begin
     end;
   finally
     TMonitor.Exit(RttiLock);
+  end;
+end;
+
+// How well a parameter of the given type takes the argument: 0 - it cannot, the higher the
+// closer. A string parameter takes anything, since arguments are converted with VarToStr.
+function ArgumentFit(const Arg: TVarData; ParamType: TRttiType): Integer;
+begin
+  if ParamType = nil then
+    Exit(1);
+
+  var IsDateTime := ParamType.Handle = TypeInfo(TDateTime);
+  var IsBoolean := ParamType.Handle = TypeInfo(Boolean);
+  case Arg.VType and varTypeMask of
+    varOleStr, varUString, varString:
+      case ParamType.TypeKind of
+        tkUString: Result := 3;
+        tkWString, tkLString, tkString: Result := 2;
+        tkVariant: Result := 1;
+      else
+        Result := 0;
+      end;
+    varBoolean:
+      if IsBoolean then
+        Result := 3
+      else if ParamType.TypeKind in [tkUString, tkWString, tkLString, tkString, tkVariant] then
+        Result := 1
+      else
+        Result := 0;
+    varShortInt, varSmallint, varInteger, varByte, varWord, varUInt32, varInt64, varUInt64:
+      case ParamType.TypeKind of
+        tkInteger, tkInt64: Result := 3;
+        tkFloat: if IsDateTime then Result := 1 else Result := 2;
+        tkUString, tkWString, tkLString, tkString, tkVariant: Result := 1;
+        tkEnumeration: if IsBoolean then Result := 0 else Result := 2;
+      else
+        Result := 0;
+      end;
+    varDate:
+      case ParamType.TypeKind of
+        tkFloat: if IsDateTime then Result := 3 else Result := 2;
+        tkUString, tkWString, tkLString, tkString, tkVariant: Result := 1;
+      else
+        Result := 0;
+      end;
+    varSingle, varDouble, varCurrency:
+      case ParamType.TypeKind of
+        tkFloat: if IsDateTime then Result := 2 else Result := 3;
+        tkUString, tkWString, tkLString, tkString, tkVariant: Result := 1;
+      else
+        Result := 0;
+      end;
+    varDispatch, varUnknown:
+      case ParamType.TypeKind of
+        tkInterface: Result := 3;
+        tkVariant: Result := 1;
+      else
+        Result := 0;
+      end;
+  else
+    Result := 1;
+  end;
+end;
+
+// The overload with as many parameters as there are arguments whose types suit the
+// arguments best; the first declared one among equals. RTTI does not keep default values
+// of parameters, so a call that relies on them finds nothing here.
+class function TDispatchInvokable.FindOverload(const Info: TRttiInfo; const Params: TDispParams): TRttiMethod;
+begin
+  Result := nil;
+  var BestFit := -1;
+  for var Method in Info.Overloads do
+  begin
+    var Pars := Method.GetParameters;
+    if Length(Pars) <> Params.cArgs then
+      Continue;
+
+    var Fit := 0;
+    for var I := 0 to Params.cArgs - 1 do
+    begin
+      var ArgFit := ArgumentFit(TVarData(Params.rgvarg[Params.cArgs - I - 1]), Pars[I].ParamType);
+      if ArgFit = 0 then
+      begin
+        Fit := -1;
+        Break;
+      end;
+      Inc(Fit, ArgFit);
+    end;
+
+    if Fit > BestFit then
+    begin
+      BestFit := Fit;
+      Result := Method;
+    end;
+  end;
+
+  // Nothing suits by type: the conversion of the arguments reports what is wrong. Nothing
+  // suits by count: the first overload names the method in the message about the count.
+  if Result = nil then
+  begin
+    for var Method in Info.Overloads do
+      if Length(Method.GetParameters) = Params.cArgs then
+        Exit(Method);
+    Result := Info.Method;
   end;
 end;
 
@@ -464,11 +608,9 @@ var
   Args: TArray<TValue>;
   Method: TRttiMethod;
   Info: TRttiInfo;
-  Disp: Pointer;
 begin
   Info := Rtti.Members[DispID];
 
-  Method := nil;
   if Flags and (DISPATCH_PROPERTYPUT or DISPATCH_PROPERTYPUTREF) <> 0 then
   begin
     if Info.Prop <> nil then
@@ -486,17 +628,14 @@ begin
   begin
     if Info.Prop <> nil then
     begin
-      Res^ := Info.Prop.GetValue(Self).AsVariant;
-      if PVarData(Res).VType = varUnknown then
-        if Supports(IUnknown(PVarData(Res).VUnknown), IDispatch, Disp) then
-          Res^ := IDispatch(Disp);
+      Res^ := VariantFromValue(Info.Prop.GetValue(Self));
       Exit(S_OK);
     end;
 
     if Info.IndexedProp <> nil then
       Method := Info.IndexedProp.ReadMethod
     else if (Flags and DISPATCH_METHOD) <> 0 then
-      Method := Info.Method
+      Method := FindOverload(Info, DispParams)
     else
       Method := nil;
   end
@@ -506,7 +645,8 @@ begin
     begin
       var Value := Info.Prop.GetValue(Self);
       if Res <> nil then
-        Res^ := Value.AsVariant;
+        Res^ := VariantFromValue(Value);
+      Exit(S_OK);
     end
     else if Info.IndexedProp <> nil then
       Method := Info.IndexedProp.ReadMethod
@@ -514,7 +654,7 @@ begin
       Method := nil;
   end
   else
-    Method := Info.Method;
+    Method := FindOverload(Info, DispParams);
 
   if Method = nil then
   begin
@@ -537,19 +677,7 @@ begin
 
   var Value := Method.Invoke(Self, Args);
   if Res <> nil then
-  begin
-    Res^ := Value.AsVariant;
-    if PVarData(Res).VType = varUnknown then
-    begin
-      if Supports(IUnknown(PVarData(Res).VUnknown), IDispatch, Disp) then
-        Res^ := IDispatch(Disp);
-    end
-    else if PVarData(Res).VType = (varUnknown or varByRef) then
-    begin
-      if Supports(IUnknown(PVarData(Res).VPointer^), IDispatch, Disp) then
-        Res^ := IDispatch(Disp);
-    end;
-  end;
+    Res^ := VariantFromValue(Value);
 
   for var I := 0 to DispParams.cArgs - 1 do
     Variant(TVarData(DispParams.rgvarg[I])) := Args[DispParams.cArgs - I - 1].AsVariant;

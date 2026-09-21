@@ -31,8 +31,8 @@
     archive Lib\Linux64\liblx2native.a; dcclinux64 has no {$L}, so LX2.Static.pas declares
     the entry points as external 'liblx2native.a'. The shim directory is not used there:
     the C runtime, iconv and pthreads are glibc. The objects may only reference the glibc
-    names listed in $GlibcImports; the youngest of them, statx, sets the floor at glibc 2.28
-    (Ubuntu 20.04 has 2.31). stat() goes through Source\shim_linux, see lx2_stat.h.
+    names listed in $GlibcImports; the youngest of them, stat64, sets the floor at glibc 2.33
+    (the oldest target, Ubuntu 22.04, has 2.35).
 
 .PARAMETER Platforms
     Subset of Win64, Linux64 to compile. Both by default. LX2.Static.pas is always generated
@@ -283,9 +283,9 @@ function Build-Group([string]$Prefix, [string]$Dir, [string[]]$Include, [string]
     }
 }
 
-# Names the Linux objects may take from glibc (libc, libm, libpthread). The youngest is statx
-# (glibc 2.28), which is the floor of the archive; stat64 must not come back, it is a function
-# only since glibc 2.33 (Source\shim_linux\lx2_stat.h). The list is closed on
+# Names the Linux objects may take from glibc (libc, libm, libpthread). The youngest is stat64,
+# a function since glibc 2.33, which is the floor of the archive; the oldest target, Ubuntu
+# 22.04, has 2.35. The list is closed on
 # purpose: with _GNU_SOURCE, or with -std=c2x, the glibc 2.38 headers redirect sscanf and
 # strtoul to __isoc23_* and the executable stops loading on every older distribution.
 $GlibcImports = @(
@@ -296,7 +296,7 @@ $GlibcImports = @(
     'pthread_cond_destroy', 'pthread_cond_init', 'pthread_cond_signal', 'pthread_cond_wait', 'pthread_getspecific',
     'pthread_key_create', 'pthread_key_delete', 'pthread_mutex_destroy', 'pthread_mutex_init', 'pthread_mutex_lock',
     'pthread_mutex_unlock', 'pthread_once', 'pthread_self', 'pthread_setspecific', 'read', 'realloc', 'snprintf',
-    'statx', 'stderr', 'stdin', 'stdout', 'strcat', 'strchr', 'strcmp', 'strlen', 'strncmp', 'strncpy', 'strstr',
+    'stat64', 'stderr', 'stdin', 'stdout', 'strcat', 'strchr', 'strcmp', 'strlen', 'strncmp', 'strncpy', 'strstr',
     'strtoul', 'strxfrm_l', 'time', 'vfprintf', 'vsnprintf', 'write'
 )
 
@@ -315,12 +315,8 @@ function Build-Linux64 {
                    '-Wno-deprecated-declarations', '-Wno-unused-parameter')
         $xmlInc = @(('-I' + (Join-Path $GenLinux 'libxml2')), ('-I' + (Join-Path $Root 'Source\libxml2\include')), ('-I' + (Join-Path $Root 'Source\libxml2')))
         $xsltInc = @(('-I' + (Join-Path $GenLinux 'libxslt')), ('-I' + (Join-Path $Root 'Source')), ('-I' + (Join-Path $Root 'Source\libxslt'))) + $xmlInc
-        # The library sources get lx2_stat.h in front of everything else; the shim itself does
-        # not, it needs _GNU_SOURCE before the first system header.
-        $libFlags = $flags + @('-include', (Join-Path $Root 'Source\shim_linux\lx2_stat.h'))
-        Build-Group 'xml'  'Source\libxml2' $xmlInc  $tmp $libFlags
-        Build-Group 'xslt' 'Source\libxslt' $xsltInc $tmp $libFlags
-        Build-Group 'shim' 'Source\shim_linux' @() $tmp $flags
+        Build-Group 'xml'  'Source\libxml2' $xmlInc  $tmp $flags
+        Build-Group 'xslt' 'Source\libxslt' $xsltInc $tmp $flags
 
         $objs = Get-ChildItem $tmp -Filter *.o | Sort-Object Name | ForEach-Object { $_.FullName }
         $defined = @{}

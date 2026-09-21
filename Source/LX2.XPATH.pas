@@ -1,5 +1,15 @@
 ﻿{
-  Simple XPath engine to support expressions that igonores element namespaces.
+  Evaluator of simple location paths: element names separated by `/` and `//`, no
+  predicates, no axes, no attributes. It returns the first node of the XPath result in
+  document order without building an XPath context.
+
+  The context rules are those of XPath: a relative path (`a/b`) starts at the children of
+  the context node, an absolute one (`/a/b`, `//a`) at the document of the context node,
+  whatever node the query was issued on.
+
+  One deliberate difference from XPath 1.0: a step without a prefix matches an element
+  of that local name in any namespace, and a prefixed step compares the prefix as written
+  in the document, not the namespace it is bound to.
 }
 
 unit LX2.XPATH;
@@ -10,14 +20,13 @@ uses
   System.SysUtils, libxml2.API, LX2.Helpers;
 
 type
-  PXPathStep = ^TXPathStep;
+  // A step points into the query text and does not own its characters.
   TXPathStep = record
     Descendant: Boolean;
     Name: xmlCharPtr;
+    NameLen: NativeInt;
     Prefix: xmlCharPtr;
-    Selector: xmlCharPtr;
-    Next: PXPathStep;
-    procedure Parse;
+    PrefixLen: NativeInt;
   end;
 
   TXPathSteps = TArray<TXPathStep>;
@@ -25,12 +34,12 @@ type
   TXPathQuery = record
   private
     FQuery: Utf8String;
+    FAbsolute: Boolean;
     FSteps: TXPathSteps;
     procedure Parse; overload;
-    function  Cmp(Node: xmlNodePtr; Step: PXPathStep): Boolean; inline;
-    function  SelectNode(Node: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
-    function  Traverse(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
-    function  SelectNodes(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
+    function  Cmp(Node: xmlNodePtr; const Step: TXPathStep): Boolean; inline;
+    function  MatchUp(Node, Context: xmlNodePtr; Index, First: NativeInt): Boolean;
+    function  SelectFrom(Context: xmlNodePtr; Index: NativeInt): xmlNodePtr;
   public
     class function Parse(const Query: Utf8String): TXPathQuery; overload; static;
     class function IsSimple(const Query: Utf8String): Boolean; static;
@@ -39,16 +48,18 @@ type
 
 implementation
 
-uses 
-  System.WideStrUtils;
-
 { TXPathQuery }
 
+// A path that ends with `/` (`/` alone selects the document) has no last step to match and is
+// left to libxml2 together with everything that is not a plain chain of names.
 class function TXPathQuery.IsSimple(const Query: Utf8String): Boolean;
 var
   Ch: xmlCharPtr;
 begin
   Ch := Pointer(Query);
+  if Ch = nil then
+    Exit(False);
+
   while Ch^ <> #0 do
   begin
     if Ch^ in ['(', ')', '[', ']', '<', '>', '{', '}', '*', '+', '.', '|', '@', '=', '?', '$'] then
@@ -58,28 +69,31 @@ begin
 
     Inc(Ch);
   end;
-  Result := True;
+
+  repeat
+    Dec(Ch);
+  until (Ch = Pointer(Query)) or (Ch^ > #32);
+  Result := Ch^ <> '/';
 end;
 
-function StrEquals(S1, S2: xmlCharPtr): Boolean; inline;
+function NameEquals(Value, Name: xmlCharPtr; NameLen: NativeInt): Boolean; inline;
 begin
-  while True do
-  begin
-    if S1^ <> S2^ then
-      Exit(False)
-    else if S1^ = #0 then
-      Exit(True);
+  if Value = nil then
+    Exit(False);
 
-    Inc(S1);
-    Inc(S2);
-  end;
+  for var I := 0 to NameLen - 1 do
+    if Value[I] <> Name[I] then
+      Exit(False);
+  Result := Value[NameLen] = #0;
 end;
 
-function TXPathQuery.Cmp(Node: xmlNodePtr; Step: PXPathStep): Boolean;
+// Only elements can match a step: a document node has no `ns` field at all, and its name is
+// nil when the document was parsed from memory.
+function TXPathQuery.Cmp(Node: xmlNodePtr; const Step: TXPathStep): Boolean;
 begin
-  Result := StrEquals(Node.name, Step.Name);
+  Result := (Node.&type = XML_ELEMENT_NODE) and NameEquals(Node.name, Step.Name, Step.NameLen);
   if Result and (Step.Prefix <> nil) then
-    Result := (Node.ns <> nil) and StrEquals(Node.ns.prefix, Step.Prefix);
+    Result := (Node.ns <> nil) and NameEquals(Node.ns.prefix, Step.Prefix, Step.PrefixLen);
 end;
 
 class function TXPathQuery.Parse(const Query: Utf8String): TXPathQuery;
@@ -90,172 +104,142 @@ end;
 
 procedure TXPathQuery.Parse;
 var
-  Cur:  PUTF8Char;
+  Cur, Start: xmlCharPtr;
   Step: TXPathStep;
-  CharLen : Integer;
 begin
   FSteps := [];
+  FAbsolute := False;
   Cur := Pointer(FQuery);
+  if Cur = nil then
+    Exit;
+
   while Cur^ <> #0 do
   begin
-    while (Cur^ <= #32) and (Cur^ > #0) do
-    begin
-      CharLen := UTF8CharLength(Cur^);
-      Inc(Cur, CharLen)
-    end;
+    while (Cur^ <= #32) and (Cur^ <> #0) do
+      Inc(Cur);
     if Cur^ = #0 then
-      Exit;
+      Break;
 
     Step.Descendant := False;
     if Cur^ = '/' then
     begin
-      Cur^ := #0;
+      if Length(FSteps) = 0 then
+        FAbsolute := True;
       Inc(Cur);
       if Cur^ = '/' then
       begin
-        Cur^ := #0;
         Inc(Cur);
         Step.Descendant := True;
       end;
+      while (Cur^ <= #32) and (Cur^ <> #0) do
+        Inc(Cur);
     end;
-    Step.Selector := Cur;
-    FSteps := FSteps + [Step];
 
+    // Bytes of a multibyte UTF-8 character are all above #127, so a byte-wise scan never
+    // stops inside one.
+    Start := Cur;
+    Step.Prefix := nil;
+    Step.PrefixLen := 0;
     while (Cur^ > #32) and (Cur^ <> '/') do
     begin
-      CharLen := UTF8CharLength(Cur^);
-      Inc(Cur, CharLen);
+      if (Cur^ = ':') and (Step.Prefix = nil) then
+      begin
+        Step.Prefix := Start;
+        Step.PrefixLen := Cur - Start;
+        Start := Cur + 1;
+      end;
+      Inc(Cur);
     end;
+    Step.Name := Start;
+    Step.NameLen := Cur - Start;
+    FSteps := FSteps + [Step];
   end;
-  for var I := Low(FSteps) to High(FSteps) - 1 do
-  begin
-    FSteps[I].Parse;
-    FSteps[I].Next := @FSteps[I + 1];
-  end;
-  FSteps[High(FSteps)].Parse;
-  FSteps[High(FSteps)].Next := nil;
 end;
 
 function TXPathQuery.Select(Node: xmlNodePtr): xmlNodePtr;
 begin
-  if Length(FSteps) = 0 then
+  if (Node = nil) or (Length(FSteps) = 0) then
     Exit(nil);
 
-  Result := SelectNode(Node, @FSteps[0]);
-end;
-
-function TXPathQuery.SelectNode(Node: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
-begin
-  if Step.Descendant then
+  if FAbsolute and not (Node.&type in [XML_DOCUMENT_NODE, XML_HTML_DOCUMENT_NODE]) then
   begin
-    if Cmp(Node, Step) then
-    begin
-      if Step.Next = nil then
-        Exit(Node);
-      Result := SelectNodes(Node, Step.Next);
-      if Result <> nil then
-        Exit;
-    end;
-    Result := Traverse(Node, Step);
-  end
-  else
-  begin
-    if not Cmp(Node, Step) then
+    Node := xmlNodePtr(Node.doc);
+    if Node = nil then
       Exit(nil);
-    if Step.Next = nil then
-      Exit(Node);
-    Result := SelectNodes(Node, Step.Next);
   end;
+
+  Result := SelectFrom(Node, 0);
 end;
 
-function TXPathQuery.SelectNodes(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
+// Steps up to the first `//` are walked forward over children. From a `//` step on, the
+// subtree of Context is scanned in document order and every element that fits the last step
+// is checked backwards against its ancestors: that is what makes the answer the first node
+// in document order, which a forward search by steps does not give (in
+// `<a><a><b/></a><b/></a>` the first `//a/b` is the inner one).
+function TXPathQuery.SelectFrom(Context: xmlNodePtr; Index: NativeInt): xmlNodePtr;
 begin
-  if Step.Descendant then
+  var Last := High(FSteps);
+
+  if not FSteps[Index].Descendant then
   begin
-    Result := Traverse(Parent, Step);
-  end
-  else
-  begin
-    var Child := Parent.FirstElementChild;
+    var Child := Context.FirstElementChild;
     while Child <> nil do
     begin
-      if Cmp(Child, Step) then
+      if Cmp(Child, FSteps[Index]) then
       begin
-        if Step.Next = nil then
+        if Index = Last then
           Exit(Child);
-        Result := SelectNodes(Child, Step.Next);
+        Result := SelectFrom(Child, Index + 1);
         if Result <> nil then
           Exit;
       end;
       Child := Child.NextElementSibling;
     end;
-    Result := nil;
+    Exit(nil);
   end;
-end;
 
-function TXPathQuery.Traverse(Parent: xmlNodePtr; Step: PXPathStep): xmlNodePtr;
-begin
-  var Child := Parent.FirstElementChild;
-  while Child <> nil do
+  var Node := Context.FirstElementChild;
+  while Node <> nil do
   begin
-    if Cmp(Child, Step) then
-    begin
-      if Step.Next = nil then
-        Exit(Child);
-      Result := SelectNodes(Child, Step.Next);
-      if Result <> nil then
-        Exit;
-    end
-    else
-    begin
-      Result := Traverse(Child, Step);
-      if Result <> nil then
-        Exit;
-    end;
+    if Cmp(Node, FSteps[Last]) and MatchUp(Node, Context, Last, Index) then
+      Exit(Node);
 
-    Child := Child.NextElementSibling;
+    var Next := Node.FirstElementChild;
+    while Next = nil do
+    begin
+      Next := Node.NextElementSibling;
+      if Next <> nil then
+        Break;
+      Node := Node.parent;
+      if (Node = nil) or (Node = Context) then
+        Exit(nil);
+    end;
+    Node := Next;
   end;
   Result := nil;
 end;
 
-{ TXPathStep }
-
-procedure TXPathStep.Parse;
-
-  procedure Trim(var S: xmlCharPtr);
-  var
-    CharLen : Integer;
-  begin
-    while S^ <= #32 do
-    begin
-      CharLen := UTF8CharLength(S^);
-      Inc(S, CharLen)
-    end;
-    var Ch := S;
-    while Ch^ <> #0 do
-    begin
-      if Ch^ <= #32 then
-        Ch^ := #0;
-      CharLen := UTF8CharLength(Ch^);
-      Inc(Ch, CharLen)
-    end;
-  end;
+// Node already fits step Index. Steps First..Index - 1 have to fit its ancestors below
+// Context; step First is a `//` step, so any depth under Context suits it.
+function TXPathQuery.MatchUp(Node, Context: xmlNodePtr; Index, First: NativeInt): Boolean;
 begin
-  Name := Selector;
-  Prefix := nil;
-  var P := Selector;
-  while P^ <> #0 do
+  if Index = First then
+    Exit(True);
+
+  var Parent := Node.parent;
+  if FSteps[Index].Descendant then
   begin
-    if P^ = ':' then
+    while (Parent <> nil) and (Parent <> Context) do
     begin
-      Prefix := Selector;
-      Name := P + 1;
-      P^ := #0;
-      Trim(Prefix);
+      if Cmp(Parent, FSteps[Index - 1]) and MatchUp(Parent, Context, Index - 1, First) then
+        Exit(True);
+      Parent := Parent.parent;
     end;
-    Inc(P);
-  end;
-  Trim(Name);
+    Result := False;
+  end
+  else
+    Result := (Parent <> nil) and (Parent <> Context) and Cmp(Parent, FSteps[Index - 1]) and
+      MatchUp(Parent, Context, Index - 1, First);
 end;
 
 end.

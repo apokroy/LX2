@@ -51,3 +51,12 @@ Tests/Win64/
 # Native/Lib are committed so that consumers never need the C compiler.
 Native/Gen/
 Native/Tests/Win64/
+Native/Tests/Linux64/
+
+# Local patches to the imported sources are source code, whatever *.Patch above says.
+!Native/Patches/*.patch
+
+# Benchmark output, the page index of a Markdown viewer, stray office files.
+Tests/LX2Bench/Win64/
+.mdindex
+*.xlsx

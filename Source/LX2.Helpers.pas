@@ -249,10 +249,11 @@ type
     /// <c>nil</c> if none matched.
     /// </summary>
     /// <remarks>
-    /// For simple path expressions (as determined by <c>TXPathQuery.IsSimple</c>),
-    /// a fast-path parser/evaluator (<c>LX2.XPATH.TXPathQuery</c>) is used instead
-    /// of the full libxml2 XPath engine, bypassing context/namespace setup for
-    /// better performance on common cases like "a/b/c" or "@attr".
+    /// A path made of element names only ("a/b", "/a/b", "//a/b", as determined by
+    /// <c>TXPathQuery.IsSimple</c>) is answered by <c>LX2.XPATH.TXPathQuery</c> without
+    /// building an XPath context. The node is the one XPath gives, with one difference: a
+    /// name without a prefix fits an element in any namespace, and a prefix is compared as
+    /// written in the document.
     /// </remarks>
     function  SelectSingleNode(const QueryString: RawByteString): xmlNodePtr;
     /// <summary>

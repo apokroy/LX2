@@ -123,6 +123,7 @@ type
     property  _newEnum: IXMLErrorEnumerator read Get__newEnum;
     property  Next: IXMLParseError read Get_next;
     property  Count: NativeInt read Get_Count;
+    property  Item[Index: NativeInt]: IXMLParseError read Get_Item;
     property  Items[Index: NativeInt]: IXMLParseError read Get_Item; default;
   end;
 
@@ -155,6 +156,7 @@ type
     function  GetEnumerator: IXSLTErrorEnumerator;
     procedure Clear;
     property  Count: NativeInt read Get_Count;
+    property  Item[Index: NativeInt]: IXSLTError read Get_Item;
     property  Items[Index: NativeInt]: IXSLTError read Get_Item; default;
   end;
 
@@ -731,8 +733,13 @@ type
     function  LoadFromBytes(const Data: TBytes): Boolean;
     function  LoadFromStream(Stream: TStream; const Encoding: Utf8String): Boolean; overload;
     function  Load(const URL: string): Boolean;
-    function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions = DefaultParserOptions): Boolean; overload;
-    function  LoadXML(const XML: string; const Options: TXmlParserOptions = DefaultParserOptions): Boolean; overload;
+    // The forms without Options parse with DefaultParserOptions. They are overloads and not a
+    // default value of the parameter, because a late-bound caller (IDispatch) finds a method
+    // by the number of its arguments and RTTI keeps no default values.
+    function  LoadXML(const XML: RawByteString): Boolean; overload;
+    function  LoadXML(const XML: string): Boolean; overload;
+    function  LoadXML(const XML: RawByteString; const Options: TXmlParserOptions): Boolean; overload;
+    function  LoadXML(const XML: string; const Options: TXmlParserOptions): Boolean; overload;
     function  NodeFromID(const idString: string): IXMLNode;
     procedure Normalize;
     procedure ReconciliateNs;

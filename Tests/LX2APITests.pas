@@ -33,6 +33,10 @@ type
     [Test]
     procedure TestSelectSingleNodeResolvesNamespacesInScope;
     [Test]
+    procedure TestSimplePathAgreesWithXPath;
+    [Test]
+    procedure TestSimplePathKeepsTheQueryString;
+    [Test]
     procedure TestGetElementsByTagNameWalksTheWholeSubtree;
     [Test]
     procedure TestXPathSeesPrefixesDeclaredOnAncestors;
@@ -55,6 +59,18 @@ type
     procedure TestCreateNodeWithNamespacePutsElementIntoIt;
     [Test]
     procedure TestSchemaCollectionGetDoesNotFreeTheSchema;
+    [Test]
+    procedure TestSimplePathFromDocumentParsedFromMemory;
+    [Test]
+    procedure TestInsertBeforeNilAppends;
+    [Test]
+    procedure TestDispatchNamesFollowInterfaceProperties;
+    [Test]
+    procedure TestLateBoundNodeListItem;
+    [Test]
+    procedure TestLateBoundResultsAreReleased;
+    [Test]
+    procedure TestLateBoundCallPicksTheOverload;
   end;
 
   // XML Schema validation over documents that live only in memory: no schema file exists
@@ -87,7 +103,8 @@ type
 implementation
 
 uses
-  libxml2.API, RttiDispatch, LX2.Types, LX2.Helpers, LX2.DOM;
+  System.Rtti, System.Variants,
+  libxml2.API, RttiDispatch, LX2.Types, LX2.Helpers, LX2.DOM, LX2.DOM.Classes;
 
 const
   XmlPreamble = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -217,6 +234,71 @@ begin
     var node := doc.documentElement.SelectSingleNode('//p:item[text()="x"]');
     Assert.AreNotEqual<Pointer>(node, nil);
     Assert.AreEqual<RawByteString>('item', node.LocalName);
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// A path made of names only is answered by the evaluator of LX2.XPATH, anything else by
+// libxml2. Both must name the same node: the first one of the XPath result in document
+// order, for a relative path counted from the children of the context node and for an
+// absolute one from the document, whatever the context node is. The reference is the same
+// query through SelectNodes, which always goes to libxml2.
+procedure TXMLHelpersTest.TestSimplePathAgreesWithXPath;
+const
+  Xml: RawByteString =
+    '<root>' +
+      '<a id="1"><a id="2"><b id="3"/></a><b id="4"/></a>' +
+      '<Tags><Tags id="5"/><Levels id="6"/></Tags>' +
+      '<c><d><b id="7"/></d><p:e xmlns:p="urn:p"><b id="8"/></p:e></c>' +
+    '</root>';
+  Contexts: array[0..4] of RawByteString = ('/', '/root', '/root/a[1]', '/root/a/a', '/root/c');
+  Queries: array[0..25] of RawByteString = (
+    'a', 'b', 'Tags', 'Tags/Tags', 'Tags/Levels', 'a/b', 'a/a/b', 'root', 'root/Tags', 'd/b', 'missing',
+    '/root', '/root/a/b', '/root/a/a/b', '/a', '/root/missing',
+    '//b', '//a/b', '//a//b', '//a/a', '//root', '//c/d/b', '//d//b', '//missing/b',
+    'c//b', ' a / b ');
+begin
+  var doc := xmlDoc.Create(Xml, []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    for var ContextPath in Contexts do
+    begin
+      var Found := xmlNodePtr(doc).SelectNodes(ContextPath);
+      Assert.AreEqual<NativeInt>(1, Length(Found), string(ContextPath));
+      var Context := Found[0];
+
+      for var Query in Queries do
+      begin
+        var Expected: xmlNodePtr := nil;
+        var Nodes := Context.SelectNodes(Query);
+        if Length(Nodes) > 0 then
+          Expected := Nodes[0];
+        Assert.AreEqual<Pointer>(Expected, Context.SelectSingleNode(Query),
+          Format('"%s" from "%s"', [string(Query), string(ContextPath)]));
+      end;
+    end;
+
+    // The prefix is compared as written, and a name without one fits any namespace.
+    var c := xmlNodePtr(doc).SelectSingleNode('/root/c');
+    Assert.AreNotEqual<Pointer>(c.SelectSingleNode('p:e/b'), nil);
+    Assert.AreEqual<Pointer>(c.SelectSingleNode('p:e'), c.SelectSingleNode('e'));
+    Assert.AreEqual<Pointer>(c.SelectSingleNode('q:e'), nil);
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+procedure TXMLHelpersTest.TestSimplePathKeepsTheQueryString;
+begin
+  var doc := xmlDoc.Create('<root><a><b/></a></root>', []);
+  Assert.AreNotEqual<Pointer>(doc, nil);
+  try
+    var Query: RawByteString := '/root/' + RawByteString('a') + '/b';
+    var Copy := Query;
+    Assert.AreNotEqual<Pointer>(xmlNodePtr(doc).SelectSingleNode(Query), nil);
+    Assert.AreEqual<RawByteString>('/root/a/b', Copy);
+    Assert.AreNotEqual<Pointer>(xmlNodePtr(doc).SelectSingleNode(Query), nil, 'the same string again');
   finally
     xmlFreeDoc(doc);
   end;
@@ -461,6 +543,181 @@ begin
   root.AppendChild(prefixed);
   Assert.AreEqual('urn:p', prefixed.NamespaceURI);
   Assert.AreEqual('item', prefixed.LocalName);
+end;
+
+// A simple path (`//name`, no predicates) takes the fast evaluator, and a query issued on the
+// document starts from the document node. That node has no name when the document was
+// parsed from memory, and it is not an element, so it must never be compared with a step.
+procedure TXMLDOMTest.TestSimplePathFromDocumentParsedFromMemory;
+begin
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<e:Envelope xmlns:e="urn:env"><e:Header/><e:Body><item/></e:Body></e:Envelope>'));
+  Assert.IsNotNull(doc.SelectSingleNode('//e:Envelope'), 'prefixed root');
+  Assert.IsNotNull(doc.SelectSingleNode('//e:Header'), 'prefixed descendant');
+  Assert.IsNotNull(doc.SelectSingleNode('//item'), 'plain descendant');
+  Assert.IsNotNull(doc.SelectSingleNode('/e:Envelope/e:Body/item'), 'absolute path');
+  Assert.IsNull(doc.SelectSingleNode('//e:Missing'), 'no such element');
+end;
+
+// DOM: insertBefore with a nil reference node appends. The usual source of the nil is
+// parent.firstChild of an empty parent.
+procedure TXMLDOMTest.TestInsertBeforeNilAppends;
+begin
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<root><head/></root>'));
+  var head := doc.SelectSingleNode('//head');
+  var first := doc.CreateElement('first');
+  head.InsertBefore(first, head.FirstChild);
+  Assert.AreEqual('<head><first/></head>', head.Xml);
+  head.InsertBefore(doc.CreateElement('zero'), head.FirstChild);
+  Assert.AreEqual('<head><zero/><first/></head>', head.Xml);
+  head.InsertBefore(doc.CreateElement('last'), nil);
+  Assert.AreEqual('<head><zero/><first/><last/></head>', head.Xml);
+end;
+
+// Interface properties carry no RTTI, so IDispatch takes member names from the implementing
+// class. Every accessor Get_X/Set_X of an implemented interface therefore has to resolve as
+// X: a property the class declares under another name is invisible to late-bound callers.
+procedure CollectUnresolvedAccessors(const What: string; const Obj: IDispatch; Missing: TStrings);
+begin
+  Assert.IsNotNull(Obj, What);
+  var Context := TRttiContext.Create;
+  var Cls := (Obj as TObject).ClassType;
+  for var Intf in (Context.GetType(Cls) as TRttiInstanceType).GetImplementedInterfaces do
+    for var Method in Intf.GetMethods do
+    begin
+      if not (Method.Name.StartsWith('Get_', True) or Method.Name.StartsWith('Set_', True)) then
+        Continue;
+      // IXMLAttributes.Get_Attr is the typed reader of Item, not a property of its own.
+      if SameText(Method.Name, 'Get_Attr') then
+        Continue;
+      var Name: WideString := Method.Name.Substring(4);
+      var DispId: Integer;
+      if Obj.GetIDsOfNames(GUID_NULL, @Name, 1, 0, @DispId) <> S_OK then
+      begin
+        var Entry := Cls.ClassName + '.' + string(Name);
+        if Missing.IndexOf(Entry) < 0 then
+          Missing.Add(Entry);
+      end;
+    end;
+end;
+
+procedure TXMLDOMTest.TestDispatchNamesFollowInterfaceProperties;
+const
+  Xsd =
+    '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">' +
+    '<xs:element name="e" type="xs:string"/></xs:schema>';
+begin
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<?pi data?><!DOCTYPE root [<!ENTITY ent "value">]>' +
+    '<root xmlns:p="urn:p" a="1"><!--c--><child>text&ent;</child><![CDATA[raw]]></root>'));
+  var root := doc.DocumentElement;
+
+  var schemas := CoCreateSchemaCollection;
+  var schema := CoCreateXMLDocument;
+  Assert.IsTrue(schema.LoadXML(Xsd));
+  schemas.Add('', schema);
+
+  var broken := CoCreateXMLDocument;
+  Assert.IsFalse(broken.LoadXML('<root>'));
+
+  var Missing := TStringList.Create;
+  try
+    CollectUnresolvedAccessors('doc', doc, Missing);
+    CollectUnresolvedAccessors('doc.CreateDocumentFragment', doc.CreateDocumentFragment, Missing);
+    CollectUnresolvedAccessors('root', root, Missing);
+    CollectUnresolvedAccessors('root.ChildNodes', root.ChildNodes, Missing);
+    CollectUnresolvedAccessors('root.ChildNodes.GetEnumerator', root.ChildNodes.GetEnumerator, Missing);
+    CollectUnresolvedAccessors('root.SelectNodes(''//child'')', root.SelectNodes('//child'), Missing);
+    CollectUnresolvedAccessors('root.GetElementsByTagName(''child'')', root.GetElementsByTagName('child'), Missing);
+    CollectUnresolvedAccessors('root.Attributes', root.Attributes, Missing);
+    CollectUnresolvedAccessors('root.Attributes.GetEnumerator', root.Attributes.GetEnumerator, Missing);
+    for var I := 0 to root.Attributes.Length - 1 do
+      CollectUnresolvedAccessors('root.Attributes[I]', root.Attributes[I], Missing);
+    for var Node in doc.ChildNodes do
+      CollectUnresolvedAccessors('Node', Node, Missing);
+    for var Node in root.ChildNodes do
+      CollectUnresolvedAccessors('Node', Node, Missing);
+    for var Node in doc.SelectSingleNode('//child').ChildNodes do
+      CollectUnresolvedAccessors('Node', Node, Missing);
+    CollectUnresolvedAccessors('schemas', schemas, Missing);
+    CollectUnresolvedAccessors('broken.Errors', broken.Errors, Missing);
+    CollectUnresolvedAccessors('broken.Errors.GetEnumerator', broken.Errors.GetEnumerator, Missing);
+    CollectUnresolvedAccessors('broken.ParseError', broken.ParseError, Missing);
+
+    Assert.AreEqual('', Missing.CommaText);
+  finally
+    Missing.Free;
+  end;
+end;
+
+// The way a script reads a document: every step is a late-bound call on a Variant.
+procedure TXMLDOMTest.TestLateBoundNodeListItem;
+begin
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<root><first name="a"/><second name="b"/></root>'));
+
+  var List: Variant := doc.DocumentElement.ChildNodes as IDispatch;
+  Assert.AreEqual(2, Integer(List.length));
+  Assert.AreEqual('second', string(List.item[1].nodeName));
+  Assert.AreEqual('b', string(List.item[1].attributes.item[0].nodeValue));
+
+  var Found: Variant := doc.SelectNodes('//first') as IDispatch;
+  Assert.AreEqual('first', string(Found.item[0].nodeName));
+
+  var brokenDoc := CoCreateXMLDocument;
+  Assert.IsFalse(brokenDoc.LoadXML('<root>'));
+  var Broken: Variant := brokenDoc as IDispatch;
+  Assert.IsTrue(Integer(Broken.errors.count) > 0);
+  Assert.AreEqual(string(Broken.parseError.reason), string(Broken.errors.item[0].reason));
+end;
+
+// A late-bound call names a method and brings arguments; which overload it means follows
+// from their number and types.
+procedure TXMLDOMTest.TestLateBoundCallPicksTheOverload;
+begin
+  var Doc: Variant := CoCreateXMLDocument as IDispatch;
+  Assert.IsTrue(Boolean(Doc.loadXML('<root><item/></root>')));
+  Assert.IsFalse(Boolean(Doc.loadXML('<root>')));
+  Assert.IsTrue(Boolean(Doc.loadXML('<root><item/></root>')));
+
+  var Item: Variant := Doc.documentElement.firstChild;
+  Item.setAttribute('text', 'value');
+  Item.setAttribute('number', 42);
+  Item.setAttribute('flag', True);
+  Assert.AreEqual('value', string(Item.getAttribute('text')));
+  Assert.AreEqual('42', string(Item.getAttribute('number')));
+  Assert.AreEqual('1', string(Item.getAttribute('flag')));
+
+  Assert.IsTrue(string(Doc.toString(True)).Contains('<item'));
+  Assert.IsTrue(string(Doc.toString('windows-1251', False)).Contains('windows-1251'));
+end;
+
+// An object handed to a late-bound caller carries exactly the caller's reference: once the
+// caller's variants are gone, so are the node wrappers. Wrappers are counted in debug
+// builds only.
+procedure TXMLDOMTest.TestLateBoundResultsAreReleased;
+
+  procedure Walk(const Doc: IXMLDocument);
+  begin
+    var Root: Variant := Doc.DocumentElement as IDispatch;
+    for var I := 1 to 10 do
+    begin
+      Assert.AreEqual('first', string(Root.childNodes.item[0].nodeName));
+      Assert.AreEqual('first', string(Root.firstChild.nodeName));
+      Assert.AreEqual('a', string(Root.selectSingleNode('//first').getAttribute('name')));
+    end;
+  end;
+
+begin
+{$IFNDEF DEBUG}
+  Assert.Pass('node wrappers are counted in a debug build only');
+{$ENDIF}
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<root><first name="a"/></root>'));
+  var Before := DebugObjectCount;
+  Walk(doc);
+  Assert.AreEqual<NativeInt>(Before, DebugObjectCount);
 end;
 
 // The compiled schema document belongs to the collection; the wrapper returned by
