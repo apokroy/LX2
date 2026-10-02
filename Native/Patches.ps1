@@ -54,13 +54,23 @@ function Invoke-GitApply {
     param([string]$Tree, [string[]]$Extra, [string]$File)
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    # git apply matches context lines byte for byte and the imported sources are LF; a patch
+    # that a checkout rewrote to CRLF (core.autocrlf) is fed to git through an LF copy.
+    $tmpPatch = $null
     try {
+        $bytes = [IO.File]::ReadAllBytes($File)
+        if ([Array]::IndexOf($bytes, [byte]13) -ge 0) {
+            $tmpPatch = Join-Path ([IO.Path]::GetTempPath()) ("lx2-" + [IO.Path]::GetFileName($File))
+            [IO.File]::WriteAllText($tmpPatch, [Text.Encoding]::UTF8.GetString($bytes).Replace("`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
+            $File = $tmpPatch
+        }
         $lines = & git -c core.autocrlf=false -c core.safecrlf=false -C $Tree apply --whitespace=nowarn @Extra $File 2>&1 | ForEach-Object { "$_" }
         $script:GitOut = ($lines -join "`n")
         return [bool]($LASTEXITCODE -eq 0)
     }
     finally {
         $ErrorActionPreference = $eap
+        if ($tmpPatch) { Remove-Item $tmpPatch -Force -ErrorAction SilentlyContinue }
     }
 }
 

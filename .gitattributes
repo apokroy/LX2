@@ -1,0 +1,3 @@
+# Patches to the imported C sources are applied with git apply, which matches context
+# lines byte for byte: a patch rewritten to CRLF on checkout no longer fits the LF sources.
+Native/Patches/*.patch -text

@@ -140,8 +140,9 @@ dcclinux64 knows neither `{$L}` nor `{$LINKLIB}`, so the 51 objects go into one 
 point as `external 'liblx2native.a' name '…'`; the application puts `Lib\Linux64` on its
 library path (`--libpath` of dcclinux64, the platform's Library path in the IDE). The
 archive keeps libxml2 and libxslt together: the linker takes the members it needs. The
-build needs a PAServer SDK (`-LinuxSdk`, or Default_Linux64 of the IDE); `-Test` links the
-smoke test with dcclinux64 and runs it in WSL.
+build needs a Linux SDK (`-LinuxSdk`: a directory or the name of an SDK description of the
+IDE; otherwise the default SDK of the IDE, otherwise the described SDK with the oldest glibc);
+`-Test` links the smoke test with dcclinux64 and runs it in WSL.
 
 - No shims: `Source\shim` is a Windows matter. The C runtime, the math, pthreads and iconv
   are glibc, `config.h` for Linux is written to `Gen\Linux64`.

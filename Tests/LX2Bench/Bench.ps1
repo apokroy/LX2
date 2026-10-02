@@ -17,7 +17,7 @@
 [CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$StudioRoot,
-    [string]$BdsVersion = '37.0',
+    [string]$BdsVersion,
     [switch]$DebugBuild,
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
     [string[]]$BenchArgs
@@ -26,12 +26,26 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
 $LX2Src = Join-Path (Split-Path (Split-Path $Root -Parent) -Parent) 'Source'
-if (-not $StudioRoot) {
-    $key = "HKCU:\Software\Embarcadero\BDS\$BdsVersion"
-    if (-not (Test-Path $key)) { $key = "HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS\$BdsVersion" }
-    $StudioRoot = (Get-ItemProperty $key).RootDir
+# RAD Studio: -StudioRoot, else -BdsVersion, else the BDS variable that rsvars.bat sets, else
+# the newest installation the registry knows (HKCU, then HKLM).
+function Find-StudioRoot([string]$Root, [string]$Version) {
+    if ($Root) { return $Root.TrimEnd('\') }
+    if (-not $Version -and $env:BDS -and (Test-Path (Join-Path $env:BDS 'bin\dcc64.exe'))) { return $env:BDS.TrimEnd('\') }
+    $found = @()
+    foreach ($hive in 'HKCU:\Software\Embarcadero\BDS', 'HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS') {
+        foreach ($key in Get-ChildItem $hive -ErrorAction SilentlyContinue) {
+            $v = $null
+            if (-not [version]::TryParse($key.PSChildName, [ref]$v)) { continue }
+            if ($Version -and $key.PSChildName -ne $Version) { continue }
+            $dir = [string](Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).RootDir
+            if ($dir -and (Test-Path (Join-Path $dir 'bin\dcc64.exe'))) { $found += [pscustomobject]@{ Version = $v; Root = $dir.TrimEnd('\') } }
+        }
+    }
+    $best = $found | Sort-Object Version -Descending | Select-Object -First 1
+    if (-not $best) { throw "RAD Studio $(if ($Version) { $Version } else { '' }) not found in the registry; pass -StudioRoot" }
+    return $best.Root
 }
-$StudioRoot = $StudioRoot.TrimEnd('\')
+$StudioRoot = Find-StudioRoot $StudioRoot $BdsVersion
 $StudioShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($StudioRoot).ShortPath
 $config = if ($DebugBuild) { 'Debug' } else { 'Release' }
 $out = Join-Path $Root "Win64\$config"

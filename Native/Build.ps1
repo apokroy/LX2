@@ -38,10 +38,13 @@
     Subset of Win64, Linux64 to compile. Both by default. LX2.Static.pas is always generated
     for both from whatever Lib\ holds.
 .PARAMETER LinuxSdk
-    PAServer SDK directory for Linux64; by default Default_Linux64 from the IDE settings.
+    Linux64 SDK: a directory, or the name of an SDK description of the IDE; by default the
+    default SDK of the IDE, else the described SDK with the oldest glibc.
 .PARAMETER StudioRoot
-    RAD Studio directory; by default from the registry key
-    HKCU\Software\Embarcadero\BDS\<BdsVersion>.
+    RAD Studio directory; by default the newest installation in the registry (or the one
+    of rsvars.bat when the script runs from a RAD Studio command prompt).
+.PARAMETER BdsVersion
+    Studio version to pick from the registry ('37.0'); by default the newest.
 .PARAMETER Test
     After the build, compile Tests\LX2StaticSmoke.dpr and run it: dcc64 for Win64,
     dcclinux64 and WSL (when present) for Linux64.
@@ -67,7 +70,7 @@ param(
     [string[]]$Platforms = @('Win64', 'Linux64'),
     [string]$StudioRoot,
     [string]$LinuxSdk,
-    [string]$BdsVersion = '37.0',
+    [string]$BdsVersion,
     [switch]$Test,
     [switch]$SkipBuild,
     [string]$Clang,
@@ -89,12 +92,28 @@ $GenLinux = Join-Path $Gen 'Linux64'
 # Tools
 # ---------------------------------------------------------------------------
 
-if (-not $StudioRoot) {
-    $key = "HKCU:\Software\Embarcadero\BDS\$BdsVersion"
-    if (-not (Test-Path $key)) { $key = "HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS\$BdsVersion" }
-    $StudioRoot = (Get-ItemProperty $key).RootDir
+# RAD Studio: -StudioRoot, else -BdsVersion, else the BDS variable that rsvars.bat sets, else
+# the newest installation the registry knows (HKCU, then HKLM). The version number is needed
+# for the SDK descriptions and the IDE keys below.
+function Find-StudioRoot([string]$Root, [string]$Version) {
+    if ($Root) { return $Root.TrimEnd('\') }
+    if (-not $Version -and $env:BDS -and (Test-Path (Join-Path $env:BDS 'bin64\bcc64x.exe'))) { return $env:BDS.TrimEnd('\') }
+    $found = @()
+    foreach ($hive in 'HKCU:\Software\Embarcadero\BDS', 'HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS') {
+        foreach ($key in Get-ChildItem $hive -ErrorAction SilentlyContinue) {
+            $v = $null
+            if (-not [version]::TryParse($key.PSChildName, [ref]$v)) { continue }
+            if ($Version -and $key.PSChildName -ne $Version) { continue }
+            $dir = [string](Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).RootDir
+            if ($dir -and (Test-Path (Join-Path $dir 'bin64\bcc64x.exe'))) { $found += [pscustomobject]@{ Version = $v; Root = $dir.TrimEnd('\') } }
+        }
+    }
+    $best = $found | Sort-Object Version -Descending | Select-Object -First 1
+    if (-not $best) { throw "RAD Studio $(if ($Version) { $Version } else { 'with bcc64x' }) not found in the registry; pass -StudioRoot" }
+    return $best.Root
 }
-$StudioRoot = $StudioRoot.TrimEnd('\')
+$StudioRoot = Find-StudioRoot $StudioRoot $BdsVersion
+if (-not $BdsVersion) { $BdsVersion = Split-Path $StudioRoot -Leaf }
 $Bcc     = Join-Path $StudioRoot 'bin64\bcc64x.exe'
 $Nm      = Join-Path $StudioRoot 'bin64\llvm-nm.exe'
 $Ar      = Join-Path $StudioRoot 'bin64\llvm-ar.exe'
@@ -104,18 +123,41 @@ foreach ($tool in $Bcc, $Nm, $Ar, $Objdump) {
 }
 $StudioShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($StudioRoot).ShortPath
 
+# Linux64 SDK directory: -LinuxSdk (a directory, or the name of an SDK description), else the
+# default SDK of the IDE, else the described SDK with the oldest glibc - the archive must load
+# on the oldest target system. The descriptions are the msbuild files the SDK Manager writes
+# to %APPDATA%\Embarcadero\BDS\<version>\<name> (Profile_sysroot is the directory).
 function Resolve-LinuxSdk {
-    if ($LinuxSdk) { return $LinuxSdk }
-    $sdks = "HKCU:\Software\Embarcadero\BDS\$BdsVersion\PlatformSDKs"
-    $name = (Get-ItemProperty $sdks -ErrorAction SilentlyContinue).Default_Linux64
-    if (-not $name) { throw 'The IDE has no Linux64 SDK configured; pass -LinuxSdk' }
-    $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "Embarcadero\Studio\SDKs\$name"
-    if (-not (Test-Path $dir)) { throw "SDK directory not found: $dir" }
-    return $dir
+    if ($LinuxSdk -and (Test-Path -LiteralPath $LinuxSdk -PathType Container)) { return (Resolve-Path -LiteralPath $LinuxSdk).Path.TrimEnd('\') }
+    $appData = Join-Path $env:APPDATA "Embarcadero\BDS\$BdsVersion"
+    $sdkRoot = if ($env:BDSPLATFORMSDKSDIR) { $env:BDSPLATFORMSDKSDIR } else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Embarcadero\Studio\SDKs' }
+    $sdks = @()
+    foreach ($file in Get-ChildItem $appData -File -ErrorAction SilentlyContinue) {
+        $text = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
+        if (-not $text -or $text -notmatch '<Profile_platform>\s*Linux64\s*</Profile_platform>') { continue }
+        if ($text -notmatch '<Profile_sysroot>\s*([^<]+?)\s*</Profile_sysroot>') { continue }
+        $dir = ($Matches[1] -replace '\$\(BDSPLATFORMSDKSDIR\)', $sdkRoot).TrimEnd('\')
+        $features = Join-Path $dir 'usr\include\features.h'
+        if (-not (Test-Path $features)) { continue }
+        $glibc = 999
+        foreach ($line in Get-Content $features) { if ($line -match '^\s*#\s*define\s+__GLIBC_MINOR__\s+(\d+)') { $glibc = [int]$Matches[1]; break } }
+        $sdks += [pscustomobject]@{ Name = $file.Name; Dir = $dir; Glibc = $glibc }
+    }
+    if ($LinuxSdk) {
+        $pick = $sdks | Where-Object { $_.Name -eq $LinuxSdk } | Select-Object -First 1
+        if (-not $pick) { throw "Linux SDK '$LinuxSdk': neither a directory nor a description in $appData" }
+        return $pick.Dir
+    }
+    $default = (Get-ItemProperty "HKCU:\Software\Embarcadero\BDS\$BdsVersion\PlatformSDKs" -ErrorAction SilentlyContinue).Default_Linux64
+    $pick = $sdks | Where-Object { $_.Name -eq $default } | Select-Object -First 1
+    if (-not $pick) { $pick = $sdks | Sort-Object Glibc, Name | Select-Object -First 1 }
+    if (-not $pick) { throw "No Linux64 SDK: no descriptions in $appData; import one with the SDK Manager of the IDE or pass -LinuxSdk <directory>" }
+    return $pick.Dir
 }
 
 function Get-LinuxGccDir([string]$Sdk) {
-    $gcc = Get-ChildItem (Join-Path $Sdk 'usr\lib\gcc\x86_64-linux-gnu') -Directory | Select-Object -First 1
+    $gcc = Get-ChildItem (Join-Path $Sdk 'usr\lib\gcc\x86_64-linux-gnu') -Directory -ErrorAction SilentlyContinue |
+        Sort-Object { [int]($_.Name -replace '\D.*$', '') } -Descending | Select-Object -First 1
     if (-not $gcc) { throw "The SDK has no usr\lib\gcc\x86_64-linux-gnu: $Sdk" }
     return $gcc.FullName
 }
