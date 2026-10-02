@@ -351,6 +351,21 @@ Beyond MSXML the element interface has the conveniences of the helpers: `AddChil
 document has `CreateRoot`, `CreateChild`, `CreateElementNs`, `Clone`, `ToString`, `ToBytes`,
 `ToUtf8`, `Canonicalize`.
 
+Prefixed names behave as in MSXML. `CreateElement('ns1:File')`, or `CreateNode` with a prefixed
+name and an empty namespace URI, keeps the prefix even when nothing declares it yet, so the
+usual sequence of creating the root and then declaring the prefix on it puts the element into
+that namespace in the document written out:
+
+```delphi
+var Root := Doc.CreateElement('ns1:File');
+Doc.DocumentElement := Root;
+Root.SetAttribute('xmlns:ns1', 'urn:example');   // <ns1:File xmlns:ns1="urn:example"/>
+```
+
+An attribute created with a prefix and no namespace URI (`CreateAttribute('ns1:Version')`)
+can be given a value before it has an owner element; the prefix is bound when the attribute
+is attached.
+
 XSLT and schemas:
 
 ```delphi

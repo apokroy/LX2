@@ -1,5 +1,18 @@
 ﻿# Changelog
 
+## Unreleased
+
+### Fixed
+
+- `CreateElement` and `CreateNode(NODE_ELEMENT, ...)` with a prefixed name and no namespace
+  URI dropped the prefix, so an element whose prefix was declared right after creation
+  (`CreateElement('ns1:File')`, then `SetAttribute('xmlns:ns1', ...)`) was written out in no
+  namespace and failed validation against its schema. The prefix is now kept, as in MSXML.
+- Assigning `Value` to an attribute that had no owner element yet (`CreateAttribute('p:name')`)
+  raised an access violation: the document was taken from the attribute's parent. It is now
+  taken from the attribute itself. `CreateNode(NODE_ATTRIBUTE, ...)` with a prefixed name and
+  no namespace URI keeps the prefix and binds it on attachment, like `CreateAttribute`.
+
 ## v1.1.0 — 2026-09-21
 
 ### Changed

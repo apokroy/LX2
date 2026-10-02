@@ -58,6 +58,8 @@ type
     [Test]
     procedure TestCreateNodeWithNamespacePutsElementIntoIt;
     [Test]
+    procedure TestCreateElementKeepsUndeclaredPrefix;
+    [Test]
     procedure TestSchemaCollectionGetDoesNotFreeTheSchema;
     [Test]
     procedure TestSimplePathFromDocumentParsedFromMemory;
@@ -543,6 +545,32 @@ begin
   root.AppendChild(prefixed);
   Assert.AreEqual('urn:p', prefixed.NamespaceURI);
   Assert.AreEqual('item', prefixed.LocalName);
+end;
+
+// As in MSXML, an element created with a prefix that is declared only afterwards keeps the
+// prefix; written out and parsed again, it lands in the declared namespace.
+procedure TXMLDOMTest.TestCreateElementKeepsUndeclaredPrefix;
+begin
+  var doc := CoCreateXMLDocument;
+  var root := doc.CreateElement('ns1:File');
+  doc.DocumentElement := root;
+  root.SetAttribute('xmlns:ns1', 'urn:file');
+  root.AddChild('ns1:Document');
+  Assert.AreEqual('ns1:File', root.NodeName);
+  Assert.AreEqual('<ns1:File xmlns:ns1="urn:file"><ns1:Document/></ns1:File>', root.Xml);
+
+  // An attribute created before it has an owner element takes its value and binds its
+  // prefix when attached.
+  var attr := doc.CreateNode(NODE_ATTRIBUTE, 'ns1:Version', '') as IXMLAttribute;
+  attr.Value := '1';
+  Assert.AreEqual('1', attr.Value);
+  root.Attributes.SetNamedItem(attr);
+  Assert.AreEqual('1', root.GetAttribute('ns1:Version'));
+
+  var copy := CoCreateXMLDocument;
+  Assert.IsTrue(copy.LoadXML(root.Xml));
+  Assert.AreEqual('urn:file', copy.DocumentElement.NamespaceURI);
+  Assert.AreEqual('File', copy.DocumentElement.LocalName);
 end;
 
 // A simple path (`//name`, no predicates) takes the fast evaluator, and a query issued on the

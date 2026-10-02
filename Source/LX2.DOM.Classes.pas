@@ -2697,7 +2697,7 @@ begin
 
   if AttrValue <> '' then
   begin
-    children := xmlNewDocText(AttrPtr.parent.doc, Args.StrPtr(attrValue));
+    children := xmlNewDocText(AttrPtr.doc, Args.StrPtr(attrValue));
     if children = nil then
       LX2InternalError;
   end;
@@ -2705,7 +2705,7 @@ begin
   // The old entry leaves the document's ID table BEFORE the attribute value changes,
   // otherwise the table would keep a stale (old value -> node) pair.
   if WasId then
-    xmlRemoveID(AttrPtr.parent.doc, AttrPtr);
+    xmlRemoveID(AttrPtr.doc, AttrPtr);
 
   if AttrPtr.children <> nil then
     xmlFreeNodeList(AttrPtr.children);
@@ -2732,7 +2732,7 @@ begin
   if WasId and (AttrValue <> '') then
   begin
     AttrPtr.atype := XML_ATTRIBUTE_ID;   // xmlRemoveID may have reset atype; restore it explicitly
-    if xmlAddID(nil, AttrPtr.parent.doc, Args.StrPtr(AttrValue), AttrPtr) = nil then
+    if xmlAddID(nil, AttrPtr.doc, Args.StrPtr(AttrValue), AttrPtr) = nil then
       LX2InternalError;   // for example, a duplicate ID in the document with validation on
   end;
 end;
@@ -3338,7 +3338,11 @@ begin
 
   case NodeType of
     NODE_ATTRIBUTE:
-      Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil));
+      // Without a namespace URI the prefix is bound when the attribute is attached, as in CreateAttribute
+      if HRef = '' then
+        Result := CreateAttribute(Name)
+      else
+        Result := Cast(xmlNewDocProp(xmlDocPtr(NodePtr), xmlStrPtr(LocalName), nil));
     NODE_CDATA_SECTION:
       Result := Cast(xmlNewCDataBlock(xmlDocPtr(NodePtr), nil, 0));
     NODE_COMMENT:
@@ -3351,7 +3355,14 @@ begin
       Result := Cast(xmlNewDocText(xmlDocPtr(NodePtr), nil));
     NODE_ELEMENT:
       begin
-        var Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlStrPtr(LocalName), nil);
+        // A prefixed name without a namespace URI keeps its prefix, as in MSXML: the prefix is
+        // usually declared on the element right after it is created, and the document written
+        // out then puts the element into that namespace.
+        var Node: xmlNodePtr;
+        if HRef = '' then
+          Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlStrPtr(Utf8Encode(Name)), nil)
+        else
+          Node := xmlNewDocNode(xmlDocPtr(NodePtr), nil, xmlStrPtr(LocalName), nil);
         if HRef <> '' then
         begin
           // xmlNewNs only declares the namespace on the node; the element is put
