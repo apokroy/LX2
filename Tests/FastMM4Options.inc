@@ -1,4 +1,4 @@
-{
+﻿{
 
 Fast Memory Manager: Options Include File
 

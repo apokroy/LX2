@@ -1,4 +1,4 @@
-// Throughput benchmark of the statically linked libxml2 (LX2.Static): parsing, push
+﻿// Throughput benchmark of the statically linked libxml2 (LX2.Static): parsing, push
 // parsing, serialization in UTF-8 and windows-1251, C14N, XPath and schema validation,
 // on a synthetic document or on a file. Built and run by Bench.ps1 next to it.
 //

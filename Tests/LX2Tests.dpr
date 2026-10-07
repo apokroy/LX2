@@ -1,4 +1,4 @@
-program LX2Tests;
+﻿program LX2Tests;
 
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}

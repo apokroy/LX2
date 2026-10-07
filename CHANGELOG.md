@@ -12,6 +12,18 @@
   raised an access violation: the document was taken from the attribute's parent. It is now
   taken from the attribute itself. `CreateNode(NODE_ATTRIBUTE, ...)` with a prefixed name and
   no namespace URI keeps the prefix and binds it on attachment, like `CreateAttribute`.
+- `CloneNode` wrapped the copy in a plain `TXMLNode` whatever the node type, so the copy of an
+  element did not support `IXMLElement` and a cast to the element class failed. The copy now
+  gets the wrapper of its node type.
+- `IXMLSchemaCollection` compiled a schema file twice when it was both added to the collection
+  (loaded with `Load`) and included by another added file, and the compilation failed with
+  "A global complex type definition '...' does already exist": the include was resolved by
+  `xmlBuildURI`, which writes a Windows path with `/`, so it did not match the URL of the
+  added document. Locations relative to a document loaded from a file are now resolved by
+  file system rules, and a file is one schema document however its path is spelled
+  (separators, `.` and `..`, letter case on Windows); a file added twice is compiled once.
+  The neighbours of a file in a directory with non-ASCII letters or braces in its path,
+  which `xmlBuildURI` refuses, are found as well.
 
 ## v1.1.0 — 2026-09-21
 

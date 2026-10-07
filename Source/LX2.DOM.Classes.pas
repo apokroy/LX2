@@ -711,6 +711,9 @@ type
   /// <item><description>Other locations are requested from the <see cref="IXMLResolver"/>
   /// passed along with the document, or, when the document was loaded from a file, read from
   /// disk relative to it. The document obtained is processed by the same rules.</description></item>
+  /// <item><description>A location relative to a document loaded from a file is a path and is
+  /// resolved by the file system rules. A file is one schema document however its path is
+  /// spelled: a file both added and included is compiled once.</description></item>
   /// <item><description>An unresolved location is not an error: an <c>xs:include</c>/<c>xs:redefine</c>
   /// is skipped, an <c>xs:import</c> loses its location, and a warning is recorded in
   /// <see cref="Errors"/>. This way the documents of one namespace, added one by one, form a
@@ -748,7 +751,8 @@ type
       Sources: TList<TSource>;
       /// The merged document Get hands out when there are several sources; lives until Invalidate.
       Merged: xmlDocPtr;
-      /// Resource indices for the duration of a compilation: the namespace wrapper and every source.
+      /// Resource indices for the duration of a compilation: the namespace wrapper and every
+      /// source; -1 for a source that repeats a file added before it.
       Resource: Integer;
       SourceResources: TArray<Integer>;
       constructor Create;
@@ -2372,10 +2376,9 @@ begin
   begin
     var NewNode := TXMLNode(NewChild);
 
-    var DocChanged := NodePtr.doc <> NewNode.NodePtr.doc;
-
-    if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
-      TXmlDocument(NewNode.NodePtr.doc._private)._Release;
+    // The document of the node BEFORE the insert: after the operation it decides
+    // the fate of the document reference held by the NewChild wrapper.
+    var OldDoc := NewNode.NodePtr.doc;
 
     ResolveUnlinked(NodePtr, NewNode);
     // A nil RefChild means "append", as in DOM: insertBefore(x, parent.firstChild) on an empty parent
@@ -2385,8 +2388,20 @@ begin
     var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, RefNode);
     Result := Cast(AddedNode);
 
-    if DocChanged and (AddedNode.doc <> nil) and (AddedNode.doc._private <> nil) then
-      TXmlDocument(AddedNode.doc._private)._AddRef;
+    // Release the NewChild wrapper's reference on its OLD document only when the
+    // wrapper destructor can no longer do it itself: the node was physically
+    // freed by libxml2 (adjacent text nodes merged inside xmlAddPrevSibling -
+    // NodePtr is nil, the destructor skips the release) or the node moved to
+    // another document. The former unconditional _Release lost one reference
+    // for same-document inserts, destroying the document prematurely while its
+    // root wrapper was still alive (mirror of TXMLNode.AppendChild).
+    if ((NewNode.NodePtr = nil) or (NewNode.NodePtr.doc <> OldDoc)) and
+       (OldDoc <> nil) and (OldDoc._private <> nil) then
+      TXmlDocument(OldDoc._private)._Release;
+
+    if (NewNode.NodePtr <> nil) and (NewNode.NodePtr.doc <> OldDoc) and
+       (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
+      TXmlDocument(NewNode.NodePtr.doc._private)._AddRef;
   end;
 end;
 
@@ -2401,7 +2416,8 @@ var
 begin
   if xmlDOMWrapCloneNode(nil, NodePtr.doc, NodePtr, NewNode, NodePtr.doc, nil, Ord(Deep), 0) <> 0 then
     LX2InternalError;
-  Result := TXMLNode.Create(NewNode);
+  // Cast picks the wrapper class by node type: a copy of an element is a TXMLElement
+  Result := Cast(NewNode);
 end;
 
 function TXMLNode.Get_Attributes: IXMLAttributes;
@@ -3929,12 +3945,61 @@ begin
   Result := FResourceUrls[Index];
 end;
 
+/// A rooted file-system path, the way the URL of a document loaded from a file looks: a drive
+/// path or a UNC name under Windows, an absolute path elsewhere. Neither a relative reference
+/// nor a URI with a scheme is one.
+function IsRootedFilePath(const S: string): Boolean;
+begin
+{$IFDEF MSWINDOWS}
+  Result := ((System.Length(S) >= 3) and CharInSet(S[1], ['A'..'Z', 'a'..'z']) and (S[2] = ':') and CharInSet(S[3], ['\', '/']))
+    or S.StartsWith('\\');
+{$ELSE}
+  Result := S.StartsWith('/');
+{$ENDIF}
+end;
+
+/// A URI reference that starts with a scheme (RFC 3986: a letter, then letters, digits, "+",
+/// "-" or "." up to ":"). A drive letter is not a scheme: a scheme has two characters at least.
+function HasUriScheme(const S: string): Boolean;
+begin
+  var I := 1;
+  while (I <= System.Length(S)) and
+    (CharInSet(S[I], ['A'..'Z', 'a'..'z']) or ((I > 1) and CharInSet(S[I], ['0'..'9', '+', '-', '.']))) do
+    Inc(I);
+  Result := (I > 2) and (I <= System.Length(S)) and (S[I] = ':');
+end;
+
+/// The key of a location in FLocations: a file is one schema document however its path is
+/// spelled — separators, "." and "..", letter case where the file system ignores it.
+/// ExpandFileName, unlike TPath.GetFullPath, raises nothing on a path longer than MAX_PATH.
+function LocationKey(const Location: string): string;
+begin
+  if not IsRootedFilePath(Location) then
+    Exit(Location);
+  Result := ExpandFileName(Location);
+{$IFDEF MSWINDOWS}
+  Result := AnsiUpperCase(Result);
+{$ENDIF}
+end;
+
 function TXMLSchemaCollection.AbsoluteLocation(const Location, BaseUrl: string): string;
 var
   Args: TXmlArgs;
 begin
   if BaseUrl = '' then
     Exit(Location);
+
+  // The neighbours of a document loaded from a file are files, and their paths are built by
+  // the file system rules: xmlBuildURI turns the separators of a Windows path into "/" and
+  // refuses a path with letters beyond ASCII or braces, while the document added from the
+  // same file carries its URL as it was loaded.
+  if IsRootedFilePath(BaseUrl) and not HasUriScheme(Location) then
+  begin
+    if IsRootedFilePath(Location) or ((Location <> '') and CharInSet(Location[1], ['/', PathDelim])) then
+      Exit(ExpandFileName(Location));
+    // The base is expanded first: under Windows ExtractFilePath does not take "/" for a separator.
+    Exit(ExpandFileName(ExtractFilePath(ExpandFileName(BaseUrl)) + Location));
+  end;
 
   var Uri := xmlBuildURI(Args.StrPtr(Location), Args.StrPtr(BaseUrl));
   if Uri = nil then
@@ -3974,7 +4039,8 @@ var
   Data: TBytes;
 begin
   var Absolute := AbsoluteLocation(Location, BaseUrl);
-  if FLocations.TryGetValue(Absolute, Result) then
+  var Key := LocationKey(Absolute);
+  if FLocations.TryGetValue(Key, Result) then
     Exit;
 
   if Resolver <> nil then
@@ -3988,7 +4054,7 @@ begin
 
   // The slot is taken before the document is processed: circular includes find it taken.
   Result := ReserveResource(Absolute);
-  FLocations.Add(Absolute, Result);
+  FLocations.Add(Key, Result);
 
   var Doc := xmlDoc.Create(Data, DefaultParserOptions);
   if Doc = nil then
@@ -4128,13 +4194,26 @@ begin
       for var I := 0 to Item.Sources.Count - 1 do
       begin
         var Url := Item.Sources[I].Doc.Url;
-        if Url <> '' then
+        if Url = '' then
+        begin
+          Item.SourceResources[I] := ReserveResource(Item.NamespaceURI + '/source' + IntToStr(I));
+          Continue;
+        end;
+
+        // One file added to a namespace twice is one document: the later copy is left out.
+        var Key := LocationKey(Url);
+        var Existing: Integer;
+        var Twice := False;
+        if FLocations.TryGetValue(Key, Existing) then
+          for var J := 0 to I - 1 do
+            Twice := Twice or (Item.SourceResources[J] = Existing);
+        if Twice then
+          Item.SourceResources[I] := -1
+        else
         begin
           Item.SourceResources[I] := ReserveResource(Url);
-          FLocations.AddOrSetValue(Url, Item.SourceResources[I]);
-        end
-        else
-          Item.SourceResources[I] := ReserveResource(Item.NamespaceURI + '/source' + IntToStr(I));
+          FLocations.AddOrSetValue(Key, Item.SourceResources[I]);
+        end;
       end;
     end;
 
@@ -4146,6 +4225,8 @@ begin
       Wrapper := Wrapper + '>';
       for var I := 0 to Item.Sources.Count - 1 do
       begin
+        if Item.SourceResources[I] < 0 then
+          Continue;
         var Source := Item.Sources[I];
         var Copy := xmlDocPtr(TXMLDocument(Source.Doc).NodePtr).Clone(True);
         try

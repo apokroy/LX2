@@ -1286,6 +1286,11 @@ begin
   if P1 = P2 then   // <-- critical, libxml2 inetrens string in dict
     Exit(True);
 
+  // libxml2's xmlStrSame is NULL-safe (a default xmlns has prefix = nil);
+  // the comparison simply fails when one side is absent
+  if (P1 = nil) or (P2 = nil) then
+    Exit(False);
+
   while True do
   begin
     Result := P1^ = P2^;

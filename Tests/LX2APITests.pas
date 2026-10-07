@@ -60,6 +60,8 @@ type
     [Test]
     procedure TestCreateElementKeepsUndeclaredPrefix;
     [Test]
+    procedure TestCloneNodeOfElementIsElement;
+    [Test]
     procedure TestSchemaCollectionGetDoesNotFreeTheSchema;
     [Test]
     procedure TestSimplePathFromDocumentParsedFromMemory;
@@ -100,12 +102,14 @@ type
     procedure TestGetMergesTheDocumentsOfANamespace;
     [Test]
     procedure TestAddCollectionCopiesEverySource;
+    [Test]
+    procedure TestIncludeOfAnAddedFileIsNotReadAgain;
   end;
 
 implementation
 
 uses
-  System.Rtti, System.Variants,
+  System.Rtti, System.Variants, System.IOUtils,
   libxml2.API, RttiDispatch, LX2.Types, LX2.Helpers, LX2.DOM, LX2.DOM.Classes;
 
 const
@@ -573,6 +577,23 @@ begin
   Assert.AreEqual('File', copy.DocumentElement.LocalName);
 end;
 
+// The copy of an element is an element: code that keeps it in an IXMLElement, or a script
+// variable of the element type, must not get a bare node.
+procedure TXMLDOMTest.TestCloneNodeOfElementIsElement;
+begin
+  var doc := CoCreateXMLDocument;
+  Assert.IsTrue(doc.LoadXML('<Request><Package/><Payment><Sum>1</Sum></Payment></Request>'));
+  var payment := doc.SelectSingleNode('//Payment');
+  var copy := payment.CloneNode(True);
+  Assert.IsTrue(Supports(copy, IXMLElement), 'clone supports IXMLElement');
+  Assert.IsTrue((copy as TObject) is TXMLElement, 'clone is a TXMLElement');
+
+  var package := doc.SelectSingleNode('//Package');
+  var added := package.AppendChild(copy);
+  Assert.IsTrue((added as TObject) is TXMLElement, 'appended node is a TXMLElement');
+  Assert.AreEqual('<Package><Payment><Sum>1</Sum></Payment></Package>', package.Xml);
+end;
+
 // A simple path (`//name`, no predicates) takes the fast evaluator, and a query issued on the
 // document starts from the document node. That node has no name when the document was
 // parsed from memory, and it is not an element, so it must never be compared with a step.
@@ -1019,6 +1040,73 @@ begin
   second.AddCollection(second);
   Assert.AreEqual<NativeInt>(1, second.Length);
   Assert.IsTrue(second.Validate(InstanceDoc('<root xmlns="urn:m"/>')));
+end;
+
+// Both files of a no-namespace schema are loaded from disk and added, and the main one
+// includes the other by its file name: the include and the added document are one schema
+// document, compiled once, whatever the order of Add and the spelling of the path.
+procedure TXMLSchemaTest.TestIncludeOfAnAddedFileIsNotReadAgain;
+begin
+  // The paths of the first set are ASCII (so is the directory of the test where Tests.ps1
+  // runs it), and xmlBuildURI accepts them as URIs; those of the second set it refuses:
+  // letters beyond ASCII, braces.
+  var guid := TGUID.NewGuid.ToString.Trim(['{', '}']);
+  var dirs: TArray<string> := [
+    TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(ParamStr(0))), 'LX2-schemas-' + guid),
+    TPath.Combine(TPath.GetTempPath, 'LX2 Схемы {' + guid + '}')];
+  var names: TArray<string> := ['types', 'типы'];
+  for var I := 0 to High(dirs) do
+  begin
+    var dir := dirs[I];
+    TDirectory.CreateDirectory(TPath.Combine(dir, 'common'));
+    try
+      var types := TPath.Combine(TPath.Combine(dir, 'common'), names[I] + '.xsd');
+      var main := TPath.Combine(dir, 'main.xsd');
+      TFile.WriteAllText(types,
+        '<xs:schema xmlns:xs="' + XsdNs + '">' +
+        '<xs:complexType name="ЧастьТип"><xs:attribute name="n" type="xs:int" use="required"/></xs:complexType>' +
+        '</xs:schema>', TEncoding.UTF8);
+      TFile.WriteAllText(main,
+        '<xs:schema xmlns:xs="' + XsdNs + '">' +
+        '<xs:include schemaLocation="common/' + names[I] + '.xsd"/>' +
+        '<xs:element name="Сообщение" type="ЧастьТип"/>' +
+        '</xs:schema>', TEncoding.UTF8);
+
+      // Another spelling of the same path: "." and "..", and under Windows the letter case.
+{$IFDEF MSWINDOWS}
+      var spelled: TArray<string> := [dir, '.', 'common', '..', 'COMMON', names[I].ToUpper + '.xsd'];
+{$ELSE}
+      var spelled: TArray<string> := [dir, '.', 'common', '..', 'common', names[I] + '.xsd'];
+{$ENDIF}
+      var orders: TArray<TArray<string>> := [
+        [types, main],
+        [main, types],
+        [string.Join(string(PathDelim), spelled), main],
+        [types, main.Replace(PathDelim, '/')],
+        // The included file alone, and one file added twice.
+        [main],
+        [types, main, types]];
+      for var order in orders do
+      begin
+        var schemas := CoCreateSchemaCollection;
+        for var path in order do
+        begin
+          var xsd := CoCreateXMLDocument;
+          Assert.IsTrue(xsd.Load(path), path);
+          schemas.Add('', xsd);
+        end;
+
+        var valid := InstanceDoc('<Сообщение n="1"/>');
+        var isValid := schemas.Validate(valid);
+        var context := string.Join(', ', order) + sLineBreak + Diagnostics(schemas, valid);
+        Assert.IsTrue(isValid, context);
+        Assert.AreEqual<NativeInt>(0, schemas.Errors.Count, context);
+        Assert.IsFalse(schemas.Validate(InstanceDoc('<Сообщение/>')), context);
+      end;
+    finally
+      TDirectory.Delete(dir, True);
+    end;
+  end;
 end;
 
 initialization
