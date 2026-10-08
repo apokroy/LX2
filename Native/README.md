@@ -97,6 +97,11 @@ Current patches:
 - `010-chardata-utf8-fast-path.patch` — `parser.c`: the fast loop of
   `xmlParseCharDataInternal` accepts complete UTF-8 sequences instead of handing every
   text node with a non-ASCII byte to `xmlParseCharDataComplex`.
+- `020-xslt-user-start-node.patch` — libxslt `transform.c`: `xsltApplyStylesheetUser`
+  starts the processing at the node the caller puts into the transform context
+  (`ctxt->node`) instead of the document node, the way `transformNode` of MSXML treats a
+  node; global variables are still evaluated at the document. LX2 sets the node for
+  transforms of a node.
 
 Tried and dropped: a 16-byte SSE2 pre-scan of character data and of the text to
 serialize. It pays only on long text nodes (a fifth off a SAX parse of 1.4 KB notes) and

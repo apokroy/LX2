@@ -166,6 +166,15 @@ type
     /// <paramref name="Node"/>.
     /// </summary>
     function  Contains(const Node: xmlNodePtr): Boolean; inline;
+    /// <summary>
+    /// Makes this element, out of its tree, self-contained in namespaces: a namespace its
+    /// subtree uses through a declaration outside the subtree is declared anew on the
+    /// element that uses it (<c>xmlDOMWrapReconcileNamespaces</c>). The declaration outside
+    /// belongs to the tree and goes with it, and the element written out alone declares
+    /// what it uses, as in MSXML. Declarations within the subtree stay as they are. Nodes
+    /// of other types use no declarations and are left alone.
+    /// </summary>
+    procedure DeclareOuterNamespaces;
     function  FirstElementChild: xmlNodePtr; inline;
     /// <summary>
     /// Returns the string value of an attribute, resolving namespace prefixes
@@ -236,8 +245,19 @@ type
     /// on this node.
     /// </summary>
     procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
+    /// <summary>
+    /// Unlinks <paramref name="ChildNode"/> and returns it, not freed and self-contained in
+    /// namespaces (<see cref="DeclareOuterNamespaces"/>).
+    /// </summary>
     function  RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr; inline;
-    function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr; inline;
+    /// <summary>
+    /// Puts <paramref name="NewChild"/> in place of <paramref name="OldChild"/> and returns
+    /// OldChild, unlinked, not freed and self-contained in namespaces
+    /// (<see cref="DeclareOuterNamespaces"/>). A child replaced by itself stays in place
+    /// and is returned. Returns <c>nil</c> when nothing is replaced: OldChild has no parent,
+    /// or one of the two is an attribute and the other is not.
+    /// </summary>
+    function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
     function  SearchNs(const Prefix: RawByteString): xmlNsPtr; overload; inline;
     function  SearchNs(const Prefix: xmlCharPtr): xmlNsPtr; overload; inline;
     function  SearchNsByRef(const href: RawByteString): xmlNsPtr; overload; inline;
@@ -273,8 +293,11 @@ type
     /// </summary>
     function  SetAttributeNs(const NamespaceURI, Name: RawByteString; const Value: RawByteString): xmlAttrPtr; inline;
     /// <summary>
-    /// Applies an XSLT stylesheet to the subtree rooted at this node, treating
-    /// this node as the initial context node, and produces a new document.
+    /// Applies an XSLT stylesheet starting at this node, as <c>transformNode</c> of
+    /// MSXML does, and produces a new document. The first template is chosen for this
+    /// node (<c>position()</c> and <c>last()</c> are 1, a template matching <c>/</c>
+    /// does not fire unless the node is the document); global variables and parameters
+    /// are evaluated at the document node, and absolute paths address the whole document.
     /// </summary>
     /// <param name="stylesheet">
     /// Parsed stylesheet document. Internally cloned before parsing, because
@@ -292,12 +315,16 @@ type
     /// Do not attempt to free it again externally.
     /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
-    /// <summary>Applies an XSLT stylesheet and serializes the result to a UTF-8/raw byte string.</summary>
+    /// <summary>
+    /// Applies an XSLT stylesheet and serializes the result to bytes in the
+    /// <c>xsl:output</c> encoding (UTF-8 when it names none); the string carries the
+    /// code page of that encoding.
+    /// </summary>
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     /// <summary>
-    /// Applies an XSLT stylesheet and serializes the result to a Unicode string.
+    /// Applies an XSLT stylesheet and serializes the result to a Unicode string, decoded
+    /// from the <c>xsl:output</c> encoding.
     /// </summary>
-    /// <remarks>Internally serializes to raw bytes first, then decodes as UTF-8.</remarks>
     function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     /// <summary>Applies an XSLT stylesheet and writes the serialized result to a stream.</summary>
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
@@ -324,6 +351,9 @@ type
     /// such elements. A fresh element and text-like nodes cannot.
     /// </summary>
     function  CarriesElementOrder: Boolean;
+    /// <summary><see cref="xmlDocHelper.TreeChanged"/> of the node's document; a node
+    /// without a document changes nothing that a child list could remember.</summary>
+    procedure TreeChanged; inline;
     property  Attribute[const name: RawByteString]: RawByteString read GetAttribute write SetAttribute;
     property  Attributes: xmlAttrArray read GetAttributes;
     property  BaseURI: RawByteString read GetBaseURI write SetBaseURI;
@@ -429,13 +459,17 @@ type
     /// <summary>Bit of <c>properties</c> that marks a document whose elements carry the
     /// order index; libxml2 uses the low byte (<c>XML_DOC_*</c>) and nothing above.</summary>
     LX2_DOC_ELEMENTS_ORDERED = 1 shl 24;
+    /// <summary>Bit of <c>properties</c> that marks a document some node list of which
+    /// remembers a position (see <see cref="KeepListPositions"/>).</summary>
+    LX2_DOC_LIST_POSITIONS = 1 shl 25;
   private
     function  GetDocumentElement: xmlNodePtr; inline;
     function  GetElementsOrdered: Boolean; inline;
     function  GetUrl: RawByteString; inline;
     function  GetXml: RawByteString;
     /// <summary>
-    /// Replaces the document's root element, freeing the previous root (if any).
+    /// Replaces the document's root element (<see cref="ReplaceDocumentElement"/>), freeing
+    /// the previous root (if any).
     /// </summary>
     procedure SetDocumentElement(const Value: xmlNodePtr);
   public
@@ -508,6 +542,15 @@ type
     function  DocType: xmlNodePtr; inline;
     function  GetElementsByTagName(const name: RawByteString): xmlNodeArray; inline;
     procedure ReconciliateNs; inline;
+    /// <summary>
+    /// Puts <paramref name="Value"/> in place of the document's root element and returns
+    /// the root it replaced, unlinked and not freed, or <c>nil</c> if there was none or it
+    /// is Value itself. Value may come from the subtree of the old root: it leaves the old
+    /// root, which keeps the rest. Value is made self-contained in namespaces
+    /// (<see cref="xmlNodeHelper.DeclareOuterNamespaces"/>). A <c>nil</c> Value changes
+    /// nothing.
+    /// </summary>
+    function  ReplaceDocumentElement(const Value: xmlNodePtr): xmlNodePtr;
     function  Save(const FileName: string; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = [xmlSaveNoEmpty]): Boolean; overload;
     function  Save(Stream: TStream; const Encoding: string = 'UTF-8'; const Options: TxmlSaveOptions = []): Boolean; overload;
     function  ToAnsi(const Encoding: string = 'windows-1251'; const Format: Boolean = False): RawByteString; overload;
@@ -524,16 +567,15 @@ type
     /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out doc: xmlDocPtr; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     /// <summary>
-    /// Applies an XSLT stylesheet and decodes the result as a Unicode string,
-    /// choosing the decoding based on the STYLESHEET's declared output encoding
-    /// (falls back to raw byte-to-char conversion for non-UTF-8 encodings).
+    /// Applies an XSLT stylesheet and serializes the result to a Unicode string, decoded
+    /// from the <c>xsl:output</c> encoding.
     /// </summary>
-    /// <remarks>
-    /// Note: this inspects <c>stylesheet.encoding</c> (the source stylesheet
-    /// document's encoding attribute), not the actual <c>xsl:output encoding="..."</c>
-    /// directive — for stylesheets where these differ, decoding may be incorrect.
-    /// </remarks>
     function  Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>
+    /// Applies an XSLT stylesheet and serializes the result to bytes in the
+    /// <c>xsl:output</c> encoding (UTF-8 when it names none); the string carries the
+    /// code page of that encoding.
+    /// </summary>
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil; ResourceLoader: xmlResourceLoader = nil): Boolean;
@@ -554,6 +596,25 @@ type
     /// <summary>Drops the mark set by <see cref="OrderElements"/>: the next XPath query
     /// indexes the elements again.</summary>
     procedure ElementsChanged; inline;
+    /// <summary>
+    /// Marks the document as one whose node lists remember positions: from now on every
+    /// change of its tree moves <see cref="xmlTreeGeneration"/>. The live lists of LX2.DOM
+    /// (<c>ChildNodes</c>, <c>GetElementsByTagName</c>) answer <c>Item[I]</c> by stepping
+    /// from the last position they were asked for and keep the position only while the
+    /// generation stays the same, so walking a list by index costs one step per item
+    /// instead of I. Changes of unmarked documents leave the generation alone: building one
+    /// document while reading another by index keeps the reader's positions.
+    /// </summary>
+    procedure KeepListPositions; inline;
+    /// <summary>
+    /// Moves <see cref="xmlTreeGeneration"/> if the document is marked by
+    /// <see cref="KeepListPositions"/>. The mutators of the helpers and of the DOM layer
+    /// call it before they link, unlink, replace or free nodes and before they rename an
+    /// element or change its namespace (a list by tag name selects by the qualified name),
+    /// for every document the operation touches; changing the tree through libxml2
+    /// directly needs the same call.
+    /// </summary>
+    procedure TreeChanged; inline;
     property  ElementsOrdered: Boolean read GetElementsOrdered;
     property  documentElement: xmlNodePtr read GetDocumentElement write SetDocumentElement;
     property  URL: RawByteString read GetURL;
@@ -564,6 +625,17 @@ type
   TXmlErrorCallback = record
     Handler: xmlDocErrorHandler;
   end;
+
+var
+  /// <summary>
+  /// Generation of the trees of documents marked by
+  /// <see cref="xmlDocHelper.KeepListPositions"/>: a position remembered in a node list
+  /// is valid while the generation has not moved. One counter for all such documents;
+  /// it moves through <c>AtomicIncrement</c>, so it never returns to a value it had.
+  /// </summary>
+  xmlTreeGeneration: Int64 = 0;
+
+type
 
   PXsltErrorCallback = ^TXsltErrorCallback;
   TXsltErrorCallback = record
@@ -815,8 +887,13 @@ begin
   var ctxt := xsltNewTransformContext(style, doc);
   if ctxt <> nil then
   begin
-    ctxt.initialContextDoc := doc;
-    ctxt.initialContextNode := node;
+    // xsl:strip-space removes the whitespace text nodes from the source document itself
+    if doc <> nil then
+      doc.TreeChanged;
+    // The node processing starts at, as transformNode of MSXML; global variables are still
+    // evaluated at the document node. libxslt reads it from ctxt.node only with
+    // Native\Patches\020-xslt-user-start-node.patch, a stock library starts at the document.
+    ctxt.node := node;
     if Assigned(errorHandler) then
     begin
       ecb.Handler := errorHandler;
@@ -831,6 +908,31 @@ begin
   begin
     xsltFreeStylesheet(style);
     style := nil;
+  end;
+end;
+
+// The bytes of the result are in the xsl:output encoding (UTF-8 when it names none);
+// tagging the string with that code page makes a later string(S) convert correctly.
+function XsltTransformToString(const stylesheet: xmlDocPtr; doc: xmlDocPtr; node: xmlNodePtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
+var
+  style: xsltStylesheetPtr;
+  output: xmlDocPtr;
+  text: xmlCharPtr;
+  len: Integer;
+begin
+  Result := XsltTransform(stylesheet, doc, node, style, output, errorHandler);
+  if Result then
+  begin
+    if xsltSaveResultToString(text, len, output, style) = 0 then
+    begin
+      SetString(S, text, len);
+      var CodePage := EncodingCodePage(xmlCharToStr(style.encoding));
+      if CodePage <> 0 then
+        SetCodePage(S, CodePage, False);
+      xmlFree(text);
+    end;
+    xmlFreeDoc(output);
+    xsltFreeStylesheet(style);
   end;
 end;
 
@@ -899,6 +1001,8 @@ end;
 function xmlNodeHelper.AppendChild(const NewChild: xmlNodePtr): xmlNodePtr;
 begin
   var Moved := NewChild.CarriesElementOrder;
+  NewChild.TreeChanged;
+  TreeChanged;
   Result := xmlAddChild(@Self, newChild);
   if Result <> nil then
   begin
@@ -929,6 +1033,14 @@ begin
     Run := Run.parent;
   end;
   Result := False;
+end;
+
+procedure xmlNodeHelper.DeclareOuterNamespaces;
+begin
+  if &type <> XML_ELEMENT_NODE then
+    Exit;
+  TreeChanged;   // a declaration may come anew under another prefix
+  xmlDOMWrapReconcileNamespaces(nil, @Self, 0);
 end;
 
 function xmlNodeHelper.GetAttributeNode(const Name: RawByteString): xmlAttrPtr;
@@ -1051,6 +1163,7 @@ end;
 
 function xmlNodeHelper.SetAttributeNs(const NamespaceURI, name, value: RawByteString): xmlAttrPtr;
 begin
+  TreeChanged;   // a new value replaces the text children of an existing attribute
   var ns := xmlSearchNsByHref(doc, @Self, xmlStrPtr(namespaceURI));
   Result := xmlSetNsProp(@Self, ns, xmlStrPtr(name), xmlStrPtr(value));
 end;
@@ -1323,6 +1436,8 @@ end;
 function xmlNodeHelper.InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
 begin
   var Moved := NewChild.CarriesElementOrder;
+  NewChild.TreeChanged;
+  TreeChanged;
   if RefChild = nil then
     Result := xmlAddChild(@Self, NewChild)
   else
@@ -1370,6 +1485,7 @@ end;
 
 procedure xmlNodeHelper.ReconciliateNs;
 begin
+  TreeChanged;   // a declaration may come back under another prefix
   xmlReconciliateNs(doc, @Self);
 end;
 
@@ -1382,24 +1498,44 @@ end;
 
 procedure xmlNodeHelper.RemoveAttributeNode(const Attr: xmlAttrPtr);
 begin
+  TreeChanged;
   xmlRemoveProp(Attr);
   xmlReconciliateNs(doc, @Self);
 end;
 
 function xmlNodeHelper.RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr;
 begin
+  ChildNode.TreeChanged;
   xmlUnlinkNode(ChildNode);
   Result := ChildNode;
   xmlReconciliateNs(doc, @Self);
+  ChildNode.DeclareOuterNamespaces;
 end;
 
 function xmlNodeHelper.ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
 begin
+  // xmlReplaceNode answers nil for a node put in place of itself, as for a failure
+  if NewChild = OldChild then
+    Exit(OldChild);
+
   var Moved := NewChild.CarriesElementOrder;
+  NewChild.TreeChanged;
+  OldChild.TreeChanged;
   Result := xmlReplaceNode(OldChild, NewChild);
+  // An attribute and a node of another type: libxml2 returns OldChild still in place
+  if (Result <> nil) and (Result.parent <> nil) then
+    Exit(nil);
   xmlReconciliateNs(doc, @Self);
+  if Result <> nil then
+    Result.DeclareOuterNamespaces;
   if Moved and (doc <> nil) then
     doc.ElementsChanged;
+end;
+
+procedure xmlNodeHelper.TreeChanged;
+begin
+  if doc <> nil then
+    doc.TreeChanged;
 end;
 
 function xmlNodeHelper.CarriesElementOrder: Boolean;
@@ -1515,6 +1651,7 @@ procedure xmlNodeHelper.SetAttribute(const Name, Value: RawByteString);
 var
   Prefix, LocalName: RawByteString;
 begin
+  TreeChanged;   // a new value replaces the text children of an existing attribute
   if Name = 'xmlns' then
     xmlSetNs(@Self, xmlNewNs(@Self, xmlStrPtr(Value), nil))
   else
@@ -1541,6 +1678,7 @@ end;
 
 procedure xmlNodeHelper.SetNodeName(const Value: RawByteString);
 begin
+  TreeChanged;
   xmlNodeSetName(@Self, xmlStrPtr(Value));
 end;
 
@@ -1558,6 +1696,7 @@ end;
 
 procedure xmlNodeHelper.SetText(const Value: RawByteString);
 begin
+  TreeChanged;
   var Escaped := xmlEncodeSpecialChars(doc, Pointer(Value));
   xmlNodeSetContent(@Self, Escaped);
   XmlFree(Escaped);
@@ -1573,24 +1712,8 @@ begin
 end;
 
 function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
-var
-  style: xsltStylesheetPtr;
-  output: xmlDocPtr;
-  text: xmlCharPtr;
-  len: Integer;
 begin
-  Result := XsltTransform(stylesheet, Self.doc, @Self, style, output, errorHandler);
-  if Result then
-  begin
-    if xsltSaveResultToString(text, len, output, style) = 0 then
-    begin
-      SetString(S, text, len);
-      Result := True;
-      xmlFree(text);
-    end;
-    xmlFreeDoc(output);
-    xsltFreeStylesheet(style);
-  end;
+  Result := XsltTransformToString(stylesheet, Self.doc, @Self, S, errorHandler);
 end;
 
 function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;
@@ -1599,7 +1722,7 @@ var
 begin
   Result := Transform(stylesheet, Text, errorHandler);
   if Result then
-    S := UTF8ToUnicodeString(Text);
+    S := string(Text);   // converts from the code page set by the RawByteString overload
 end;
 
 function xmlNodeHelper.Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler): Boolean;
@@ -1708,6 +1831,8 @@ end;
 
 procedure xmlAttrHelper.SetValue(const Value: RawByteString);
 begin
+  if doc <> nil then
+    doc.TreeChanged;
   if atype = XML_ATTRIBUTE_ID then
     xmlRemoveID(doc, @self);
 
@@ -2009,6 +2134,7 @@ end;
 
 procedure xmlDocHelper.ReconciliateNs;
 begin
+  TreeChanged;   // a declaration may come back under another prefix
   if documentElement <> nil then
     xmlReconciliateNs(@Self, documentElement);
 end;
@@ -2037,14 +2163,40 @@ begin
   properties := properties and not LX2_DOC_ELEMENTS_ORDERED;
 end;
 
-procedure xmlDocHelper.SetDocumentElement(const Value: xmlNodePtr);
+procedure xmlDocHelper.KeepListPositions;
 begin
+  properties := properties or LX2_DOC_LIST_POSITIONS;
+end;
+
+procedure xmlDocHelper.TreeChanged;
+begin
+  if properties and LX2_DOC_LIST_POSITIONS <> 0 then
+    AtomicIncrement(xmlTreeGeneration);
+end;
+
+function xmlDocHelper.ReplaceDocumentElement(const Value: xmlNodePtr): xmlNodePtr;
+begin
+  // xmlDocSetRootElement answers the root set again with the root itself, left in place
+  if Value = documentElement then
+    Exit(nil);
+
   var Moved := (Value <> nil) and Value.CarriesElementOrder;
-  var Old := xmlDocSetRootElement(@Self, Value);
-  if Old <> nil then
-    xmlFreeNode(Old);
+  if Value <> nil then
+    Value.TreeChanged;
+  TreeChanged;
+  Result := xmlDocSetRootElement(@Self, Value);
+  // An element of the old root's subtree may use the declarations of the old root
+  if Value <> nil then
+    Value.DeclareOuterNamespaces;
   if Moved then
     ElementsChanged;
+end;
+
+procedure xmlDocHelper.SetDocumentElement(const Value: xmlNodePtr);
+begin
+  var Old := ReplaceDocumentElement(Value);
+  if Old <> nil then
+    xmlFreeNode(Old);
 end;
 
 function xmlDocHelper.ToAnsi(const Encoding: string; const Format: Boolean): RawByteString;
@@ -2110,29 +2262,8 @@ begin
 end;
 
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler): Boolean;
-var
-  style: xsltStylesheetPtr;
-  output: xmlDocPtr;
-  text: xmlCharPtr;
-  len: Integer;
 begin
-  Result := XsltTransform(stylesheet, @Self, @Self, style, output, errorHandler);
-  if Result then
-  begin
-    if xsltSaveResultToString(text, len, output, style) = 0 then
-    begin
-      SetString(S, text, len);
-      // The bytes are in the xsl:output encoding (UTF-8 when it names none); tagging
-      // the string with that code page makes a later string(S) convert correctly.
-      var CodePage := EncodingCodePage(xmlCharToStr(style.encoding));
-      if CodePage <> 0 then
-        SetCodePage(S, CodePage, False);
-      Result := True;
-      xmlFree(text);
-    end;
-    xmlFreeDoc(output);
-    xsltFreeStylesheet(style);
-  end;
+  Result := XsltTransformToString(stylesheet, @Self, @Self, S, errorHandler);
 end;
 
 function xmlDocHelper.Transform(const stylesheet: xmlDocPtr; out S: string; errorHandler: xsltErrorHandler): Boolean;

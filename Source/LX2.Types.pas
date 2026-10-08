@@ -573,12 +573,22 @@ const
   RAW_STR_INIT:   UInt64 = (UInt64(1) shl 32) or (UInt64(SizeOf(AnsiChar)) shl 16) or $FFFF;
   UTF8_STR_INIT:  UInt64 = (UInt64(1) shl 32) or (UInt64(SizeOf(AnsiChar)) shl 16) or 65001;
 
-procedure NewUtf16String(out Result: Pointer; Len: NativeInt); overload; inline;
-procedure NewUtf16String(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
-procedure NewRawString(out Result: Pointer; Len: NativeInt); overload; inline;
-procedure NewRawString(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
-procedure NewUtf8String(out Result: Pointer; Len: NativeInt); overload; inline;
-procedure NewUtf8String(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+/// <summary>
+/// Makes a string variable a new string of <paramref name="Len"/> characters,
+/// building the header directly instead of going through the RTL string manager.
+/// </summary>
+/// <remarks>
+/// <paramref name="Result"/> is a string variable passed as <c>Pointer(S)</c>, and
+/// whatever it holds is released first. It is not necessarily empty: a string
+/// function's result arrives holding the variable it is being assigned to, which
+/// inside a loop is the previous iteration's string.
+/// </remarks>
+procedure NewUtf16String(var Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewUtf16String(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+procedure NewRawString(var Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewRawString(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+procedure NewUtf8String(var Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewUtf8String(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
 
 resourcestring
   SXmlNsHrefNotFound     = 'Namespace with URI "%s" not found';
@@ -607,15 +617,14 @@ type
     length: Integer;
   end;
 
-procedure NewUtf16String(out Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewUtf16String(var Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    UnicodeString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(WideChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -624,15 +633,14 @@ begin
   PWideChar(Result)[Len] := #0;
 end;
 
-procedure NewUtf16String(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+procedure NewUtf16String(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    UnicodeString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(WideChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -642,15 +650,14 @@ begin
   Move(Data^, Result^, Len * SizeOf(WideChar));
 end;
 
-procedure NewRawString(out Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewRawString(var Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    RawByteString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -659,15 +666,14 @@ begin
   PAnsiChar(Result)[Len] := #0;
 end;
 
-procedure NewRawString(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+procedure NewRawString(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    RawByteString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -677,15 +683,14 @@ begin
   Move(Data^, Result^, Len);
 end;
 
-procedure NewUtf8String(out Result: Pointer; Len: NativeInt); overload; inline;
+procedure NewUtf8String(var Result: Pointer; Len: NativeInt); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    RawByteString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -694,15 +699,14 @@ begin
   PAnsiChar(Result)[Len] := #0;
 end;
 
-procedure NewUtf8String(out Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
+procedure NewUtf8String(var Result: Pointer; Len: NativeInt; const Data: Pointer); overload; inline;
 var
   P: PStrRec;
 begin
+  if Result <> nil then
+    RawByteString(Result) := '';
   if Len = 0 then
-  begin
-    Result := nil;
     Exit;
-  end;
 
   GetMem(P, SizeOf(StrRec) + (Len + 1) * SizeOf(AnsiChar));
   Result := Pointer(PByte(P) + SizeOf(StrRec));
@@ -1205,10 +1209,9 @@ function xmlEscapeString(const Value: RawByteString): RawByteString;
 begin
   var Escaped := xmlEncodeSpecialChars(nil, Pointer(Value));
   var Len := xmlStrLen(Escaped);
-  // An empty result has to stay a nil string: NewUtf8String would build a
-  // non-nil zero-length one, and xmlStrPtr relies on empty meaning nil.
-  if Len > 0 then
-    NewUtf8String(Pointer(Result), Len, Escaped);
+  // An empty result is a nil string, as xmlStrPtr expects: NewUtf8String with
+  // Len = 0 releases what Result held and leaves nil.
+  NewUtf8String(Pointer(Result), Len, Escaped);
   XmlFree(Escaped);
 end;
 

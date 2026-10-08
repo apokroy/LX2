@@ -260,7 +260,13 @@ elements in document order (`xmlXPathOrderDocElems`; `OrderElements`, `ElementsC
 and `ElementsOrdered` on `xmlDoc`): without the index libxml2 sorts results by walking
 the tree, which is quadratic among thousands of sibling elements. The helpers and the DOM
 layer drop the index when an indexed element is moved; after moving elements through
-libxml2 directly, call `ElementsChanged`. The blocks themselves come from the C runtime heap
+libxml2 directly, call `ElementsChanged`. In the same way the live lists of the DOM layer
+(`ChildNodes`, `GetElementsByTagName`) answer `Item[I]` by stepping from the position of
+the previous call, so a walk by index is linear; the position holds while
+`xmlTreeGeneration` stays the same, and the helpers and the DOM layer call `TreeChanged` (on
+`xmlDoc` or `xmlNode`) before they link, unlink, replace or free nodes, rename an element or
+change its namespace. After changing such a document through libxml2 directly, call
+`TreeChanged` as well. The blocks themselves come from the C runtime heap
 by default; `LX2Lib.UseHostMemoryManager := True` before `Initialize` points libxml2 at
 `GetMem`/`ReallocMem`/`FreeMem` instead, so a document lives in the same heap as the
 strings around it and a faster manager installed by the host (FastMM5 and the like)
@@ -377,7 +383,18 @@ if Doc.Transform(Style, Html) then                                   // out IXML
 else
   for var E in Doc.XSLTErrors do
     Writeln(E.Reason);
+```
 
+A transformation of a node other than the document (`Node.TransformNode(Style)`, any
+`Transform` or `TransformNodeTo...` of an element, attribute or text node) starts at that
+node, as `transformNode` of MSXML does: the first template is chosen for the node itself, with
+`position()` and `last()` equal to 1, and a template matching `/` does not fire. Global
+variables and parameters are evaluated at the document node, and absolute paths address the
+whole document. libxslt cannot do this on its own; the bundled build carries a local patch
+(`Native\Patches\020-xslt-user-start-node.patch`). With a libxslt loaded from elsewhere
+(`XSLTLib.Load`) the processing of a node starts at its document.
+
+```delphi
 var Schemas := CoCreateSchemaCollection;
 var Xsd := CoCreateXMLDocument;
 Xsd.Load('order.xsd');

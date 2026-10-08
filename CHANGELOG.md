@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Changed
+
+- `GetElementsByTagName` and `GetElementsByTagNameNS` select elements as MSXML and DOM
+  Level 2 do. The list of an element holds its descendants at any depth (it held the direct
+  children only), the list of a document holds the root element too (it was left out). By
+  tag name the qualified name is compared, `'*'` matches every element and an empty name none
+  (it matched every element). By namespace the namespace URI and the local name are compared,
+  `'*'` matches any value of either and an empty URI means no namespace; the URI used to be
+  ignored and the local name compared with the qualified one, so prefixed elements were never
+  found. A document without a root element gives an empty list instead of nil.
+- `IXMLElement.GetElementsByTagNameNS`: the same selection by namespace URI and local name
+  among the descendants of an element, the element itself excluded, as in DOM Level 2.
+- A transformation of a node other than the document (`TransformNode`, `Transform`,
+  `TransformNodeToObject`, `TransformNodeToStream` of an element, attribute or text node, and
+  `xmlNodeHelper.Transform`) starts at that node, as `transformNode` of MSXML does: the first
+  template is chosen for the node itself, with `position()` and `last()` equal to 1, and a
+  template matching `/` does not fire. It used to start at the document whatever node it was
+  called on: libxslt replaces the start node with the document, and the
+  `initialContextNode` that LX2 set never reached it. Global variables and parameters are
+  still evaluated at the document node, and absolute paths address the whole document. The
+  start node comes through `ctxt->node` of the transform context, which libxslt honours with
+  the new local patch `Native\Patches\020-xslt-user-start-node.patch`; with a libxslt loaded
+  from elsewhere (`XSLTLib.Load`) the processing of a node still starts at its document.
+
 ### Fixed
 
 - `CreateElement` and `CreateNode(NODE_ELEMENT, ...)` with a prefixed name and no namespace
@@ -24,6 +48,111 @@
   (separators, `.` and `..`, letter case on Windows); a file added twice is compiled once.
   The neighbours of a file in a directory with non-ASCII letters or braces in its path,
   which `xmlBuildURI` refuses, are found as well.
+- The SAX parser leaked the name and value strings of every attribute but the last one of
+  each element: `NewUtf16String`, `NewRawString` and `NewUtf8String` overwrote the target
+  variable without releasing what it held, and a string function's result arrives holding
+  the variable it is assigned to (inside a loop, the previous iteration's string). A 220 MB
+  document with a dozen attributes per element left about 850 MB allocated. The
+  constructors now release the previous value (`out Result: Pointer` became `var`).
+- `xmlEscapeString` of an empty value returned whatever the receiving variable held, for
+  instance the previous iteration's escaped text; it now returns an empty (nil) string.
+- `ChildNodes.Item[I]` walked from the first child on every call, so a walk over the list
+  by index was quadratic: 100 000 children took about six minutes. The node now remembers
+  the position of the last call and steps from the nearest of it, the first and the last
+  child; the list stays live, because every change of a document whose lists remember a
+  position moves `xmlTreeGeneration` (new `xmlDoc.KeepListPositions` and `TreeChanged`,
+  called by the helpers and the DOM layer; xsl:strip-space, which libxslt applies to the
+  source document, included). `Item[-1]` returned the first child instead of nil.
+- `GetElementsByTagName(...).Item[I]` and `Length` walked the (sub)tree from the start on
+  every call. The list now remembers its position the same way and steps between matching
+  elements forward and backward in document order; renaming an element and changing its
+  namespace move the generation too, since the list selects by the qualified name. The tag
+  name is compared in place instead of being built for every node. Entity references and
+  the DTD are leaves of the walk: libxml2 keeps the parsed text of an entity under its
+  declaration, and the walk used to descend into it and end there.
+- A `ChildNodes` list kept a raw pointer to its node, and a `GetElementsByTagName` list to
+  the root element: the list of a document read after `LoadXML` or `Load` used the freed
+  document. A list now holds the wrapper it was taken from, reads that node (the document
+  itself for a document) on every call, and keeps it alive for as long as the list lives.
+- `TransformNodeToObject` freed the source instead of the output's previous document: a
+  transformed document was left without its tree, and a transformed element was passed to
+  `xmlFreeDoc`, which ended in an access violation. The output's previous document leaked,
+  and the result was not linked to the output wrapper, so `OwnerDocument` of its nodes was
+  nil. The output now takes the result the way `LoadXML` takes a parsed document, and the
+  source stays intact, as in MSXML.
+- `TransformNode` of an element handed the element to libxslt as the source document, and
+  libxslt read document fields from the element node. The internal subset of a document
+  lies where an element keeps the document order index of XPath, so after any query that
+  indexed the document (`SelectNodes`, any `SelectSingleNode` but a simple path) libxslt took
+  the index for a DTD node and unlinked it: an access violation that killed the process.
+  `xmlDocHelper.TreeChanged` read past the end of the node as well. The element is now
+  transformed through `xmlNodeHelper.Transform`, like the `Transform` overloads of a node.
+- `xmlNodeHelper.Transform` did not tag a `RawByteString` result with the code page of the
+  `xsl:output` encoding, and its `string` overload decoded the result as UTF-8 whatever that
+  encoding was: `IXMLNode.Transform` of an element with `encoding="windows-1251"` gave broken
+  text. Both overloads now share the serialization of `xmlDocHelper.Transform`.
+- `xsltTransformContext` in `libxslt.API` was declared `packed`, while C aligns the structure:
+  every field after `type` lay 4 to 36 bytes before its C counterpart, and `lasttsize` was a
+  pointer instead of an `Integer`. A field written through the record landed in a neighbour;
+  the `initialContextNode` and `initialContextDoc` that LX2 wrote went into `tmpDoc`,
+  `internalized`, `nbKeys` and `hasTemplKeyPatterns` (which libxslt happened to recompute or
+  hold at the same truth value). The record now matches the C structure field for field on
+  Win64 and Linux64; a test checks it against the values `xsltNewTransformContext` sets.
+- A node still referenced from Delphi when its document took new content (`LoadXML`, `Load`,
+  `LoadFromBytes`, `LoadFromMemory`, `LoadFromStream`, `TransformNodeToObject` into that
+  document) outlived its libxml2 document, which was freed. A detached node (removed with
+  `RemoveChild`, or created and never inserted) kept a dangling `doc` and names in the freed
+  dictionary: releasing it ended in an access violation or a corrupted heap. A node of the
+  old tree lost its libxml2 node, failed on any access and kept the document wrapper alive
+  for good. The old libxml2 document now passes to an internal retired `TXMLDocument`, which
+  takes over exactly the references the node wrappers hold through it and frees it with the
+  last of them. As in MSXML, the nodes stay usable and can be moved into the new content;
+  `OwnerDocument` gives the reloaded document, and the old top-level nodes show no parent
+  and no siblings. A document that does not own its libxml2 document (the one
+  `IXMLSchemaCollection.Get` returns) no longer frees it on reload. The list `SelectNodes`
+  returns held no reference on its document at all, so its items read freed memory once the
+  document was reloaded or released; it now holds the document as a node wrapper does.
+- A node wrapper released its document reference through the document its node belonged to
+  at that moment, not the one it had taken the reference on. A move to another document
+  carried the reference of the moved node only (`AppendChild`, `InsertBefore`, `setNamedItem`)
+  or none at all (`ReplaceChild`, `DocumentElement`), so wrappers of the subtree kept the
+  source document for good and released the target once more than they had referenced it,
+  which could free it while in use. `AppendChild` released the source before the adoption,
+  freeing the dictionary of the node under it when that was the last reference. A wrapper now
+  remembers the libxml2 document it holds (`TXMLNode.FHeldDoc`) and releases that one, every
+  wrapper of a moved subtree takes its reference to the new document after the move, and a
+  wrapper whose node libxml2 freed (merged text, a descendant of a freed detached node)
+  releases its reference when it goes instead of never.
+- `InsertBefore`, `ReplaceChild`, `DocumentElement`, `setNamedItem` and
+  `IXMLAttributes.SetNamedItem` with a node of another document now adopt it before linking it,
+  as `AppendChild` did (`xmlDOMWrapAdoptNode`): the namespaces it uses are declared in the new
+  document. They used to leave a node pointing at namespace declarations of the old
+  document; an attribute moved by `IXMLAttributes.SetNamedItem` was written without its
+  declaration and read the freed old document once that went. `InsertBefore` and
+  `ReplaceChild` refuse (nil) a fragment or DTD node of another document, as `AppendChild`
+  does: libxml2 does not adopt them.
+- Setting `DocumentElement` to the element that already is the root
+  (`Doc.DocumentElement := Doc.DocumentElement`) freed the root while it stayed linked: an
+  access violation or a corrupted heap. `xmlDocSetRootElement` of libxml2 2.15 returns the
+  root itself when it is set again, and `xmlDocHelper.SetDocumentElement` freed whatever came
+  back. The root set again now stays as it is. Setting another element no longer frees the
+  replaced root either: as in MSXML, it stays detached and usable for as long as its wrapper
+  lives and goes with the wrapper; a root without a wrapper is freed at once. The new
+  `xmlDocHelper.ReplaceDocumentElement` returns the replaced root unlinked;
+  `SetDocumentElement` frees it as before.
+- `ReplaceChild` freed the child it returned, so the result had no libxml2 node and failed on
+  any access. As in MSXML, the old child is now returned detached and usable, and goes with
+  its wrapper. A child replaced by itself (`xmlReplaceNode` answers nil) freed a node still in
+  the tree; it now stays in place and is returned. A replacement libxml2 does not make (an
+  attribute and a node of another type) returns nil instead of freeing the child still in
+  place.
+- A node taken out of its tree by `RemoveChild` or `ReplaceChild`, and an element of the
+  root's subtree set as `DocumentElement`, kept pointing at namespace declarations of the
+  tree: the node was written out (`Xml`) without them and read freed memory once the element
+  carrying them went. Such declarations are now made anew on the node
+  (`xmlNodeHelper.DeclareOuterNamespaces`, over `xmlDOMWrapReconcileNamespaces`), as MSXML
+  writes the node; declarations within its subtree stay as they are. The same path declares
+  the namespace of the root `xmlDocHelper.CreateRoot` makes, which was written without it.
 
 ## v1.1.0 — 2026-09-21
 

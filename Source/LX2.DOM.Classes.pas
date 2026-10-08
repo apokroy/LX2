@@ -15,12 +15,17 @@
 /// </para>
 /// <para>
 /// <b>Mutual reference counting of the document and its nodes:</b> every
-/// <c>TXMLNode</c> increments the refcount of its owning document on creation
-/// (<c>TXMLDocument._AddRef</c>) and decrements it on destruction (<c>_Release</c>).
-/// This guarantees that the document is not destroyed while at least one DOM object
-/// referring to its nodes is alive, even when user code has lost every reference to the
-/// `IXMLDocument` itself. Details are in the comments on <see cref="TXMLNode.Create"/>
-/// and <see cref="TXMLNode.Destroy"/>.
+/// <c>TXMLNode</c> holds a reference on the document object of its node's libxml2
+/// document (<c>TXMLDocument._AddRef</c>) and remembers that libxml2 document
+/// (<c>FHeldDoc</c>); destruction releases the reference through the same libxml2
+/// document. This guarantees that the document is not destroyed while at least one DOM
+/// object referring to its nodes is alive, even when user code has lost every reference to
+/// the `IXMLDocument` itself, and even for nodes outside the tree (removed or never
+/// inserted), whose names still live in the document's dictionary. A node moved to another
+/// document takes its reference along (<see cref="FollowDocument"/>); a reload passes the
+/// old libxml2 document, with the references on it, to a retired document object (see
+/// <see cref="TXMLDocument.Retire"/>). Details are in the comments on
+/// <see cref="TXMLNode.Create"/> and <see cref="TXMLNode.Destroy"/>.
 /// </para>
 /// <para>
 /// <b>Global libxml2 node-deregister hook:</b> <see cref="NodeFreeCallback"/> is
@@ -189,16 +194,24 @@ type
     procedure Reset; override;
   end;
 
+  /// <summary>
+  /// The live list of the children of a node (<c>ChildNodes</c>): every call reads the
+  /// current children of the owner. <c>Item</c> and <c>Length</c> go through the owner's
+  /// remembered position (<see cref="TXMLNode.ChildAt"/>), which every list of the same
+  /// node shares; the list holds a reference to the owner, so the position and the node
+  /// itself outlive the variable the list was taken from.
+  /// </summary>
   TXMLNodeList = class(TXMLCustomNodeList, IXMLNodeList)
   private
-    FNode: xmlNodePtr;
+    FOwner: TXMLNode;
     FEnum: TXMLNodeChildEnumerator;
+    function  GetNode: xmlNodePtr; inline;
   protected
     function  DoNextNode: xmlNodePtr; override;
     function  CreateEnumerator: TXMLNodeEnumerator; override;
-    property  Node: xmlNodePtr read FNode;
+    property  Node: xmlNodePtr read GetNode;
   public
-    constructor Create(Node: xmlNodePtr);
+    constructor Create(Owner: TXMLNode);
     destructor Destroy; override;
     { MSXMLDOMNodeList }
     function  Get_Item(index: NativeInt): IXMLNode; override;
@@ -222,11 +235,16 @@ type
   private
     FObj: xmlXPathObjectPtr;
     FIndex: NativeInt;
+    // The document of the selected nodes, held as a node wrapper holds it
+    // (TXMLNode.FHeldDoc): the list keeps it alive, through a reload as well.
+    FHeldDoc: xmlDocPtr;
   protected
     function  DoNextNode: xmlNodePtr; override;
     function  CreateEnumerator: TXMLNodeEnumerator; override;
   public
-    constructor Create(Obj: xmlXPathObjectPtr);
+    /// <summary>The nodes of <paramref name="Obj"/>, a node set selected in
+    /// <paramref name="Doc"/>; the list owns the object.</summary>
+    constructor Create(Obj: xmlXPathObjectPtr; Doc: xmlDocPtr);
     destructor Destroy; override;
     { MSXMLDOMNodeList }
     function  Get_Item(Index: NativeInt): IXMLNode; override;
@@ -258,10 +276,11 @@ type
   private
     FParent: xmlNodePtr;
   protected
+    function  GetParent: xmlNodePtr; virtual;
     function  InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr; override;
   public
     constructor Create(const Parent: xmlNodePtr);
-    property  Parent: xmlNodePtr read FParent;
+    property  Parent: xmlNodePtr read GetParent;
   end;
 
   /// <summary>
@@ -349,49 +368,32 @@ type
   end;
 
   /// <summary>
-  /// Implementation of <c>getElementsByTagName</c>/<c>getElementsByTagNameNS</c>: a
-  /// "live" set of elements (computed lazily on every walk, not a cached list) filtered
-  /// by tag name (<see cref="Mask"/>) and, optionally, walking either the direct
-  /// children only or the whole subtree (<see cref="Recursive"/>).
+  /// Implementation of <c>getElementsByTagName</c> (as in MSXML) and
+  /// <c>getElementsByTagNameNS</c> (as in DOM Level 2): a live list of the elements of the
+  /// owner's subtree in document order. The owner element itself is not in its list; the
+  /// list of a document holds its root element too. By tag name the qualified name
+  /// (<c>nodeName</c>) is compared and '*' matches every element; by namespace the
+  /// namespace URI and the local name are compared, '*' matches any value of either and an
+  /// empty URI means no namespace. The list holds a reference to the owner and reads the
+  /// owner's current node on every call.
   /// </summary>
   /// <remarks>
-  /// <para>
-  /// <b>Dispatch through <c>TMoveNext = function: Boolean of object</c>:</b> instead of
-  /// branching on <c>if Recursive then ... if UseMask then ...</c> inside every
-  /// <c>MoveNext</c> call (two condition checks per iteration step), the walk
-  /// implementation (DoNextSibling/DoNextSiblingWithMask/DoNextRecursive/
-  /// DoNextRecursiveWithMask) is chosen ONCE in the constructor and stored as the method
-  /// pointer <c>FDoMoveNext</c>, which removes the conditional jumps from the hot path
-  /// of enumeration. This matters most for <see cref="Get_Item"/>/<see cref="Get_Length"/>
-  /// (see the performance warning below), which recreate the enumerator and walk it to
-  /// the end on every call.
-  /// </para>
-  /// <para>
-  /// ⚠ <b>Performance warning:</b> <see cref="Get_Item"/> and <see cref="Get_Length"/>
-  /// perform a FULL walk of the document (sub)tree on EVERY call (recreating
-  /// <see cref="TEnumerator"/> from scratch), because the result of the walk is not
-  /// cached anywhere. The typical user loop
-  /// <c>for I := 0 to List.Length - 1 do Process(List[I])</c> is therefore O(n²) in the
-  /// size of the document instead of the expected O(n). Prefer enumeration through
-  /// <c>for..in</c> (a single pass over the same <c>Enum.MoveNext</c>) or an explicit
-  /// <see cref="ToArray"/> to indexed access in a loop.
-  /// </para>
+  /// <c>Item</c> and <c>Length</c> step from the position of the previous call, from the
+  /// first or from the last matching element, whichever is nearest, so a walk over the
+  /// list by index in either direction is linear. The position is valid while the owner's
+  /// node is the same and <c>xmlTreeGeneration</c> has not moved: the document is marked by
+  /// <c>KeepListPositions</c>, and every change of its tree, of an element name or of a
+  /// namespace moves the generation. Entity references and the DTD are leaves of the walk:
+  /// their children are declarations and parsed entity text, not elements of the document.
+  /// An owner outside any document is walked from the start on every call.
   /// </remarks>
   TXMLElementList = class(TXMLNodeNamedNodeMap)
   private type
-    TMoveNext = function: Boolean of object;
-
     TEnumerator = class(TXMLNodeEnumerator)
     private
       FList: TXMLElementList;
       FCurrent: xmlNodePtr;
       FIsFirst: Boolean;
-      FMask: Utf8String;
-      FDoMoveNext: TMoveNext;
-      function  DoNextSibling: Boolean;
-      function  DoNextSiblingWithMask: Boolean;
-      function  DoNextRecursive: Boolean;
-      function  DoNextRecursiveWithMask: Boolean;
     protected
       function  DoGetCurrent: xmlNodePtr; override;
       function  DoMoveNext: Boolean; override;
@@ -400,24 +402,53 @@ type
       procedure Reset; override;
     end;
   private
-    FRecursive: Boolean;
+    FOwner: TXMLNode;
+    FOwnerIsDocument: Boolean;
+    FByNamespace: Boolean;
     FMask: string;
-    FUseMask: Boolean;
+    FMaskUtf8: RawByteString;
+    FAnyName: Boolean;
     FNamespaceURI: string;
+    FNamespaceUtf8: RawByteString;
+    FAnyNamespace: Boolean;
     FEnum: TEnumerator;
+    // The element found by the previous call, its number and the number of elements
+    // (-1 while unknown); valid while the root is FPositionRoot and xmlTreeGeneration is
+    // FPositionGeneration
+    FPositionRoot: xmlNodePtr;
+    FPositionGeneration: Int64;
+    FPositionIndex: NativeInt;
+    FPositionNode: xmlNodePtr;
+    FCount: NativeInt;
+    function  WalkRoot: xmlNodePtr;
+    function  Matches(Node: xmlNodePtr): Boolean;
+    class function Descends(Node: xmlNodePtr): Boolean; static; inline;
+    class function Following(Node, Root: xmlNodePtr): xmlNodePtr; static;
+    class function Preceding(Node, Root: xmlNodePtr): xmlNodePtr; static;
+    function  FirstMatch(Root: xmlNodePtr): xmlNodePtr;
+    function  LastMatch(Root: xmlNodePtr): xmlNodePtr;
+    function  NextMatch(Node, Root: xmlNodePtr): xmlNodePtr;
+    function  PrevMatch(Node, Root: xmlNodePtr): xmlNodePtr;
+    procedure CheckPosition(Root: xmlNodePtr);
   protected
+    function  GetParent: xmlNodePtr; override;
     function  DoNextNode: xmlNodePtr; override;
     function  CreateEnumerator: TXMLNodeEnumerator; override;
     function  FindItem(const Name: string): xmlNodePtr; override;
     function  FindQualifiedItem(const BaseName: string; const NamespaceURI: string): xmlNodePtr; override;
-    property  UseMask: Boolean read FUseMask;
   public
-    constructor Create(Parent: xmlNodePtr; Recursive: Boolean; const Mask: string = '*'; const NamespaceURI: string = '');
+    /// <summary>Elements of the owner's subtree with the qualified name
+    /// <paramref name="TagName"/>, every element for '*'.</summary>
+    constructor Create(Owner: TXMLNode; const TagName: string);
+    /// <summary>Elements of the owner's subtree with the namespace
+    /// <paramref name="NamespaceURI"/> (none for '', any for '*') and the local name
+    /// <paramref name="LocalName"/> (any for '*').</summary>
+    constructor CreateNS(Owner: TXMLNode; const NamespaceURI, LocalName: string);
     destructor Destroy; override;
     procedure Reset; override;
     function  Get_Item(Index: NativeInt): IXMLNode; override;
     function  Get_Length: NativeInt; override;
-    property  Recursive: Boolean read FRecursive;
+    /// <summary>The tag name, or the local name of a list by namespace.</summary>
     property  Mask: string read FMask;
     property  NamespaceURI: string read FNamespaceURI;
   end;
@@ -425,8 +456,30 @@ type
   TXMLNode = class(TXMLBase, IXMLNode)
   private
     FXSLTErrors: TXSLTErrors;
+    // The child last found by ChildAt and how many children there are (-1 while unknown).
+    // Valid while NodePtr is still FChildOwner and xmlTreeGeneration is still
+    // FChildGeneration: the document is marked by KeepListPositions, so any change of its
+    // tree moves the generation.
+    FChildOwner: xmlNodePtr;
+    FChildGeneration: Int64;
+    FChildIndex: NativeInt;
+    FChildNode: xmlNodePtr;
+    FChildCount: NativeInt;
+    function  KeepsChildPosition: Boolean; inline;
+    procedure CheckChildPosition;
     procedure XPathErrorHandler(const error: xmlError);
     procedure XSLTError(const Msg: string); virtual;
+  protected
+    /// <summary>
+    /// Child number <paramref name="Index"/>, nil outside the list. Steps from the nearest
+    /// of the first child, the child found by the previous call and the last child (once
+    /// the count is known), so a walk over the list in either direction costs one step per
+    /// item. A node outside any document and an entity reference (whose children belong to
+    /// the DTD) are walked from the first child every time.
+    /// </summary>
+    function  ChildAt(Index: NativeInt): xmlNodePtr;
+    /// <summary>Number of children, counted once per generation of the tree.</summary>
+    function  ChildCount: NativeInt;
   public
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -467,8 +520,16 @@ type
     function  TransformNode(const stylesheet: IXMLDocument): string; virtual;
   protected
     NodePtr: xmlNodePtr;
-    FOwnerDocRefTaken: Boolean;
+    /// The libxml2 document whose document object this wrapper holds a reference on, nil
+    /// when it holds none. It is what the reference is released through, so it stays valid
+    /// after libxml2 frees the node (NodePtr is nil then) and after a reload retires it.
+    FHeldDoc: xmlDocPtr;
     constructor Create(node: xmlNodePtr);
+    /// <summary>
+    /// Makes the wrapper hold the document its node belongs to now: takes a reference on
+    /// that document's object and releases the one held before, if they differ.
+    /// </summary>
+    procedure HoldDocument;
   public
     destructor Destroy; override;
     procedure ReconciliateNs; virtual;
@@ -643,6 +704,7 @@ type
     function  RemoveAttributeNs(const NamespaceURI, Name: string): Boolean;
     function  RemoveAttributeNode(const Attribute: IXMLAttribute): IXMLAttribute;
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
+    function  GetElementsByTagNameNS(const NamespaceURI, LocalName: string): IXMLNodeList;
     function  Get_TagName: string;
 
     function  NextElementSibling: IXMLElement;
@@ -815,6 +877,18 @@ type
     FOptions: TXmlParserOptions;
     FSuccessError: IXMLParseError;
     FSchemas: IXMLSchemaCollection;
+    // How many of the references on this object node wrappers hold through its libxml2
+    // document (TXMLNode.FHeldDoc): a reload passes exactly these to the retired document.
+    FNodeRefs: Integer;
+    // Set on a retired document only: the document object that was reloaded. It owns the
+    // retired nodes for the DOM and is kept alive as long as they are.
+    FSuccessor: TXMLDocument;
+    procedure AddNodeRef;
+    procedure ReleaseNodeRef;
+    procedure Retire;
+    /// <summary>The document object reported as the owner of this document's nodes: the
+    /// document itself, or for a retired one the document that was reloaded.</summary>
+    function  LiveDocument: TXMLDocument;
   protected
     procedure ErrorCallback(const error: xmlError); virtual;
     function  SetNewDoc(Doc: xmlDocPtr): xmlDocPtr;
@@ -972,14 +1046,18 @@ end;
 /// </list>
 /// </para>
 /// <para>
-/// <b>Known limitation:</b> this function does NOT release the reference on the owning
-/// document taken in <see cref="TXMLNode.Create"/>; that reference is released only in
-/// <see cref="TXMLNode.Destroy"/>, which by then can no longer read <c>NodePtr.doc</c>
-/// (it is already <c>nil</c>). See the corresponding note in <see cref="TXMLNode.Destroy"/>.
+/// The reference the wrapper holds on its document (<see cref="TXMLNode.FHeldDoc"/>) is
+/// NOT released here but in <see cref="TXMLNode.Destroy"/>: releasing it could destroy the
+/// document in the middle of the libxml2 call that frees the node, and libxml2 reads the
+/// node's document after this callback returns.
 /// </para>
 /// </remarks>
 procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
 begin
+  // A freed document takes its child lists along; a new one may get the same address
+  if Node.&type in [XML_DOCUMENT_NODE, XML_HTML_DOCUMENT_NODE] then
+    xmlDocPtr(Node).TreeChanged;
+
   if Node._private <> nil then
   begin
     var Ns := TXMLNode(Node._private).NodePtr.nsDef;
@@ -1175,6 +1253,93 @@ begin
 end;
 
 /// <summary>
+/// Makes every wrapper in the subtree of <paramref name="Node"/> hold the document its node
+/// belongs to now (<see cref="TXMLNode.HoldDocument"/>). Called after a node has moved to
+/// another document: libxml2 moves the whole subtree, and a wrapper of any node in it must
+/// keep the new document alive, not the old one.
+/// </summary>
+/// <remarks>
+/// The subtree includes the attributes of its elements and their text. The children of
+/// an entity reference and of a DTD are declarations of the DTD, not part of the subtree.
+/// </remarks>
+procedure FollowDocument(Node: xmlNodePtr);
+
+  procedure Follow(Node: xmlNodePtr); inline;
+  begin
+    if Node._private <> nil then
+      TXMLNode(Node._private).HoldDocument;
+  end;
+
+begin
+  var Cur := Node;
+  while Cur <> nil do
+  begin
+    Follow(Cur);
+    if Cur.&type = XML_ELEMENT_NODE then
+    begin
+      var Attr := Cur.properties;
+      while Attr <> nil do
+      begin
+        Follow(xmlNodePtr(Attr));
+        var Text := Attr.children;
+        while Text <> nil do
+        begin
+          Follow(Text);
+          Text := Text.next;
+        end;
+        Attr := Attr.next;
+      end;
+    end;
+
+    if (Cur.children <> nil) and not (Cur.&type in [XML_ENTITY_REF_NODE, XML_DTD_NODE]) then
+      Cur := Cur.children
+    else
+    begin
+      while (Cur <> Node) and (Cur.next = nil) do
+        Cur := Cur.parent;
+      if Cur = Node then
+        Cur := nil
+      else
+        Cur := Cur.next;
+    end;
+  end;
+end;
+
+/// <summary>
+/// Brings <paramref name="Node"/>, if it belongs to another document, into the document of
+/// <paramref name="Parent"/> before it is linked under Parent. libxml2 adopts it: unlinks
+/// it from its old tree, moves its names to the new dictionary and declares anew the
+/// namespaces it uses that Parent does not declare. Then the wrappers of its subtree hold
+/// the new document (<see cref="FollowDocument"/>). Nothing of the subtree refers to the old
+/// document afterwards, so the old document may go.
+/// </summary>
+/// <returns>False if libxml2 cannot adopt the node (a fragment or a DTD node from
+/// another document).</returns>
+function AdoptForeign(Node, Parent: xmlNodePtr): Boolean;
+begin
+  if Node.doc = Parent.doc then
+    Exit(True);
+
+  Node.TreeChanged;
+  Result := xmlDOMWrapAdoptNode(nil, nil, Node, Parent.doc, Parent, 0) = 0;
+  if Result then
+    FollowDocument(Node);
+end;
+
+/// <summary>
+/// True for a node at the top level of a retired document (see
+/// <see cref="TXMLDocument.Retire"/>). The DOM shows such a node without a parent and
+/// siblings, as MSXML shows the old root after a reload: the retired document object is
+/// internal to the reloaded one.
+/// </summary>
+function IsRetiredTop(Node: xmlNodePtr): Boolean;
+begin
+  var Parent := Node.parent;
+  Result := (Parent <> nil) and (Parent.&type in [XML_DOCUMENT_NODE, XML_HTML_DOCUMENT_NODE]) and
+    (Parent._private <> nil) and (TXMLDocument(Parent._private).FSuccessor <> nil);
+end;
+
+/// <summary>
 /// Unlinks <paramref name="Ns"/> from the singly linked list of namespace declarations
 /// <paramref name="List"/> (normally <c>Node.nsDef</c>), fixing up the pointers of the
 /// neighbouring entries.
@@ -1248,6 +1413,7 @@ begin
   if not xmlUnlinkNs(Node.nsDef, Ns) then
     Exit;
 
+  Node.TreeChanged;   // the elements of the namespace lose its prefix
   Ns.next := nil;
   Ns.context := nil;
 
@@ -1372,17 +1538,25 @@ end;
 
 { TXMLNodeList }
 
-constructor TXMLNodeList.Create(Node: xmlNodePtr);
+constructor TXMLNodeList.Create(Owner: TXMLNode);
 begin
   inherited Create;
-  FNode := Node;
-  FEnum := TXMLNodeChildEnumerator.Create(Node);
+  FOwner := Owner;
+  FOwner._AddRef;
+  FEnum := TXMLNodeChildEnumerator.Create(Owner.NodePtr);
 end;
 
 destructor TXMLNodeList.Destroy;
 begin
   FreeAndNil(FEnum);
+  if FOwner <> nil then
+    FOwner._Release;
   inherited;
+end;
+
+function TXMLNodeList.GetNode: xmlNodePtr;
+begin
+  Result := FOwner.NodePtr;
 end;
 
 function TXMLNodeList.CreateEnumerator: TXMLNodeEnumerator;
@@ -1392,25 +1566,12 @@ end;
 
 function TXMLNodeList.Get_Item(Index: NativeInt): IXMLNode;
 begin
-  var Current := Node.children;
-  for var I := 0 to Index - 1 do
-    if Current = nil then
-      Exit(nil)
-    else
-      Current := Current.next;
-
-  Result := Cast(Current);
+  Result := Cast(FOwner.ChildAt(Index));
 end;
 
 function TXMLNodeList.Get_Length: NativeInt;
 begin
-  Result := 0;
-  var Current := Node.children;
-  while Current <> nil do
-  begin
-    Inc(Result);
-    Current := Current.next;
-  end;
+  Result := FOwner.ChildCount;
 end;
 
 function TXMLNodeList.DoNextNode: xmlNodePtr;
@@ -1453,17 +1614,24 @@ end;
 
 { TXPathList }
 
-constructor TXPathList.Create(Obj: xmlXPathObjectPtr);
+constructor TXPathList.Create(Obj: xmlXPathObjectPtr; Doc: xmlDocPtr);
 begin
   inherited Create;
   FObj := Obj;
   FIndex := -1;
+  if (Doc <> nil) and (Doc._private <> nil) then
+  begin
+    FHeldDoc := Doc;
+    TXMLDocument(Doc._private).AddNodeRef;
+  end;
 end;
 
 destructor TXPathList.Destroy;
 begin
   xmlXPathFreeObject(FObj);
   inherited;
+  if FHeldDoc <> nil then
+    TXMLDocument(FHeldDoc._private).ReleaseNodeRef;
 end;
 
 function TXPathList.CreateEnumerator: TXMLNodeEnumerator;
@@ -1536,6 +1704,7 @@ end;
 
 procedure TXMLCustomNamedNodeMap.RemoveNode(Node: xmlNodePtr);
 begin
+  Node.TreeChanged;
   xmlUnlinkNode(Node);
 end;
 
@@ -1590,13 +1759,19 @@ begin
   FParent := Parent;
 end;
 
+function TXMLNodeNamedNodeMap.GetParent: xmlNodePtr;
+begin
+  Result := FParent;
+end;
+
 function TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr;
 begin
-  var DocChanged := Parent.doc <> NewNode.doc;
-  if (NewNode.doc <> nil) and (Parent.doc <> NewNode.doc) and (NewNode.doc._private <> nil) then
-    TXmlDocument(NewNode.doc._private)._Release;
+  if not AdoptForeign(NewNode, Parent) then
+    Exit(nil);
 
   var Moved := NewNode.CarriesElementOrder;
+  NewNode.TreeChanged;
+  Parent.TreeChanged;
   if AfterNode = nil then
     Result := xmlAddChild(Parent, NewNode)
   else
@@ -1608,9 +1783,6 @@ begin
     if Moved and (Result.doc <> nil) then
       Result.doc.ElementsChanged;
   end;
-
-  if DocChanged and (Result.doc <> nil) and (Result.doc._private <> nil) then
-    TXmlDocument(Result.doc._private)._AddRef;
 end;
 
 { TXMLAttributeList.TEnumerator }
@@ -1928,6 +2100,8 @@ begin
   else if Obj is TXMLAttribute then
   begin
     var Attr := TXMLAttribute(Obj);
+    if not AdoptForeign(xmlNodePtr(Attr.AttrPtr), Parent) then
+      Exit(nil);
     ResolveUnlinked(Parent, Attr);
     var Child := xmlAddChild(Parent, xmlNodePtr(Attr.AttrPtr));
     if Child <> nil then
@@ -2021,18 +2195,6 @@ begin
   inherited Create;
   FList := List;
   FIsFirst := True;
-  FMask := Utf8Encode(List.Mask);
-  if List.Recursive then
-  begin
-    if List.UseMask then
-      FDoMoveNext := DoNextRecursiveWithMask
-    else
-      FDoMoveNext := DoNextRecursive
-  end
-  else if List.UseMask then
-    FDoMoveNext := DoNextSiblingWithMask
-  else
-    FDoMoveNext := DoNextSibling;
 end;
 
 function TXMLElementList.TEnumerator.DoGetCurrent: xmlNodePtr;
@@ -2042,7 +2204,17 @@ end;
 
 function TXMLElementList.TEnumerator.DoMoveNext: Boolean;
 begin
-  Result := FDoMoveNext;
+  var Root := FList.WalkRoot;
+  if Root = nil then
+    FCurrent := nil
+  else if FIsFirst then
+  begin
+    FCurrent := FList.FirstMatch(Root);
+    FIsFirst := False;
+  end
+  else if FCurrent <> nil then
+    FCurrent := FList.NextMatch(FCurrent, Root);
+  Result := FCurrent <> nil;
 end;
 
 procedure TXMLElementList.TEnumerator.Reset;
@@ -2050,99 +2222,31 @@ begin
   FIsFirst := True;
 end;
 
-function TXMLElementList.TEnumerator.DoNextRecursive: Boolean;
-begin
-  if FIsFirst then
-  begin
-    FCurrent := FList.Parent.children;
-    FIsFirst := False;
-  end
-  else
-    FCurrent := FCurrent.GetNext(FList.Parent);
-
-  while FCurrent <> nil do
-  begin
-    if FCurrent.&type = XML_ELEMENT_NODE then
-      Break;
-    FCurrent := FCurrent.GetNext(FList.Parent);
-  end;
-
-  Result := FCurrent <>  nil;
-end;
-
-function TXMLElementList.TEnumerator.DoNextRecursiveWithMask: Boolean;
-begin
-  if FIsFirst then
-  begin
-    FCurrent := FList.Parent.children;
-    FIsFirst := False;
-  end
-  else
-    FCurrent := FCurrent.GetNext(FList.Parent);
-
-  while FCurrent <> nil do
-  begin
-    if (FCurrent.&type = XML_ELEMENT_NODE) and (FCurrent.TagName = FMask) then
-      Break;
-
-    FCurrent := FCurrent.GetNext(FList.Parent);
-  end;
-  Result := FCurrent <>  nil;
-end;
-
-function TXMLElementList.TEnumerator.DoNextSibling: Boolean;
-begin
-  if FIsFirst then
-  begin
-    FCurrent := FList.Parent.children;
-    FIsFirst := False;
-  end
-  else
-    FCurrent := FCurrent.next;
-
-  while FCurrent <> nil do
-  begin
-    if FCurrent.&type = XML_ELEMENT_NODE then
-      Break;
-    FCurrent := FCurrent.next;
-  end;
-
-  Result := FCurrent <>  nil;
-end;
-
-function TXMLElementList.TEnumerator.DoNextSiblingWithMask: Boolean;
-begin
-  if FIsFirst then
-  begin
-    FCurrent := FList.Parent.children;
-    FIsFirst := False;
-  end
-  else
-    FCurrent := FCurrent.next;
-
-  while FCurrent <> nil do
-  begin
-    if (FCurrent.&type = XML_ELEMENT_NODE) and (FCurrent.TagName = FMask) then
-      Break;
-    FCurrent := FCurrent.next;
-  end;
-
-  Result := FCurrent <>  nil;
-end;
-
 { TXMLElementList }
 
-constructor TXMLElementList.Create(Parent: xmlNodePtr; Recursive: Boolean; const Mask, NamespaceURI: string);
+constructor TXMLElementList.Create(Owner: TXMLNode; const TagName: string);
 begin
-  inherited Create(Parent);
-  FRecursive := Recursive;
-  FMask := Mask;
-  FUseMask := not ((Mask = '*') or (Mask = ''));
-  FNamespaceURI := NamespaceURI;
+  FOwner := Owner;
+  FOwner._AddRef;
+  FOwnerIsDocument := Owner is TXMLDocument;
+  inherited Create(GetParent);
+  FMask := TagName;
+  FMaskUtf8 := Utf8Encode(TagName);
+  FAnyName := TagName = '*';
+  FCount := -1;
   FEnum := TEnumerator.Create(Self);
   {$IFDEF DEBUG}
   Inc(DebugObjectCount);
   {$ENDIF}
+end;
+
+constructor TXMLElementList.CreateNS(Owner: TXMLNode; const NamespaceURI, LocalName: string);
+begin
+  Create(Owner, LocalName);
+  FByNamespace := True;
+  FNamespaceURI := NamespaceURI;
+  FNamespaceUtf8 := Utf8Encode(NamespaceURI);
+  FAnyNamespace := NamespaceURI = '*';
 end;
 
 destructor TXMLElementList.Destroy;
@@ -2151,7 +2255,157 @@ begin
   Dec(DebugObjectCount);
   {$ENDIF}
   FreeAndNil(FEnum);
+  if FOwner <> nil then
+    FOwner._Release;
   inherited;
+end;
+
+function TXMLElementList.GetParent: xmlNodePtr;
+begin
+  if FOwner.NodePtr = nil then
+    Result := nil
+  else if FOwnerIsDocument then
+    Result := xmlDocPtr(FOwner.NodePtr).documentElement
+  else
+    Result := FOwner.NodePtr;
+end;
+
+// The node the walk goes through: the document itself for a document, so that its root
+// element is in the list, and the element itself otherwise
+function TXMLElementList.WalkRoot: xmlNodePtr;
+begin
+  Result := FOwner.NodePtr;
+end;
+
+// By namespace: the URI and the local name. By tag name: the qualified name equals the
+// mask, compared in place without building the name.
+function TXMLElementList.Matches(Node: xmlNodePtr): Boolean;
+begin
+  if Node.&type <> XML_ELEMENT_NODE then
+    Exit(False);
+
+  if FByNamespace then
+  begin
+    if not FAnyNamespace then
+      if FNamespaceUtf8 = '' then
+      begin
+        if (Node.ns <> nil) and (Node.ns.href <> nil) and (Node.ns.href^ <> #0) then
+          Exit(False);
+      end
+      else if (Node.ns = nil) or not xmlStrSame(Node.ns.href, Pointer(FNamespaceUtf8)) then
+        Exit(False);
+    Exit(FAnyName or xmlStrSame(Node.name, Pointer(FMaskUtf8)));
+  end;
+
+  if FAnyName then
+    Exit(True);
+
+  var M := PAnsiChar(Pointer(FMaskUtf8));
+  if M = nil then
+    Exit(False);   // an empty tag name: no element has one
+  if (Node.ns <> nil) and (Node.ns.prefix <> nil) and (Node.ns.prefix^ <> #0) then
+  begin
+    var P := PAnsiChar(Node.ns.prefix);
+    while (P^ <> #0) and (P^ = M^) do
+    begin
+      Inc(P);
+      Inc(M);
+    end;
+    if (P^ <> #0) or (M^ <> ':') then
+      Exit(False);
+    Inc(M);
+  end;
+
+  var N := PAnsiChar(Node.name);
+  while (N^ <> #0) and (N^ = M^) do
+  begin
+    Inc(N);
+    Inc(M);
+  end;
+  Result := (N^ = #0) and (M^ = #0);
+end;
+
+// Whether the walk goes into the node's children: those of an entity reference and of the
+// DTD are declarations and parsed entity text, not elements of the document
+class function TXMLElementList.Descends(Node: xmlNodePtr): Boolean;
+begin
+  Result := (Node.children <> nil) and (Node.&type <> XML_ENTITY_REF_NODE) and (Node.&type <> XML_DTD_NODE);
+end;
+
+// Next node of the walk in document order inside Root, Root itself excluded
+class function TXMLElementList.Following(Node, Root: xmlNodePtr): xmlNodePtr;
+begin
+  if Descends(Node) then
+    Exit(Node.children);
+
+  Result := Node;
+  repeat
+    if Result.next <> nil then
+      Exit(Result.next);
+    Result := Result.parent;
+  until (Result = Root) or (Result = nil);
+  Result := nil;
+end;
+
+// The inverse of Following: the previous sibling's last descendant, or the parent
+class function TXMLElementList.Preceding(Node, Root: xmlNodePtr): xmlNodePtr;
+begin
+  if Node.prev = nil then
+  begin
+    Result := Node.parent;
+    if Result = Root then
+      Result := nil;
+    Exit;
+  end;
+
+  Result := Node.prev;
+  while Descends(Result) do
+    Result := Result.last;
+end;
+
+function TXMLElementList.FirstMatch(Root: xmlNodePtr): xmlNodePtr;
+begin
+  Result := Root.children;
+  while (Result <> nil) and not Matches(Result) do
+    Result := Following(Result, Root);
+end;
+
+function TXMLElementList.LastMatch(Root: xmlNodePtr): xmlNodePtr;
+begin
+  Result := Root.last;
+  if Result <> nil then
+    while Descends(Result) do
+      Result := Result.last;
+  while (Result <> nil) and not Matches(Result) do
+    Result := Preceding(Result, Root);
+end;
+
+function TXMLElementList.NextMatch(Node, Root: xmlNodePtr): xmlNodePtr;
+begin
+  Result := Following(Node, Root);
+  while (Result <> nil) and not Matches(Result) do
+    Result := Following(Result, Root);
+end;
+
+function TXMLElementList.PrevMatch(Node, Root: xmlNodePtr): xmlNodePtr;
+begin
+  Result := Preceding(Node, Root);
+  while (Result <> nil) and not Matches(Result) do
+    Result := Preceding(Result, Root);
+end;
+
+procedure TXMLElementList.CheckPosition(Root: xmlNodePtr);
+begin
+  if (Root.doc <> nil) and (FPositionRoot = Root) and (FPositionGeneration = xmlTreeGeneration) then
+    Exit;
+
+  if Root.doc <> nil then
+    Root.doc.KeepListPositions;
+  FPositionRoot := Root;
+  FPositionGeneration := xmlTreeGeneration;
+  FPositionIndex := 0;
+  FPositionNode := nil;
+  FCount := -1;
 end;
 
 function TXMLElementList.CreateEnumerator: TXMLNodeEnumerator;
@@ -2227,27 +2481,94 @@ end;
 
 function TXMLElementList.Get_Item(Index: NativeInt): IXMLNode;
 begin
-  var Enum := TEnumerator.Create(Self);
-  var Count := 0;
-  while Enum.MoveNext do
+  var Root := WalkRoot;
+  if (Index < 0) or (Root = nil) then
+    Exit(nil);
+  CheckPosition(Root);
+  if (FCount >= 0) and (Index >= FCount) then
+    Exit(nil);
+
+  // Start from the nearest of the remembered element, the first and the last one
+  var FromFirst := Index;
+  var FromRemembered := High(NativeInt);
+  if FPositionNode <> nil then
+    FromRemembered := Abs(Index - FPositionIndex);
+  var FromLast := High(NativeInt);
+  if FCount > 0 then
+    FromLast := FCount - 1 - Index;
+
+  var Position: NativeInt;
+  var Node: xmlNodePtr;
+  if (FromRemembered <= FromFirst) and (FromRemembered <= FromLast) then
   begin
-    if Count = Index then
-    begin
-      Result := Enum.Current;
-      Break;
-    end;
-    Inc(Count);
+    Position := FPositionIndex;
+    Node := FPositionNode;
+  end
+  else if FromLast < FromFirst then
+  begin
+    Position := FCount - 1;
+    Node := LastMatch(Root);
+  end
+  else
+  begin
+    Position := 0;
+    Node := FirstMatch(Root);
   end;
-  Enum.Free;
+
+  while (Position < Index) and (Node <> nil) do
+  begin
+    Node := NextMatch(Node, Root);
+    Inc(Position);
+  end;
+  while (Position > Index) and (Node <> nil) do
+  begin
+    Node := PrevMatch(Node, Root);
+    Dec(Position);
+  end;
+
+  if Node = nil then
+    FCount := Position   // the walk ran off the end: the list holds Position elements
+  else
+  begin
+    FPositionIndex := Index;
+    FPositionNode := Node;
+  end;
+  Result := Cast(Node);
 end;
 
 function TXMLElementList.Get_Length: NativeInt;
 begin
-  Result := 0;
-  var Enum := TEnumerator.Create(Self);
-  while Enum.MoveNext do
-    Inc(Result);
-  Enum.Free;
+  var Root := WalkRoot;
+  if Root = nil then
+    Exit(0);
+  CheckPosition(Root);
+  if FCount < 0 then
+  begin
+    var Node := FPositionNode;
+    var Position := FPositionIndex;
+    if Node = nil then
+    begin
+      Node := FirstMatch(Root);
+      Position := 0;
+    end;
+    if Node = nil then
+      FCount := 0
+    else
+    begin
+      var Next := NextMatch(Node, Root);
+      while Next <> nil do
+      begin
+        Node := Next;
+        Inc(Position);
+        Next := NextMatch(Node, Root);
+      end;
+      FCount := Position + 1;
+      // The last element is a likely next request: a walk from the end starts here
+      FPositionIndex := Position;
+      FPositionNode := Node;
+    end;
+  end;
+  Result := FCount;
 end;
 
 procedure TXMLElementList.Reset;
@@ -2261,26 +2582,27 @@ end;
 /// Creates the Delphi wrapper over an existing <c>xmlNodePtr</c>, establishing the
 /// two-way link through <c>Node._private := Self</c> (used by the <c>Cast(...)</c>
 /// functions for caching, see the note on the unit as a whole) and, where applicable,
-/// increments the refcount of the owning document.
+/// takes a reference on the owning document (<see cref="HoldDocument"/>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The <c>FOwnerDocRefTaken</c> condition:</b>
-/// <c>(Node.doc &lt;&gt; nil) and (xmlNodePtr(Node.doc) &lt;&gt; Node) and (Node.doc._private &lt;&gt; nil)</c>.
-/// The middle term, <c>xmlNodePtr(Node.doc) &lt;&gt; Node</c>, excludes the case where the
-/// object being created IS the document wrapper (<c>TXMLDocument</c> descends from
-/// <c>TXMLNode</c> and calls this very constructor through
+/// <b>When a reference is taken:</b> the node belongs to a document
+/// (<c>Node.doc &lt;&gt; nil</c>) that has a wrapper (<c>Node.doc._private &lt;&gt; nil</c>),
+/// and the node is not the document itself (<c>xmlNodePtr(Node.doc) &lt;&gt; Node</c>). The
+/// last term excludes the case where the object being created IS the document wrapper
+/// (<c>TXMLDocument</c> descends from <c>TXMLNode</c> and calls this very constructor through
 /// <c>inherited Create(xmlNodePtr(doc))</c>): a document must not take a reference on
 /// itself, or its refcount could never drop to zero and the object would never be
 /// destroyed.
 /// </para>
 /// <para>
-/// The <see cref="FOwnerDocRefTaken"/> flag is kept in a field of its own rather than
-/// recomputed in <c>Destroy</c> from the current state of <c>NodePtr</c>, because by the
-/// time the object is destroyed <c>NodePtr.doc</c> may no longer be reachable (see
-/// <see cref="NodeFreeCallback"/>, which clears <c>NodePtr</c> when the node is freed
-/// externally); without the stored flag there is no reliable way to tell whether the
-/// constructor took a reference at all.
+/// The libxml2 document the reference was taken through is kept in
+/// <see cref="FHeldDoc"/> rather than read again in <c>Destroy</c> from <c>NodePtr</c>,
+/// because by the time the object is destroyed <c>NodePtr</c> may be nil (see
+/// <see cref="NodeFreeCallback"/>, which clears it when libxml2 frees the node) and the
+/// reference must still be released. The document object behind <c>FHeldDoc._private</c>
+/// may change meanwhile, from the reloaded document to the retired one that took over its
+/// references (<see cref="TXMLDocument.Retire"/>), and it is that one the reference goes to.
 /// </para>
 /// </remarks>
 constructor TXMLNode.Create(Node: xmlNodePtr);
@@ -2288,10 +2610,7 @@ begin
   inherited Create;
   NodePtr := Node;
   NodePtr._private := Self;
-
-  FOwnerDocRefTaken := (Node.doc <> nil) and (xmlNodePtr(Node.doc) <> Node) and (Node.doc._private <> nil);
-  if FOwnerDocRefTaken then
-    TXMLDocument(Node.doc._private)._AddRef;
+  HoldDocument;
 
   FXSLTErrors := TXSLTErrors.Create;
   FXSLTErrors._AddRef;
@@ -2301,18 +2620,19 @@ begin
   {$ENDIF}
 end;
 
+/// <remarks>
+/// A wrapper that took no reference also frees no node: its document is not managed by
+/// this unit. The reference is released last, because freeing a detached node reads the
+/// dictionary of its document.
+/// </remarks>
 destructor TXMLNode.Destroy;
-var
-  doc: TXMLDocument;
 begin
-  doc := nil;
-  if FOwnerDocRefTaken and (NodePtr <> nil) and (NodePtr._private = Self) then
+  var Held := FHeldDoc;
+  FHeldDoc := nil;
+  if (NodePtr <> nil) and (NodePtr._private = Self) then
   begin
-    if (NodePtr.doc <> nil) and (NodePtr.doc._private <> nil) then
-      doc := TXMLDocument(NodePtr.doc._private);
-
     NodePtr._private := nil;
-    if NodePtr.parent = nil then
+    if (Held <> nil) and (NodePtr.parent = nil) then
       xmlFreeNode(NodePtr);
   end;
 
@@ -2325,14 +2645,31 @@ begin
 
   inherited;
 
-  if doc <> nil then
-    doc._Release;
+  if Held <> nil then
+    TXMLDocument(Held._private).ReleaseNodeRef;
+end;
+
+procedure TXMLNode.HoldDocument;
+begin
+  var Doc := NodePtr.doc;
+  if (Doc <> nil) and ((xmlNodePtr(Doc) = NodePtr) or (Doc._private = nil)) then
+    Doc := nil;
+  if Doc = FHeldDoc then
+    Exit;
+
+  var Held := FHeldDoc;
+  FHeldDoc := Doc;
+  if Doc <> nil then
+    TXMLDocument(Doc._private).AddNodeRef;
+  if Held <> nil then
+    TXMLDocument(Held._private).ReleaseNodeRef;
 end;
 
 function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
 begin
   if TObject(NewChild) is TXMLNsNode then
   begin
+    NodePtr.TreeChanged;
     xmlSetNs(NodePtr, TXMLNsNode(NewChild).NsPtr);
     Result := NewChild;
   end
@@ -2345,23 +2682,10 @@ begin
       // xmlAddChild can merge nodes, then Old can be freed
       Result := Cast(NodePtr.AppendChild(NewNode.NodePtr));
     end
+    else if AdoptForeign(NewNode.NodePtr, NodePtr) then
+      Result := Cast(NodePtr.AppendChild(NewNode.NodePtr))
     else
-    begin
-      var DocChanged := NodePtr.doc <> NewNode.NodePtr.doc;
-
-      if (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
-        TXmlDocument(NewNode.NodePtr.doc._private)._Release;
-
-      if xmlDOMWrapAdoptNode(nil, nil, NewNode.NodePtr, NodePtr.doc, NodePtr, 0)  = 0 then
-      begin
-        var AddedNode := NodePtr.AppendChild(NewNode.NodePtr);
-        Result := Cast(AddedNode);
-        if DocChanged and (AddedNode.doc <> nil) and (AddedNode.doc._private <> nil) then
-          TXmlDocument(AddedNode.doc._private)._AddRef;
-      end
-      else
-        Result := nil;
-    end;
+      Result := nil;
   end;
 end;
 
@@ -2369,39 +2693,24 @@ function TXMLNode.InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IX
 begin
   if TObject(NewChild) is TXMLNsNode then
   begin
+    NodePtr.TreeChanged;
     xmlSetNs(NodePtr, TXMLNsNode(NewChild).NsPtr);
     Result := NewChild;
   end
   else
   begin
     var NewNode := TXMLNode(NewChild);
-
-    // The document of the node BEFORE the insert: after the operation it decides
-    // the fate of the document reference held by the NewChild wrapper.
-    var OldDoc := NewNode.NodePtr.doc;
+    if not AdoptForeign(NewNode.NodePtr, NodePtr) then
+      Exit(nil);
 
     ResolveUnlinked(NodePtr, NewNode);
     // A nil RefChild means "append", as in DOM: insertBefore(x, parent.firstChild) on an empty parent
     var RefNode: xmlNodePtr := nil;
     if RefChild <> nil then
       RefNode := TXMLNode(RefChild).NodePtr;
-    var AddedNode := NodePtr.InsertBefore(NewNode.NodePtr, RefNode);
-    Result := Cast(AddedNode);
-
-    // Release the NewChild wrapper's reference on its OLD document only when the
-    // wrapper destructor can no longer do it itself: the node was physically
-    // freed by libxml2 (adjacent text nodes merged inside xmlAddPrevSibling -
-    // NodePtr is nil, the destructor skips the release) or the node moved to
-    // another document. The former unconditional _Release lost one reference
-    // for same-document inserts, destroying the document prematurely while its
-    // root wrapper was still alive (mirror of TXMLNode.AppendChild).
-    if ((NewNode.NodePtr = nil) or (NewNode.NodePtr.doc <> OldDoc)) and
-       (OldDoc <> nil) and (OldDoc._private <> nil) then
-      TXmlDocument(OldDoc._private)._Release;
-
-    if (NewNode.NodePtr <> nil) and (NewNode.NodePtr.doc <> OldDoc) and
-       (NewNode.NodePtr.doc <> nil) and (NewNode.NodePtr.doc._private <> nil) then
-      TXmlDocument(NewNode.NodePtr.doc._private)._AddRef;
+    // A text node merged into its neighbour is freed (its NodePtr turns nil); its wrapper
+    // keeps the document reference until it goes
+    Result := Cast(NodePtr.InsertBefore(NewNode.NodePtr, RefNode));
   end;
 end;
 
@@ -2432,7 +2741,121 @@ end;
 
 function TXMLNode.Get_ChildNodes: IXMLNodeList;
 begin
-  Result := TXMLNodeList.Create(NodePtr);
+  Result := TXMLNodeList.Create(Self);
+end;
+
+function TXMLNode.KeepsChildPosition: Boolean;
+begin
+  Result := (NodePtr.doc <> nil) and (NodePtr.&type <> XML_ENTITY_REF_NODE);
+end;
+
+procedure TXMLNode.CheckChildPosition;
+begin
+  if (FChildOwner = NodePtr) and (FChildGeneration = xmlTreeGeneration) then
+    Exit;
+
+  NodePtr.doc.KeepListPositions;
+  FChildOwner := NodePtr;
+  FChildGeneration := xmlTreeGeneration;
+  FChildIndex := 0;
+  FChildNode := nil;
+  FChildCount := -1;
+end;
+
+function TXMLNode.ChildAt(Index: NativeInt): xmlNodePtr;
+begin
+  if (Index < 0) or (NodePtr = nil) then
+    Exit(nil);
+
+  if not KeepsChildPosition then
+  begin
+    Result := NodePtr.children;
+    while (Index > 0) and (Result <> nil) do
+    begin
+      Result := Result.next;
+      Dec(Index);
+    end;
+    Exit;
+  end;
+
+  CheckChildPosition;
+  if (FChildCount >= 0) and (Index >= FChildCount) then
+    Exit(nil);
+
+  // The nearest known position: the first child, the one found last, the last child
+  var Position: NativeInt := 0;
+  Result := NodePtr.children;
+  if (FChildNode <> nil) and (Abs(Index - FChildIndex) < Index) then
+  begin
+    Position := FChildIndex;
+    Result := FChildNode;
+  end;
+  if (FChildCount > 0) and (FChildCount - 1 - Index < Abs(Index - Position)) then
+  begin
+    Position := FChildCount - 1;
+    Result := NodePtr.last;
+  end;
+
+  while (Position < Index) and (Result <> nil) do
+  begin
+    Result := Result.next;
+    Inc(Position);
+  end;
+  while Position > Index do
+  begin
+    Result := Result.prev;
+    Dec(Position);
+  end;
+
+  if Result = nil then
+    FChildCount := Position   // the walk ran off the end: the list holds Position children
+  else
+  begin
+    FChildIndex := Index;
+    FChildNode := Result;
+  end;
+end;
+
+function TXMLNode.ChildCount: NativeInt;
+begin
+  if NodePtr = nil then
+    Exit(0);
+
+  if not KeepsChildPosition then
+  begin
+    Result := 0;
+    var Child := NodePtr.children;
+    while Child <> nil do
+    begin
+      Inc(Result);
+      Child := Child.next;
+    end;
+    Exit;
+  end;
+
+  CheckChildPosition;
+  if FChildCount < 0 then
+  begin
+    var Child := FChildNode;
+    var Position := FChildIndex;
+    if Child = nil then
+    begin
+      Child := NodePtr.children;
+      Position := 0;
+    end;
+    if Child = nil then
+      FChildCount := 0
+    else
+    begin
+      while Child.next <> nil do
+      begin
+        Child := Child.next;
+        Inc(Position);
+      end;
+      FChildCount := Position + 1;
+    end;
+  end;
+  Result := FChildCount;
 end;
 
 function TXMLNode.Get_FirstChild: IXMLNode;
@@ -2455,6 +2878,8 @@ end;
 
 function TXMLNode.Get_NextSibling: IXMLNode;
 begin
+  if IsRetiredTop(NodePtr) then
+    Exit(nil);
   Result := Cast(NodePtr.next);
 end;
 
@@ -2494,14 +2919,17 @@ end;
 
 function TXMLNode.Get_OwnerDocument: IXMLDocument;
 begin
-  if NodePtr.OwnerDocument._private = nil then
+  var Doc := NodePtr.OwnerDocument;
+  if (Doc = nil) or (Doc._private = nil) then
     Exit(nil);
 
-  Result := TXMLDocument(NodePtr.OwnerDocument._private);
+  Result := TXMLDocument(Doc._private).LiveDocument;
 end;
 
 function TXMLNode.Get_ParentNode: IXMLNode;
 begin
+  if IsRetiredTop(NodePtr) then
+    Exit(nil);
   Result := Cast(NodePtr.parent);
 end;
 
@@ -2515,6 +2943,8 @@ end;
 
 function TXMLNode.Get_PreviousSibling: IXMLNode;
 begin
+  if IsRetiredTop(NodePtr) then
+    Exit(nil);
   Result := Cast(NodePtr.prev);
 end;
 
@@ -2567,8 +2997,11 @@ function TXMLNode.ReplaceChild(const NewChild, OldChild: IXMLNode): IXMLNode;
 begin
   var New := TXMLNode(NewChild);
   var Old := TXMLNode(OldChild);
+  if not AdoptForeign(New.NodePtr, NodePtr) then
+    Exit(nil);
+  // The replaced child stays detached and usable, as in MSXML: its wrapper (the caller
+  // passed it in) frees it when it goes, see Destroy
   Result := Cast(NodePtr.ReplaceChild(New.NodePtr, Old.NodePtr));
-  xmlFreeNode(Old.NodePtr);
 end;
 
 function TXMLNode.SelectNodes(const QueryString: string): IXMLNodeList;
@@ -2576,7 +3009,7 @@ begin
   var Obj := NodePtr.XPathEval(Utf8Encode(QueryString), nil, XPathErrorHandler);
   if Obj = nil then
     Exit(nil);
-  Result := TXPathList.Create(Obj);
+  Result := TXPathList.Create(Obj, NodePtr.doc);
 end;
 
 function TXMLNode.SelectSingleNode(const QueryString: string): IXMLNode;
@@ -2638,7 +3071,7 @@ function TXMLNode.TransformNode(const stylesheet: IXMLDocument): string;
 begin
   FXSLTErrors.Clear;
 
-  xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
+  NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
 end;
 
 function TXMLNode.TransformNodeToObject(const stylesheet, output: IXMLDocument): Boolean;
@@ -2649,10 +3082,7 @@ begin
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
   if Result then
-  begin
-    xmlFreeDoc(xmlDocPtr(NodePtr));
-    TXMLDocument(output).NodePtr := xmlNodePtr(Doc);
-  end;
+    TXMLDocument(output).SetNewDoc(Doc);
 end;
 
 function TXMLNode.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
@@ -2723,6 +3153,7 @@ begin
   if WasId then
     xmlRemoveID(AttrPtr.doc, AttrPtr);
 
+  NodePtr.TreeChanged;
   if AttrPtr.children <> nil then
     xmlFreeNodeList(AttrPtr.children);
   AttrPtr.children := nil;
@@ -2847,7 +3278,12 @@ end;
 
 function TXMLElement.GetElementsByTagName(const tagName: string): IXMLNodeList;
 begin
-  Result := TXMLElementList.Create(NodePtr, False, tagName);
+  Result := TXMLElementList.Create(Self, tagName);
+end;
+
+function TXMLElement.GetElementsByTagNameNS(const NamespaceURI, LocalName: string): IXMLNodeList;
+begin
+  Result := TXMLElementList.CreateNS(Self, NamespaceURI, LocalName);
 end;
 
 function TXMLElement.Get_Attributes: IXMLAttributes;
@@ -3244,6 +3680,70 @@ begin
     FErrors._Release;
   if FSuccessError <> nil then
     FSuccessError._Release;
+  if FSuccessor <> nil then
+    FSuccessor._Release;
+end;
+
+procedure TXMLDocument.AddNodeRef;
+begin
+  AtomicIncrement(FNodeRefs);
+  _AddRef;
+end;
+
+procedure TXMLDocument.ReleaseNodeRef;
+begin
+  AtomicDecrement(FNodeRefs);
+  _Release;
+end;
+
+function TXMLDocument.LiveDocument: TXMLDocument;
+begin
+  Result := Self;
+  while Result.FSuccessor <> nil do
+    Result := Result.FSuccessor;
+end;
+
+/// <summary>
+/// Lets go of the current libxml2 document before another one takes its place.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Without node wrappers holding it, the document is freed (if this object owns it).
+/// Otherwise its nodes are still referenced from Delphi: nodes of the tree, and also
+/// detached ones (removed, or created and never inserted), which libxml2 does not free with
+/// the tree but whose names live in its dictionary. The document then passes to a retired
+/// document object, which owns it from now on and takes over exactly the references the
+/// wrappers hold through it (<see cref="FNodeRefs"/>): they release them through
+/// <c>FHeldDoc._private</c>, which now leads to the retired object, and the last of them
+/// frees the document. Wrappers of other nodes are not concerned.
+/// </para>
+/// <para>
+/// MSXML keeps such nodes usable and owned by the reloaded document. The retired object
+/// therefore holds this one as its successor: it is reported as the owner of the retired
+/// nodes (<see cref="LiveDocument"/>), lives as long as they do, and the top-level nodes of
+/// the retired content show neither parent nor siblings (<see cref="IsRetiredTop"/>).
+/// </para>
+/// </remarks>
+procedure TXMLDocument.Retire;
+begin
+  var Old := xmlDocPtr(NodePtr);
+  var Refs := FNodeRefs;
+  if Refs = 0 then
+  begin
+    Old._private := nil;
+    if FDocOwner then
+      xmlFreeDoc(Old);
+    Exit;
+  end;
+
+  var Retired := TXMLDocument.Create(Old, FDocOwner);
+  Retired.FSuccessor := Self;
+  _AddRef;
+  for var I := 1 to Refs do
+  begin
+    Retired.AddNodeRef;
+    ReleaseNodeRef;   // never the last reference: the retired document holds this object
+  end;
 end;
 
 function TXMLDocument.Canonicalize(Mode: TXmlC14NMode; Comments: Boolean): RawByteString;
@@ -3427,18 +3927,12 @@ end;
 
 function TXMLDocument.getElementsByTagName(const TagName: string): IXMLNodeList;
 begin
-  if xmlDocPtr(NodePtr).documentElement = nil  then
-    Exit(nil);
-
-  Result := TXMLElementList.Create(xmlDocPtr(NodePtr).documentElement, True, TagName);
+  Result := TXMLElementList.Create(Self, TagName);
 end;
 
 function TXMLDocument.getElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
 begin
-  if xmlDocPtr(NodePtr).documentElement = nil  then
-    Exit(nil);
-
-  Result := TXMLElementList.Create(xmlDocPtr(NodePtr).documentElement, True, localName, namespaceURI);
+  Result := TXMLElementList.CreateNS(Self, namespaceURI, localName);
 end;
 
 function TXMLDocument.getErrors: IXMLErrors;
@@ -3511,10 +4005,10 @@ begin
   if Doc = nil then
     Exit;
 
-  NodePtr._private := nil;
-  xmlFreeDoc(Pointer(NodePtr));
+  Retire;
   NodePtr := Pointer(Doc);
   NodePtr._private := Self;
+  FDocOwner := True;
 
   Errors.FList.Clear;
 
@@ -3598,6 +4092,7 @@ end;
 
 procedure TXMLDocument.ReconciliateNs;
 begin
+  NodePtr.TreeChanged;
   xmlReconciliateNs(xmlDocPtr(NodePtr), xmlDocPtr(NodePtr).documentElement);
 end;
 
@@ -3617,12 +4112,24 @@ begin
   Result := xmlDocPtr(NodePtr).Save(Stream, Encoding, Options);
 end;
 
+/// <remarks>
+/// The replaced root stays detached and usable, as in MSXML, for as long as its wrapper
+/// lives: the wrapper frees it when it goes (see <see cref="TXMLNode.Destroy"/>). A root
+/// without a wrapper is freed at once, as a removed node is when its wrapper goes, and
+/// wrappers of its descendants lose their nodes.
+/// </remarks>
 procedure TXMLDocument.Set_documentElement(const Element: IXMLElement);
 begin
-  if Element = nil then
-    xmlDocPtr(NodePtr).documentElement := nil
-  else
-    xmlDocPtr(NodePtr).documentElement := TXMLNode(Element).NodePtr;
+  var Root: xmlNodePtr := nil;
+  if Element <> nil then
+  begin
+    Root := TXMLNode(Element).NodePtr;
+    if not AdoptForeign(Root, NodePtr) then
+      LX2InternalError;
+  end;
+  var Old := xmlDocPtr(NodePtr).ReplaceDocumentElement(Root);
+  if (Old <> nil) and (Old._private = nil) then
+    xmlFreeNode(Old);
 end;
 
 procedure TXMLDocument.Set_preserveWhiteSpace(isPreserving: Boolean);
@@ -3717,10 +4224,7 @@ begin
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
   if Result then
-  begin
-    xmlFreeDoc(xmlDocPtr(NodePtr));
-    TXMLDocument(output).NodePtr := xmlNodePtr(Doc);
-  end;
+    TXMLDocument(output).SetNewDoc(Doc);
 end;
 
 function TXMLDocument.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
@@ -4518,7 +5022,7 @@ end;
 function TXMLNsNode.Get_OwnerDocument: IXMLDocument;
 begin
   if (NsPtr.context <> nil) and (NsPtr.context._private <> nil) then
-    Result := TXMLDocument(NsPtr.context._private)
+    Result := TXMLDocument(NsPtr.context._private).LiveDocument
   else
     Result := nil;
 end;

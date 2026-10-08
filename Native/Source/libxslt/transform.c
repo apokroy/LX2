@@ -5817,6 +5817,7 @@ xsltApplyStylesheetInternal(xsltStylesheetPtr style, xmlDocPtr doc,
     xmlDocPtr res = NULL;
     xsltTransformContextPtr ctxt = NULL;
     xmlNodePtr root, node;
+    xmlNodePtr startNode;
     const xmlChar *method;
     const xmlChar *doctypePublic;
     const xmlChar *doctypeSystem;
@@ -5870,6 +5871,17 @@ xsltApplyStylesheetInternal(xsltStylesheetPtr style, xmlDocPtr doc,
 
     if (ctxt == NULL)
         return (NULL);
+
+    /*
+     * A node of doc set by the caller in userCtxt->node is where the
+     * processing of the source tree starts, as transformNode of MSXML does
+     * for a node other than the document; global variables and parameters
+     * are still evaluated with the document node as the current node.
+     */
+    startNode = (xmlNodePtr) doc;
+    if ((userCtxt != NULL) && (ctxt->node != NULL) &&
+        (ctxt->node->type != XML_NAMESPACE_DECL) && (ctxt->node->doc == doc))
+        startNode = ctxt->node;
 
     ctxt->initialContextDoc = doc;
     ctxt->initialContextNode = (xmlNodePtr) doc;
@@ -6032,6 +6044,7 @@ xsltApplyStylesheetInternal(xsltStylesheetPtr style, xmlDocPtr doc,
     /*
     * Start processing the source tree -----------------------------------
     */
+    ctxt->node = startNode;
     xsltProcessOneNode(ctxt, ctxt->node, NULL);
     /*
     * Remove all remaining vars from the stack.
@@ -6266,7 +6279,8 @@ xsltProfileStylesheet(xsltStylesheetPtr style, xmlDocPtr doc,
  * @userCtxt:  user provided transform context
  *
  * Apply the stylesheet to the document and allow the user to provide
- * its own transformation context.
+ * its own transformation context. When @userCtxt->node is a node of @doc,
+ * the processing starts at that node instead of the document node.
  *
  * Returns the result document or NULL in case of error
  */

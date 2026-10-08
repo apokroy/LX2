@@ -268,7 +268,11 @@ type
   xsltTransformCachePtr = ^xsltTransformCache;
   xsltTransformCache = packed record end;
 
-  xsltTransformContext = packed record
+  /// <summary>
+  /// struct _xsltTransformContext field for field, aligned as C aligns it: a field written
+  /// through this record (LX2 writes <c>node</c>) must land where libxslt reads it.
+  /// </summary>
+  xsltTransformContext = record
     /// the stylesheet used
     style: xsltStylesheetPtr;
     /// the type of output
@@ -388,7 +392,7 @@ type
     /// last text node content
     lasttext: xmlCharPtr;
     /// last text node size
-    lasttsize: xmlCharPtr;
+    lasttsize: Integer;
     /// last text node use
     lasttuse: Integer;
 

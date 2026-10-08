@@ -47,7 +47,15 @@ type
     [Test]
     procedure TestTransformReportsFormattedErrors;
     [Test]
+    procedure TestTransformContextLayoutMatchesLibxslt;
+    [Test]
     procedure TestToStringDecodesNonUtf8Dump;
+    [Test]
+    procedure TestNewStringReleasesPreviousValue;
+    [Test]
+    procedure TestEscapeOfEmptyValueIsEmpty;
+    [Test]
+    procedure TestSAXAttributeStringsAreReleased;
   end;
 
   [TestFixture]
@@ -68,6 +76,10 @@ type
     [Test]
     procedure TestInsertBeforeNilAppends;
     [Test]
+    procedure TestTransformNodeToObjectKeepsTheSource;
+    [Test]
+    procedure TestTransformElementToObjectKeepsTheSource;
+    [Test]
     procedure TestDispatchNamesFollowInterfaceProperties;
     [Test]
     procedure TestLateBoundNodeListItem;
@@ -75,6 +87,74 @@ type
     procedure TestLateBoundResultsAreReleased;
     [Test]
     procedure TestLateBoundCallPicksTheOverload;
+    [Test]
+    procedure TestChildNodesFollowChanges;
+    [Test]
+    procedure TestChildNodesOutOfRange;
+    [Test]
+    procedure TestChildNodesFollowStripSpace;
+    [Test]
+    procedure TestChildNodesFollowReload;
+    [Test]
+    procedure TestChildNodesKeepTheNodeAlive;
+    [Test]
+    procedure TestChildNodesIndexedWalkIsLinear;
+    [Test]
+    procedure TestElementsByTagNameFollowChanges;
+    [Test]
+    procedure TestElementsByTagNameFollowPrefix;
+    [Test]
+    procedure TestElementsByTagNameFollowTheRoot;
+    [Test]
+    procedure TestElementsByTagNameOutOfRange;
+    [Test]
+    procedure TestElementsByTagNameIndexedWalkIsLinear;
+    [Test]
+    procedure TestElementsByTagNameAsInMSXML;
+    [Test]
+    procedure TestElementsByTagNameNSAsInDOM;
+    [Test]
+    procedure TestElementsByTagNameOfDocumentWithoutRoot;
+    [Test]
+    procedure TestElementsByTagNameSkipsTheDTD;
+    [Test]
+    procedure TestElementsByTagNameNSOfElement;
+    [Test]
+    procedure TestElementsByTagNameNSFollowTheRoot;
+    [Test]
+    procedure TestTransformElementAfterXPathQuery;
+    [Test]
+    procedure TestTransformElementTagsResultWithOutputEncoding;
+    [Test]
+    procedure TestTransformNodeStartsAtTheNodeAsInMSXML;
+    [Test]
+    procedure TestTransformWithKeysAsInMSXML;
+    [Test]
+    procedure TestRemovedRootSurvivesReload;
+    [Test]
+    procedure TestCreatedElementSurvivesReload;
+    [Test]
+    procedure TestTransformNodeToObjectKeepsDetachedNodes;
+    [Test]
+    procedure TestReloadedContentStaysUsable;
+    [Test]
+    procedure TestMovedSubtreeHoldsItsNewDocument;
+    [Test]
+    procedure TestSelectedNodesSurviveReload;
+    [Test]
+    procedure TestDocumentElementSetToItself;
+    [Test]
+    procedure TestReplacedDocumentElementStaysUsable;
+    [Test]
+    procedure TestDocumentElementFromItsOwnSubtree;
+    [Test]
+    procedure TestReplaceChildReturnsTheOldChild;
+    [Test]
+    procedure TestReplaceChildWithItself;
+    [Test]
+    procedure TestReplacedChildKeepsItsNamespaces;
+    [Test]
+    procedure TestRemovedChildKeepsItsNamespaces;
   end;
 
   // XML Schema validation over documents that live only in memory: no schema file exists
@@ -109,8 +189,8 @@ type
 implementation
 
 uses
-  System.Rtti, System.Variants, System.IOUtils,
-  libxml2.API, RttiDispatch, LX2.Types, LX2.Helpers, LX2.DOM, LX2.DOM.Classes;
+  System.Rtti, System.Variants, System.IOUtils, System.Diagnostics,
+  libxml2.API, libxslt.API, RttiDispatch, LX2.Types, LX2.Helpers, LX2.DOM, LX2.DOM.Classes, LX2.SAX;
 
 const
   XmlPreamble = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -153,6 +233,22 @@ end;
 procedure TErrorSink.Handler(const Msg: string);
 begin
   Messages.Add(Msg);
+end;
+
+type
+  // Keeps references to the names and values of the first element's attributes.
+  TAttributeKeeper = class(TSAXCustomParser)
+  protected
+    procedure DoStartElement(const LocalName, Prefix, URI: string; const Namespaces: TSAXNamespaces; const Attributes: TSAXAttributes); override;
+  public
+    Kept: TArray<string>;
+  end;
+
+procedure TAttributeKeeper.DoStartElement(const LocalName, Prefix, URI: string; const Namespaces: TSAXNamespaces; const Attributes: TSAXAttributes);
+begin
+  if Kept = nil then
+    for var I := 0 to High(Attributes) do
+      Kept := Kept + [Attributes[I].Name, Attributes[I].Value];
 end;
 
 function TextStylesheet(const OutputEncoding: string = ''): string;
@@ -473,6 +569,47 @@ begin
   end;
 end;
 
+// The Delphi record of the transform context lays its fields out as the C structure of
+// libxslt does: a field written through the record at another offset lands in a neighbour.
+// Every value checked here is put there by xsltNewTransformContext; the locale functions
+// are the last fields of the structure.
+procedure TXMLHelpersTest.TestTransformContextLayoutMatchesLibxslt;
+const
+  XSLT_PARSE_OPTIONS = XML_PARSE_NOENT or XML_PARSE_DTDLOAD or XML_PARSE_DTDATTR or XML_PARSE_NOCDATA;
+  DefaultMaxDepth = 3000;   // xsltMaxDepth
+  DefaultMaxVars = 15000;   // xsltMaxVars
+begin
+  XSLTLib.Initialize;
+  var doc := xmlDoc.Create('<root/>', []);
+  var style := xsltParseStylesheetDoc(xmlDoc.Create(TextStylesheet, []));   // takes the document
+  Assert.IsTrue(style <> nil, 'stylesheet');
+  var ctxt := xsltNewTransformContext(style, doc);
+  try
+    Assert.IsTrue(ctxt <> nil, 'context');
+    Assert.IsTrue(ctxt.style = style, 'style');
+    Assert.AreEqual(0, ctxt.templNr, 'templNr');
+    Assert.AreEqual(5, ctxt.templMax, 'templMax');
+    Assert.AreEqual(10, ctxt.varsMax, 'varsMax');
+    Assert.IsTrue(ctxt.document <> nil, 'document');
+    Assert.IsTrue(ctxt.document.doc = doc, 'document.doc');
+    Assert.AreEqual(1, ctxt.document.main, 'document.main');
+    Assert.IsTrue(ctxt.node = nil, 'node');
+    Assert.IsTrue(ctxt.xpathCtxt <> nil, 'xpathCtxt');
+    Assert.AreEqual(XSLT_PARSE_OPTIONS, ctxt.parserOptions, 'parserOptions');
+    Assert.IsTrue(ctxt.dict <> nil, 'dict');
+    Assert.AreEqual(1, ctxt.internalized, 'internalized');
+    Assert.IsTrue(ctxt.initialContextNode = nil, 'initialContextNode');
+    Assert.IsTrue(ctxt.cache <> nil, 'cache');
+    Assert.AreEqual(DefaultMaxDepth, ctxt.maxTemplateDepth, 'maxTemplateDepth');
+    Assert.AreEqual(DefaultMaxVars, ctxt.maxTemplateVars, 'maxTemplateVars');
+    Assert.IsTrue(Assigned(ctxt.newLocale) and Assigned(ctxt.freeLocale) and Assigned(ctxt.genSortKey), 'locale functions');
+  finally
+    xsltFreeTransformContext(ctxt);
+    xsltFreeStylesheet(style);
+    xmlFreeDoc(doc);
+  end;
+end;
+
 // ToString dumps in the requested encoding; reading that dump back as UTF-8 turned
 // every non-ASCII character into U+FFFD.
 procedure TXMLHelpersTest.TestToStringDecodesNonUtf8Dump;
@@ -485,6 +622,70 @@ begin
     Assert.IsTrue(doc.ToString('UTF-8').Contains('<root>' + CyrillicHello + '</root>'));
   finally
     xmlFreeDoc(doc);
+  end;
+end;
+
+// A string function receives in Result whatever the variable it is assigned to holds. The
+// string constructors behind xmlCharToStr and the like release that value; StringRefCount
+// of a second reference shows whether they did.
+procedure TXMLHelpersTest.TestNewStringReleasesPreviousValue;
+var
+  S, Kept: string;
+  R, KeptRaw: RawByteString;
+begin
+  S := StringOfChar('p', 8);
+  Kept := S;
+  NewUtf16String(Pointer(S), 4, PChar('next'));
+  Assert.AreEqual('next', S);
+  Assert.AreEqual<Integer>(1, StringRefCount(Kept), 'NewUtf16String');
+
+  Kept := S;
+  NewUtf16String(Pointer(S), 0);
+  Assert.AreEqual('', S);
+  Assert.AreEqual<Integer>(1, StringRefCount(Kept), 'NewUtf16String of length 0');
+
+  R := StringOfChar(AnsiChar('p'), 8);
+  KeptRaw := R;
+  NewRawString(Pointer(R), 4, PAnsiChar('next'));
+  Assert.AreEqual<RawByteString>('next', R);
+  Assert.AreEqual<Integer>(1, StringRefCount(KeptRaw), 'NewRawString');
+
+  KeptRaw := R;
+  NewUtf8String(Pointer(R), 4, PAnsiChar('utf8'));
+  Assert.AreEqual<RawByteString>('utf8', R);
+  Assert.AreEqual<Integer>(1, StringRefCount(KeptRaw), 'NewUtf8String');
+end;
+
+// One call site in a loop: the result arrives holding the previous value, and an empty
+// value has to replace it rather than pass it through.
+procedure TXMLHelpersTest.TestEscapeOfEmptyValueIsEmpty;
+const
+  Values: array[0..1] of RawByteString = ('a&b', '');
+var
+  S: RawByteString;
+begin
+  for var V in Values do
+    S := xmlEscapeString(V);
+  Assert.AreEqual<RawByteString>('', S);
+  Assert.AreEqual<Pointer>(nil, Pointer(S), 'an empty escape is a nil string');
+end;
+
+// The attributes of an element are converted one after another through the same
+// temporaries of StartElement; once the element is handled, only the handler's own
+// references may be left.
+procedure TXMLHelpersTest.TestSAXAttributeStringsAreReleased;
+var
+  Xml: RawByteString;
+begin
+  Xml := '<r><i a="1" bb="22" ccc="333"/><i a="4"/></r>';
+  var Parser := TAttributeKeeper.Create;
+  try
+    Assert.IsTrue(Parser.Parse(Xml));
+    Assert.AreEqual<NativeInt>(6, Length(Parser.Kept));
+    for var I := 0 to High(Parser.Kept) do
+      Assert.AreEqual<Integer>(1, StringRefCount(Parser.Kept[I]), Parser.Kept[I]);
+  finally
+    Parser.Free;
   end;
 end;
 
@@ -622,6 +823,54 @@ begin
   Assert.AreEqual('<head><zero/><first/></head>', head.Xml);
   head.InsertBefore(doc.CreateElement('last'), nil);
   Assert.AreEqual('<head><zero/><first/><last/></head>', head.Xml);
+end;
+
+// The template matches the root element as well as the document node, so the result is the
+// same whether processing starts at the document or at the transformed element.
+function CopyItemStylesheet: IXMLDocument;
+begin
+  Result := CoCreateXMLDocument;
+  Assert.IsTrue(Result.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:template match="/ | root"><out><xsl:value-of select="/root/item"/></out></xsl:template>' +
+    '</xsl:stylesheet>'));
+end;
+
+// transformNodeToObject, as in MSXML: the output document takes the result in place of what
+// it held, the source stays as it was and can be transformed again.
+procedure TXMLDOMTest.TestTransformNodeToObjectKeepsTheSource;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<root><item>first</item></root>'));
+  var Style := CopyItemStylesheet;
+  var Output := CoCreateXMLDocument;
+  Assert.IsTrue(Output.LoadXML('<previous/>'));
+
+  Assert.IsTrue(Source.TransformNodeToObject(Style, Output));
+  Assert.AreEqual('<out>first</out>', Output.DocumentElement.Xml);
+  Assert.IsTrue(Output.DocumentElement.OwnerDocument = Output, 'the result belongs to the output wrapper');
+  Assert.AreEqual('<root><item>first</item></root>', Source.DocumentElement.Xml, 'the source is intact');
+
+  Source.SelectSingleNode('/root/item').Text := 'second';
+  Assert.IsTrue(Source.TransformNodeToObject(Style, Output));
+  Assert.AreEqual('<out>second</out>', Output.DocumentElement.Xml, 'the second result replaces the first');
+  Assert.AreEqual('<root><item>second</item></root>', Source.DocumentElement.Xml);
+end;
+
+// The same through an element of the source: neither the element nor its document is freed.
+procedure TXMLDOMTest.TestTransformElementToObjectKeepsTheSource;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<root><item>first</item></root>'));
+  var Root := Source.DocumentElement;
+  var Output := CoCreateXMLDocument;
+
+  Assert.IsTrue(Root.TransformNodeToObject(CopyItemStylesheet, Output));
+  Assert.AreEqual('<out>first</out>', Output.DocumentElement.Xml);
+  Assert.IsTrue(Output.DocumentElement.OwnerDocument = Output, 'the result belongs to the output wrapper');
+  Assert.AreEqual('<root><item>first</item></root>', Root.Xml, 'the element is intact');
+  Assert.IsTrue(Root.OwnerDocument = Source, 'the element stays in its document');
+  Assert.AreEqual('first', Source.SelectSingleNode('/root/item').Text, 'the source document is intact');
 end;
 
 // Interface properties carry no RTTI, so IDispatch takes member names from the implementing
@@ -767,6 +1016,1165 @@ begin
   var Before := DebugObjectCount;
   Walk(doc);
   Assert.AreEqual<NativeInt>(Before, DebugObjectCount);
+end;
+
+// Names of the list's items by index, last to first and then first to last, so that a
+// remembered position is used in both directions.
+function NamesByIndex(const List: IXMLNodeList): string;
+begin
+  var Count := List.Length;
+  var Backward := '';
+  for var I := Count - 1 downto 0 do
+    Backward := List[I].NodeName + ' ' + Backward;
+  Result := '';
+  for var I := 0 to Count - 1 do
+    Result := Result + List[I].NodeName + ' ';
+  Assert.AreEqual(Result, Backward, 'forward and backward');
+  Result := Result.TrimRight;
+end;
+
+function NamesBySiblings(const Node: IXMLNode): string;
+begin
+  Result := '';
+  var Child := Node.FirstChild;
+  while Child <> nil do
+  begin
+    Result := Result + Child.NodeName + ' ';
+    Child := Child.NextSibling;
+  end;
+  Result := Result.TrimRight;
+end;
+
+// ChildNodes is live: after every change of the tree a list taken before the change shows
+// the current children. Each change comes right after a read near the changed place, when
+// the list remembers a position there.
+procedure TXMLDOMTest.TestChildNodesFollowChanges;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a/><b/><c/><d/></r>'));
+  var Root := Doc.DocumentElement;
+  var List := Root.ChildNodes;
+  Assert.AreEqual('a b c d', NamesByIndex(List));
+
+  Assert.AreEqual('c', List[2].NodeName);
+  Root.InsertBefore(Doc.CreateElement('x'), Root.FirstChild);
+  Assert.AreEqual('b', List[2].NodeName, 'insert in front');
+  Assert.AreEqual<NativeInt>(5, List.Length);
+  Assert.AreEqual(NamesBySiblings(Root), NamesByIndex(List));
+
+  Assert.AreEqual('c', List[3].NodeName);
+  Root.RemoveChild(List[1]);
+  Assert.AreEqual('d', List[3].NodeName, 'remove before the position');
+  Assert.AreEqual('x b c d', NamesByIndex(List));
+
+  Root.AppendChild(Doc.CreateElement('y'));
+  Assert.AreEqual<NativeInt>(5, List.Length, 'append after the count was taken');
+  Assert.AreEqual('y', List[4].NodeName);
+
+  Assert.AreEqual('b', List[1].NodeName);
+  Root.ReplaceChild(Doc.CreateElement('z'), List[1]);
+  Assert.AreEqual('x z c d y', NamesByIndex(List));
+
+  // Moving inside the document: the child leaves this list for another one
+  List[2].AppendChild(List[0]);
+  Assert.AreEqual('z c d y', NamesByIndex(List));
+  Assert.AreEqual('x', List[1].ChildNodes[0].NodeName);
+
+  // Moving between documents, in and out
+  var Other := CoCreateXMLDocument;
+  Assert.IsTrue(Other.LoadXML('<o><w/></o>'));
+  Root.AppendChild(Other.DocumentElement.FirstChild);
+  Assert.AreEqual('z c d y w', NamesByIndex(List));
+  Other.DocumentElement.AppendChild(List[0]);
+  Assert.AreEqual('c d y w', NamesByIndex(List));
+  Assert.AreEqual('z', Other.DocumentElement.ChildNodes[0].NodeName);
+
+  Root.Text := 'plain';
+  Assert.AreEqual<NativeInt>(1, List.Length, 'text replaces the children');
+  Assert.AreEqual('#text', List[0].NodeName);
+  Assert.IsNull(List[1]);
+end;
+
+procedure TXMLDOMTest.TestChildNodesOutOfRange;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a/><b/></r>'));
+  var List := Doc.DocumentElement.ChildNodes;
+  Assert.IsNull(List[-1]);
+  Assert.IsNull(List[2], 'past the end before the count is known');
+  Assert.AreEqual<NativeInt>(2, List.Length);
+  Assert.IsNull(List[2], 'past the end after the count is known');
+  Assert.AreEqual('b', List[1].NodeName);
+
+  var Empty := Doc.CreateElement('e').ChildNodes;
+  Assert.AreEqual<NativeInt>(0, Empty.Length);
+  Assert.IsNull(Empty[0]);
+end;
+
+// xsl:strip-space removes the whitespace text nodes from the source document itself, inside
+// libxslt; a list read before the transformation must not keep showing them.
+procedure TXMLDOMTest.TestChildNodesFollowStripSpace;
+begin
+  // Loading drops whitespace-only text (XML_PARSE_NOBLANKS), so it is added by hand
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r/>'));
+  var Root := Doc.DocumentElement;
+  Root.AppendChild(Doc.CreateTextNode(' '));
+  Root.AppendChild(Doc.CreateElement('a'));
+  Root.AppendChild(Doc.CreateTextNode(' '));
+  Root.AppendChild(Doc.CreateElement('b'));
+  Root.AppendChild(Doc.CreateTextNode(' '));
+  var List := Root.ChildNodes;
+  Assert.AreEqual<NativeInt>(5, List.Length);
+  Assert.AreEqual('b', List[3].NodeName);
+
+  var Style := CoCreateXMLDocument;
+  Assert.IsTrue(Style.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:strip-space elements="*"/><xsl:output method="text"/>' +
+    '<xsl:template match="/">done</xsl:template></xsl:stylesheet>'));
+  Assert.AreEqual('done', Doc.TransformNode(Style));
+
+  Assert.AreEqual(NamesBySiblings(Root), NamesByIndex(List));
+  Assert.AreEqual('a b', NamesByIndex(List));
+end;
+
+// The document's own list follows a reload: the wrapper stays, the libxml2 document under
+// it is replaced.
+procedure TXMLDOMTest.TestChildNodesFollowReload;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<!--c--><r/>'));
+  var List := Doc.ChildNodes;
+  Assert.AreEqual('#comment r', NamesByIndex(List));
+  Assert.IsTrue(Doc.LoadXML('<s/>'));
+  Assert.AreEqual('s', NamesByIndex(List));
+end;
+
+// A list keeps its node, and through it the document, for as long as the list lives.
+procedure TXMLDOMTest.TestChildNodesKeepTheNodeAlive;
+
+  function ChildrenOfFreshDocument: IXMLNodeList;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Assert.IsTrue(Doc.LoadXML('<r><a/><b/></r>'));
+    Result := Doc.DocumentElement.ChildNodes;
+  end;
+
+begin
+  var List := ChildrenOfFreshDocument;
+  Assert.AreEqual('a b', NamesByIndex(List));
+end;
+
+// Walking a list by index steps from the position of the previous call, also through a new
+// list of the same node on every step, and building another document meanwhile does not
+// make it start over. A walk from the first child on every step would take seconds here.
+procedure TXMLDOMTest.TestChildNodesIndexedWalkIsLinear;
+const
+  Count = 40000;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<r/>'));
+  var Root := Source.DocumentElement;
+  for var I := 1 to Count do
+    Root.AddChild('i');
+
+  var Target := CoCreateXMLDocument;
+  Assert.IsTrue(Target.LoadXML('<t/>'));
+  var Watch := TStopwatch.StartNew;
+  for var I := 0 to Count - 1 do
+  begin
+    Assert.AreEqual('i', Root.ChildNodes[I].NodeName);
+    Target.DocumentElement.AddChild('copy');
+  end;
+  var List := Root.ChildNodes;
+  for var I := List.Length - 1 downto 0 do
+    Assert.AreEqual('i', List[I].NodeName);
+  Watch.Stop;
+
+  Assert.AreEqual<NativeInt>(Count, Target.DocumentElement.ChildNodes.Length);
+  Assert.IsTrue(Watch.ElapsedMilliseconds < 2000, Format('%d ms', [Watch.ElapsedMilliseconds]));
+end;
+
+// The id attributes of the list's elements by index, last to first and then first to last
+function IdsByIndex(const List: IXMLNodeList): string;
+begin
+  var Count := List.Length;
+  var Backward := '';
+  for var I := Count - 1 downto 0 do
+    Backward := (List[I] as IXMLElement).GetAttribute('id') + ' ' + Backward;
+  Result := '';
+  for var I := 0 to Count - 1 do
+    Result := Result + (List[I] as IXMLElement).GetAttribute('id') + ' ';
+  Assert.AreEqual(Result, Backward, 'forward and backward');
+  Result := Result.TrimRight;
+end;
+
+// The list by tag name is live: after every change a list taken before it shows the
+// matching elements of the current tree, nested ones included.
+procedure TXMLDOMTest.TestElementsByTagNameFollowChanges;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a id="1"/><b><a id="2"/><c/></b><a id="3"/></r>'));
+  var Root := Doc.DocumentElement;
+  var List := Doc.GetElementsByTagName('a');
+  Assert.AreEqual('1 2 3', IdsByIndex(List));
+
+  Assert.AreEqual('2', (List[1] as IXMLElement).GetAttribute('id'));
+  var New := Doc.CreateElement('a');
+  New.SetAttribute('id', '0');
+  Root.InsertBefore(New, Root.FirstChild);
+  Assert.AreEqual('1', (List[1] as IXMLElement).GetAttribute('id'), 'insert in front');
+  Assert.AreEqual('0 1 2 3', IdsByIndex(List));
+
+  // An element added deep inside, after the count was taken
+  Assert.AreEqual<NativeInt>(4, List.Length);
+  New := Doc.CreateElement('a');
+  New.SetAttribute('id', '4');
+  Root.ChildNodes[2].ChildNodes[1].AppendChild(New);
+  Assert.AreEqual('0 1 2 4 3', IdsByIndex(List));
+
+  Assert.AreEqual('2', (List[2] as IXMLElement).GetAttribute('id'));
+  Root.RemoveChild(Root.ChildNodes[2]);
+  Assert.AreEqual('0 1 3', IdsByIndex(List), 'a subtree removed');
+
+  Root.Text := 'plain';
+  Assert.AreEqual<NativeInt>(0, List.Length);
+  Assert.IsNull(List[0]);
+end;
+
+// The list selects by the qualified name, so it follows the prefix of an element: here
+// the declaration of the prefix is removed and the element is left without it.
+procedure TXMLDOMTest.TestElementsByTagNameFollowPrefix;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><p:a xmlns:p="urn:p" id="1"/><a id="2"/></r>'));
+  var Prefixed := Doc.GetElementsByTagName('p:a');
+  var Plain := Doc.GetElementsByTagName('a');
+  Assert.AreEqual('1', IdsByIndex(Prefixed));
+  Assert.AreEqual('2', IdsByIndex(Plain));
+
+  (Doc.DocumentElement.FirstChild as IXMLElement).Attributes.RemoveNamedItem('xmlns:p');
+  Assert.AreEqual('', IdsByIndex(Prefixed));
+  Assert.AreEqual('1 2', IdsByIndex(Plain));
+end;
+
+// The list of a document reads the current root element: it follows a reload and a new
+// root, and it keeps the document alive.
+procedure TXMLDOMTest.TestElementsByTagNameFollowTheRoot;
+
+  function ElementsOfFreshDocument: IXMLNodeList;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Assert.IsTrue(Doc.LoadXML('<r><a id="1"/><a id="2"/></r>'));
+    Result := Doc.GetElementsByTagName('a');
+  end;
+
+begin
+  Assert.AreEqual('1 2', IdsByIndex(ElementsOfFreshDocument));
+
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a id="1"/></r>'));
+  var List := Doc.GetElementsByTagName('a');
+  Assert.AreEqual('1', IdsByIndex(List));
+  Assert.IsTrue(Doc.LoadXML('<s><a id="7"/><a id="8"/></s>'));
+  Assert.AreEqual('7 8', IdsByIndex(List), 'reload');
+
+  var Root := Doc.CreateElement('t');
+  var A := Doc.CreateElement('a');
+  A.SetAttribute('id', '9');
+  Root.AppendChild(A);
+  Doc.DocumentElement := Root;
+  Assert.AreEqual('9', IdsByIndex(List), 'new root');
+end;
+
+procedure TXMLDOMTest.TestElementsByTagNameOutOfRange;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a/><b/><a/></r>'));
+  var List := Doc.GetElementsByTagName('a');
+  Assert.IsNull(List[-1]);
+  Assert.IsNull(List[2], 'past the end before the count is known');
+  Assert.AreEqual<NativeInt>(2, List.Length);
+  Assert.IsNull(List[2], 'past the end after the count is known');
+  Assert.IsNotNull(List[1]);
+
+  var None := Doc.GetElementsByTagName('z');
+  Assert.AreEqual<NativeInt>(0, None.Length);
+  Assert.IsNull(None[0]);
+end;
+
+// Walking a list by tag name by index steps from the previous position in both directions,
+// in the whole document and among the children of an element; a walk from the start on
+// every step would take seconds here.
+procedure TXMLDOMTest.TestElementsByTagNameIndexedWalkIsLinear;
+const
+  Groups = 200;
+  PerGroup = 100;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r/>'));
+  for var G := 1 to Groups do
+  begin
+    var Group := Doc.DocumentElement.AddChild('g');
+    for var I := 1 to PerGroup do
+    begin
+      Group.AddChild('i');
+      Group.AddChild('skip');
+    end;
+  end;
+
+  var Watch := TStopwatch.StartNew;
+  var List := Doc.GetElementsByTagName('i');
+  Assert.AreEqual<NativeInt>(Groups * PerGroup, List.Length);
+  for var I := List.Length - 1 downto 0 do
+    Assert.AreEqual('i', List[I].NodeName);
+  for var I := 0 to List.Length - 1 do
+    Assert.AreEqual('i', List[I].NodeName);
+
+  var Children := (Doc.DocumentElement as IXMLElement).GetElementsByTagName('g');
+  for var I := 0 to Children.Length - 1 do
+    Assert.AreEqual('g', Children[I].NodeName);
+  Watch.Stop;
+
+  Assert.IsTrue(Watch.ElapsedMilliseconds < 2000, Format('%d ms', [Watch.ElapsedMilliseconds]));
+end;
+
+// As in MSXML: the list of an element holds its descendants at any depth but not the
+// element itself, the list of a document holds the root element too; '*' is every
+// element and an empty name is none.
+procedure TXMLDOMTest.TestElementsByTagNameAsInMSXML;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<a id="0"><a id="1"><a id="2"/></a><b><a id="3"/></b></a>'));
+  var Root := Doc.DocumentElement;
+  Assert.AreEqual('0 1 2 3', IdsByIndex(Doc.GetElementsByTagName('a')));
+  Assert.AreEqual('1 2 3', IdsByIndex(Root.GetElementsByTagName('a')));
+  Assert.AreEqual('2', IdsByIndex((Root.FirstChild as IXMLElement).GetElementsByTagName('a')));
+  Assert.AreEqual('a a a b a', NamesByIndex(Doc.GetElementsByTagName('*')));
+  Assert.AreEqual('a a b a', NamesByIndex(Root.GetElementsByTagName('*')));
+  Assert.AreEqual<NativeInt>(0, Doc.GetElementsByTagName('').Length);
+end;
+
+// By tag name the qualified name counts, prefix included; by namespace (DOM Level 2) the
+// namespace URI and the local name count, whatever the prefix, with '*' for any and an
+// empty URI for no namespace.
+procedure TXMLDOMTest.TestElementsByTagNameNSAsInDOM;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML(
+    '<r xmlns:p="urn:p"><p:a id="1"/><a id="2"/><x:a xmlns:x="urn:p" id="3"/>' +
+    '<d xmlns="urn:d"><a id="4"/></d></r>'));
+  Assert.AreEqual('1', IdsByIndex(Doc.GetElementsByTagName('p:a')));
+  Assert.AreEqual('2 4', IdsByIndex(Doc.GetElementsByTagName('a')));
+
+  Assert.AreEqual('1 3', IdsByIndex(Doc.GetElementsByTagNameNS('urn:p', 'a')));
+  Assert.AreEqual('2', IdsByIndex(Doc.GetElementsByTagNameNS('', 'a')));
+  Assert.AreEqual('4', IdsByIndex(Doc.GetElementsByTagNameNS('urn:d', 'a')));
+  Assert.AreEqual('1 2 3 4', IdsByIndex(Doc.GetElementsByTagNameNS('*', 'a')));
+  Assert.AreEqual('d a', NamesByIndex(Doc.GetElementsByTagNameNS('urn:d', '*')));
+end;
+
+// A document without a root element gives an empty list, which shows the root once it
+// appears.
+procedure TXMLDOMTest.TestElementsByTagNameOfDocumentWithoutRoot;
+begin
+  var Doc := CoCreateXMLDocument;
+  var List := Doc.GetElementsByTagName('*');
+  Assert.IsNotNull(List);
+  Assert.AreEqual<NativeInt>(0, List.Length);
+  Doc.DocumentElement := Doc.CreateElement('r');
+  Assert.AreEqual('r', NamesByIndex(List));
+end;
+
+// The DTD is not walked: libxml2 keeps the parsed text of an entity under its
+// declaration, and those elements are not part of the document.
+procedure TXMLDOMTest.TestElementsByTagNameSkipsTheDTD;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<!DOCTYPE r [<!ENTITY e "<x/>">]><r>&e;</r>'));
+  Assert.AreEqual('r x', NamesByIndex(Doc.GetElementsByTagName('*')));
+end;
+
+// GetElementsByTagNameNS of an element, as in DOM Level 2: the descendants by namespace and
+// local name, whatever the prefix; the element itself is not in the list even when it
+// matches, and the list follows changes like the other lists by name.
+procedure TXMLDOMTest.TestElementsByTagNameNSOfElement;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML(
+    '<p:a xmlns:p="urn:p" id="0"><p:a id="1"><x:a xmlns:x="urn:p" id="2"/></p:a>' +
+    '<a id="3"/><d xmlns="urn:d"><a id="4"/></d></p:a>'));
+  var Root := Doc.DocumentElement;
+  Assert.AreEqual('1 2', IdsByIndex(Root.GetElementsByTagNameNS('urn:p', 'a')));
+  Assert.AreEqual('3', IdsByIndex(Root.GetElementsByTagNameNS('', 'a')));
+  Assert.AreEqual('1 2 3 4', IdsByIndex(Root.GetElementsByTagNameNS('*', 'a')));
+  Assert.AreEqual('d a', NamesByIndex(Root.GetElementsByTagNameNS('urn:d', '*')));
+  Assert.AreEqual('2', IdsByIndex((Root.FirstChild as IXMLElement).GetElementsByTagNameNS('urn:p', '*')));
+
+  var List := Root.GetElementsByTagNameNS('urn:d', 'a');
+  Assert.AreEqual('4', IdsByIndex(List));
+  var New := Doc.CreateElementNs('urn:d', 'a');
+  New.SetAttribute('id', '5');
+  Root.AppendChild(New);
+  Assert.AreEqual('4 5', IdsByIndex(List));
+end;
+
+// The list of a document by namespace walks the document itself, so it follows every change
+// of the root: a new root element, a root replaced or removed through the document's own
+// children, a reload, a root set on a document that had none.
+procedure TXMLDOMTest.TestElementsByTagNameNSFollowTheRoot;
+var
+  Doc: IXMLDocument;
+
+  function NewRoot(const Id: string): IXMLElement;
+  begin
+    Result := Doc.CreateElementNs('urn:p', 'a');
+    Result.SetAttribute('id', Id);
+    var Child := Doc.CreateElementNs('urn:p', 'a');
+    Child.SetAttribute('id', Id + '.1');
+    Result.AppendChild(Child);
+  end;
+
+  procedure SetRoot(const Id: string);
+  begin
+    Doc.DocumentElement := NewRoot(Id);
+  end;
+
+  procedure ReplaceRoot(const Id: string);
+  begin
+    Doc.ReplaceChild(NewRoot(Id), Doc.DocumentElement);
+  end;
+
+  procedure RemoveRoot;
+  begin
+    Doc.RemoveChild(Doc.DocumentElement);
+  end;
+
+  procedure AppendRoot(const Id: string);
+  begin
+    Doc.AppendChild(NewRoot(Id));
+  end;
+
+  function IdAt(const List: IXMLNodeList; Index: NativeInt): string;
+  begin
+    Result := (List[Index] as IXMLElement).GetAttribute('id');
+  end;
+
+begin
+  Doc := CoCreateXMLDocument;
+  var List := Doc.GetElementsByTagNameNS('urn:p', 'a');
+  Assert.AreEqual<NativeInt>(0, List.Length, 'no root yet');
+
+  SetRoot('1');
+  Assert.AreEqual('1 1.1', IdsByIndex(List), 'root set');
+  Assert.AreEqual('1.1', IdAt(List, 1));
+
+  SetRoot('2');
+  Assert.AreEqual('2 2.1', IdsByIndex(List), 'root replaced');
+
+  ReplaceRoot('3');
+  Assert.AreEqual('3 3.1', IdsByIndex(List), 'root replaced as a child of the document');
+
+  RemoveRoot;
+  Assert.AreEqual<NativeInt>(0, List.Length, 'root removed');
+  Assert.IsNull(List[0]);
+
+  AppendRoot('4');
+  Assert.AreEqual('4 4.1', IdsByIndex(List), 'root appended to the document');
+
+  Assert.IsTrue(Doc.LoadXML('<x:a xmlns:x="urn:p" id="5"><b><x:a id="5.1"/></b></x:a>'));
+  Assert.AreEqual('5 5.1', IdsByIndex(List), 'reload');
+end;
+
+type
+  // Reaches the libxml2 node under a DOM wrapper
+  TXMLNodeAccess = class(TXMLNode);
+
+// An XPath query leaves the element order index in the content field of every element (see
+// TestXPathIndexesElementsOnDemand); SelectNodes always runs one, SelectSingleNode answers a
+// simple path without XPath. TransformNode of an indexed element, the root as well as a
+// nested one, gives the result and leaves the source as it was. The stylesheet has only the
+// built-in rules, which put out the text of the subtree, so the result is the same whether
+// processing starts at the document or at the element.
+procedure TXMLDOMTest.TestTransformElementAfterXPathQuery;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<root><item>first</item></root>'));
+  var Root := Source.DocumentElement;
+  var Item := Source.SelectNodes('//item')[0];
+  Assert.IsTrue(NativeInt(TXMLNodeAccess(Root as TObject).NodePtr.content) < 0, 'the query indexed the root');
+  Assert.IsTrue(NativeInt(TXMLNodeAccess(Item as TObject).NodePtr.content) < 0, 'the query indexed the item');
+  var Style := CoCreateXMLDocument;
+  Assert.IsTrue(Style.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '"><xsl:output method="text"/></xsl:stylesheet>'));
+
+  Assert.AreEqual('first', Root.TransformNode(Style));
+  Assert.AreEqual('first', Item.TransformNode(Style));
+  Assert.AreEqual('<root><item>first</item></root>', Source.DocumentElement.Xml, 'the source is intact');
+  Assert.AreEqual('first', Source.SelectSingleNode('/root/item').Text, 'the next query still works');
+end;
+
+// Through an element as through the document, the result is in the xsl:output encoding:
+// TransformNode and the string overload decode it from that encoding, the RawByteString
+// carries its code page.
+procedure TXMLDOMTest.TestTransformElementTagsResultWithOutputEncoding;
+var
+  S: RawByteString;
+  U: string;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<root><name>' + CyrillicHello + '</name></root>'));
+  var Root := Source.DocumentElement;
+  var Style := CoCreateXMLDocument;
+  Assert.IsTrue(Style.LoadXML(TextStylesheet('windows-1251')));
+
+  Assert.AreEqual(CyrillicHello, Root.TransformNode(Style));
+
+  Assert.IsTrue(Root.Transform(Style, U));
+  Assert.AreEqual(CyrillicHello, U);
+
+  Assert.IsTrue(Root.Transform(Style, S));
+  Assert.AreEqual<Word>(1251, StringCodePage(S));
+  Assert.AreEqual<NativeInt>(Length(CyrillicHello), Length(S), 'single-byte encoding');
+  Assert.AreEqual(CyrillicHello, string(S));
+end;
+
+// Every template writes what XSLT sees at its node: the position and size of the current node
+// list, an absolute path, a global parameter, a global variable with select and one with a
+// body, each counting the ancestors of its context node.
+function StartNodeStylesheet: IXMLDocument;
+begin
+  Result := CoCreateXMLDocument;
+  Assert.IsTrue(Result.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '"><xsl:output method="text"/>' +
+    '<xsl:param name="p" select="count(ancestor-or-self::node())"/>' +
+    '<xsl:variable name="v" select="count(ancestor-or-self::node())"/>' +
+    '<xsl:variable name="t"><xsl:value-of select="count(ancestor-or-self::node())"/></xsl:variable>' +
+    '<xsl:template match="/">/[<xsl:apply-templates/>]</xsl:template>' +
+    '<xsl:template match="*"><xsl:value-of select="name()"/>:<xsl:value-of select="position()"/>' +
+    '/<xsl:value-of select="last()"/> abs=<xsl:value-of select="count(/root/item)"/>' +
+    ' p=<xsl:value-of select="$p"/> v=<xsl:value-of select="$v"/> t=<xsl:value-of select="$t"/>' +
+    '[<xsl:apply-templates/>]</xsl:template>' +
+    '<xsl:template match="@*">@<xsl:value-of select="name()"/>=<xsl:value-of select="."/>' +
+    ' t=<xsl:value-of select="$t"/></xsl:template>' +
+    '<xsl:template match="text()">(<xsl:value-of select="."/>)</xsl:template>' +
+    '</xsl:stylesheet>'));
+end;
+
+// A transform of a node starts at that node, as transformNode of MSXML does: the first
+// template is chosen for the node itself, with position() and last() equal to 1, and the
+// template for "/" fires for the document only. Global parameters and variables are evaluated
+// at the document node, absolute paths address the whole document. The expected strings are
+// what MSXML 6 gives for the same calls.
+procedure TXMLDOMTest.TestTransformNodeStartsAtTheNodeAsInMSXML;
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML('<root a="1"><item>first</item><item>second<sub>x</sub></item></root>'));
+  var Style := StartNodeStylesheet;
+
+  Assert.AreEqual(
+    '/[root:1/1 abs=2 p=1 v=1 t=1[item:1/2 abs=2 p=1 v=1 t=1[(first)]' +
+    'item:2/2 abs=2 p=1 v=1 t=1[(second)sub:2/2 abs=2 p=1 v=1 t=1[(x)]]]]',
+    Source.TransformNode(Style), 'document');
+  Assert.AreEqual(
+    'root:1/1 abs=2 p=1 v=1 t=1[item:1/2 abs=2 p=1 v=1 t=1[(first)]' +
+    'item:2/2 abs=2 p=1 v=1 t=1[(second)sub:2/2 abs=2 p=1 v=1 t=1[(x)]]]',
+    Source.DocumentElement.TransformNode(Style), 'root element');
+  var Second := Source.SelectSingleNode('/root/item[2]');
+  Assert.AreEqual(
+    'item:1/1 abs=2 p=1 v=1 t=1[(second)sub:2/2 abs=2 p=1 v=1 t=1[(x)]]',
+    Second.TransformNode(Style), 'nested element');
+  Assert.AreEqual('@a=1 t=1', Source.SelectSingleNode('/root/@a').TransformNode(Style), 'attribute');
+  Assert.AreEqual('(first)', Source.SelectSingleNode('/root/item[1]/text()').TransformNode(Style), 'text');
+
+  var CopyStyle := CoCreateXMLDocument;
+  Assert.IsTrue(CopyStyle.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:template match="/"><doc/></xsl:template>' +
+    '<xsl:template match="item"><out n="{position()}"><xsl:value-of select="."/></out></xsl:template>' +
+    '</xsl:stylesheet>'));
+  var Output := CoCreateXMLDocument;
+  Assert.IsTrue(Second.TransformNodeToObject(CopyStyle, Output));
+  Assert.AreEqual('<out n="1">secondx</out>', Output.DocumentElement.Xml, 'TransformNodeToObject');
+end;
+
+// xsl:key builds its tables on the source document that libxslt keeps in the transform
+// context, both for key() in expressions and for key() in match patterns. The expected
+// strings are what MSXML 6 gives for the same calls; the source stays as it was.
+procedure TXMLDOMTest.TestTransformWithKeysAsInMSXML;
+const
+  SourceXml = '<root><item cat="a">1</item><item cat="b">2</item><item cat="a">3</item></root>';
+begin
+  var Source := CoCreateXMLDocument;
+  Assert.IsTrue(Source.LoadXML(SourceXml));
+  var Style := CoCreateXMLDocument;
+  Assert.IsTrue(Style.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '"><xsl:output method="text"/>' +
+    '<xsl:key name="k" match="item" use="@cat"/>' +
+    '<xsl:template match="/ | root">[<xsl:for-each select="key(''k'', ''a'')"><xsl:value-of select="."/>' +
+    '</xsl:for-each>|<xsl:apply-templates/>]</xsl:template>' +
+    '<xsl:template match="item">(<xsl:value-of select="count(key(''k'', @cat))"/>)</xsl:template>' +
+    '<xsl:template match="key(''k'', ''b'')">B</xsl:template>' +
+    '</xsl:stylesheet>'));
+
+  Assert.AreEqual('[13|[13|(2)B(2)]]', Source.TransformNode(Style), 'document');
+  Assert.AreEqual('[13|(2)B(2)]', Source.DocumentElement.TransformNode(Style), 'root element');
+  Assert.AreEqual('(2)', Source.SelectSingleNode('/root/item[1]').TransformNode(Style), 'first item');
+  Assert.AreEqual('B', Source.SelectSingleNode('/root/item[2]').TransformNode(Style), 'second item');
+  Assert.AreEqual(SourceXml, Source.DocumentElement.Xml, 'the source is intact');
+  Assert.AreEqual('[13|[13|(2)B(2)]]', Source.TransformNode(Style), 'document again');
+end;
+
+// libxml2 memory in use. The debug allocator of a debug build accounts every byte the
+// library holds; with the allocators of a release build the count stays 0.
+function LibraryMemoryInUse: NativeUInt;
+begin
+  LX2Lib.Initialize;
+  Result := xmlMemUsed;
+end;
+
+// The tests below make their changes in routines of their own: the results of calls are
+// temporaries that live until their routine returns, and would hold the nodes and the
+// documents the tests watch go.
+
+// A root removed from the document and still referenced survives a reload of the document,
+// as in MSXML: the node keeps its content, has no parent and is owned by the reloaded
+// document. The libxml2 document it came from stays alive for it and goes with the last
+// reference, as does everything else.
+procedure TXMLDOMTest.TestRemovedRootSurvivesReload;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Kept: IXMLElement;
+
+  procedure RemoveRootAndReload;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Kept := Doc.CreateElementNs('urn:p', 'a');
+    Kept.AppendChild(Doc.CreateElementNs('urn:p', 'b'));
+    Doc.DocumentElement := Kept;
+    Doc.RemoveChild(Kept);
+    Assert.IsTrue(Doc.LoadXML('<r/>'));
+  end;
+
+  procedure UseTheRemovedRoot;
+  begin
+    Assert.AreEqual('<a xmlns="urn:p"><b xmlns="urn:p"/></a>', Kept.Xml);
+    Assert.IsNull(Kept.ParentNode);
+    Assert.IsTrue(Kept.OwnerDocument = Doc, 'the reloaded document owns the node, as in MSXML');
+    Assert.AreEqual('<r/>', Doc.DocumentElement.Xml, 'the document holds the new content');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  RemoveRootAndReload;
+  UseTheRemovedRoot;
+  Kept := nil;
+  Assert.IsTrue(Released <> nil, 'the document lives as long as it is referenced');
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// An element created by the document and never inserted survives a reload as well. Here the
+// document is let go first: the node keeps it alive, and it goes with the node.
+procedure TXMLDOMTest.TestCreatedElementSurvivesReload;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Kept: IXMLElement;
+
+  procedure CreateAndReload;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Kept := Doc.CreateElement('o');
+    Assert.IsTrue(Doc.LoadXML('<r/>'));
+  end;
+
+  procedure UseTheCreatedElement;
+  begin
+    Kept.SetAttribute('x', '1');
+    Assert.AreEqual('<o x="1"/>', Kept.Xml);
+    Assert.IsTrue(Kept.OwnerDocument = Doc, 'the reloaded document owns the node, as in MSXML');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateAndReload;
+  UseTheCreatedElement;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the node keeps the document alive');
+  Assert.AreEqual('o', Kept.NodeName);
+  Kept := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the node');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// TransformNodeToObject puts the result into the output document in place of its content,
+// as a reload does: nodes of the replaced content, removed or created and never inserted,
+// stay usable and owned by the output document.
+procedure TXMLDOMTest.TestTransformNodeToObjectKeepsDetachedNodes;
+var
+  [Weak] Released: IXMLDocument;
+  Output: IXMLDocument;
+  Removed, Created: IXMLNode;
+
+  // The first transform of the process sets libxslt up for good
+  procedure WarmUp;
+  begin
+    var Source := CoCreateXMLDocument;
+    Assert.IsTrue(Source.LoadXML('<root/>'));
+    Source.TransformNode(CopyItemStylesheet);
+  end;
+
+  procedure TransformIntoOutput;
+  begin
+    var Source := CoCreateXMLDocument;
+    Assert.IsTrue(Source.LoadXML('<root><item>first</item></root>'));
+    Output := CoCreateXMLDocument;
+    Released := Output;
+    Assert.IsTrue(Output.LoadXML('<previous><x/></previous>'));
+    Removed := Output.DocumentElement.RemoveChild(Output.DocumentElement.FirstChild);
+    Created := Output.CreateElement('o');
+    Assert.IsTrue(Source.TransformNodeToObject(CopyItemStylesheet, Output));
+  end;
+
+  procedure UseTheDetachedNodes;
+  begin
+    Assert.AreEqual('<out>first</out>', Output.DocumentElement.Xml);
+    Assert.AreEqual('<x/>', Removed.Xml);
+    Assert.IsNull(Removed.ParentNode);
+    Assert.IsTrue(Created.OwnerDocument = Output, 'the output document owns the node, as in MSXML');
+    Created.AppendChild(Removed);
+    Assert.AreEqual('<o><x/></o>', Created.Xml, 'the nodes of the replaced content work together');
+  end;
+
+begin
+  WarmUp;
+  var Used := LibraryMemoryInUse;
+  TransformIntoOutput;
+  UseTheDetachedNodes;
+  Output := nil;
+  Assert.IsTrue(Released <> nil, 'the nodes keep the output document alive');
+  Removed := nil;
+  Created := nil;
+  Assert.IsTrue(Released = nil, 'the output document goes with the last node');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Nodes of the content a reload replaces stay usable even if they were never detached, as
+// in MSXML: the old root keeps its subtree and shows neither parent nor siblings, its
+// descendants keep their parents, the reloaded document owns them all, and a node of the
+// old content can be moved into the new one.
+procedure TXMLDOMTest.TestReloadedContentStaysUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  OldRoot, Item: IXMLNode;
+
+  procedure LoadTwice;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<!--c--><root><item a="1"><sub/></item><last/></root>'));
+    OldRoot := Doc.DocumentElement;
+    Item := OldRoot.FirstChild;
+    Assert.IsTrue(Doc.LoadXML('<new/>'));
+  end;
+
+  procedure UseTheOldContent;
+  begin
+    Assert.AreEqual('<root><item a="1"><sub/></item><last/></root>', OldRoot.Xml);
+    Assert.IsNull(OldRoot.ParentNode, 'the old root is detached, as in MSXML');
+    Assert.IsNull(OldRoot.PreviousSibling, 'the comment before it is no sibling of it any more');
+    Assert.IsTrue((Item.ParentNode as TObject) = (OldRoot as TObject), 'the subtree stays');
+    Assert.IsTrue(OldRoot.OwnerDocument = Doc, 'the reloaded document owns the old content');
+    Assert.AreEqual('last', OldRoot.SelectSingleNode('last').NodeName, 'XPath over the old content');
+
+    Doc.DocumentElement.AppendChild(Item);
+    Assert.AreEqual('<new><item a="1"><sub/></item></new>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('<root><last/></root>', OldRoot.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  LoadTwice;
+  UseTheOldContent;
+  Doc := nil;
+  OldRoot := nil;
+  Assert.IsTrue(Released <> nil, 'the moved item keeps the document alive');
+  Item := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last node');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A node moved to another document takes along the references of its whole subtree: a
+// wrapper of a descendant keeps the target document alive, not the source.
+procedure TXMLDOMTest.TestMovedSubtreeHoldsItsNewDocument;
+var
+  [Weak] Source: IXMLDocument;
+  [Weak] Target: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure MoveSubtree;
+  begin
+    var FromDoc := CoCreateXMLDocument;
+    Source := FromDoc;
+    Assert.IsTrue(FromDoc.LoadXML('<r><a><b/></a></r>'));
+    var ToDoc := CoCreateXMLDocument;
+    Target := ToDoc;
+    Assert.IsTrue(ToDoc.LoadXML('<s/>'));
+    var Moved := FromDoc.DocumentElement.FirstChild;
+    Inner := Moved.FirstChild;
+    ToDoc.DocumentElement.AppendChild(Moved);
+    Assert.AreEqual('<s><a><b/></a></s>', ToDoc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  MoveSubtree;
+  Assert.IsTrue(Source = nil, 'nothing holds the source document');
+  Assert.IsTrue(Target <> nil, 'the inner node holds the target document');
+  Inner := nil;
+  Assert.IsTrue(Target = nil, 'the target document goes with the inner node');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The list SelectNodes returns holds its document as a node does: its nodes stay usable
+// after a reload of the document, as in MSXML, and the document goes with the list.
+procedure TXMLDOMTest.TestSelectedNodesSurviveReload;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  List: IXMLNodeList;
+
+  procedure SelectAndReload;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a n="1"/><a n="2"/></r>'));
+    List := Doc.SelectNodes('//a');
+    Assert.IsTrue(Doc.LoadXML('<s/>'));
+  end;
+
+  procedure UseTheList;
+  begin
+    Assert.AreEqual<NativeInt>(2, List.Length);
+    Assert.AreEqual('2', (List[1] as IXMLElement).GetAttribute('n'));
+    Assert.IsTrue(List[0].OwnerDocument = Doc, 'the reloaded document owns the selected nodes');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  SelectAndReload;
+  UseTheList;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the list keeps the document alive');
+  List := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the list');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Setting the document element to the element already there changes nothing, as in MSXML:
+// the root stays in the document with its content.
+procedure TXMLDOMTest.TestDocumentElementSetToItself;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Root: IXMLElement;
+
+  procedure SetTheSameRoot;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a/></r>'));
+    Root := Doc.DocumentElement;
+    Doc.DocumentElement := Doc.DocumentElement;
+  end;
+
+  procedure UseTheRoot;
+  begin
+    Assert.AreEqual('<r><a/></r>', Doc.DocumentElement.Xml);
+    Assert.IsTrue((Doc.DocumentElement as TObject) = (Root as TObject), 'the same element');
+    Assert.IsTrue((Root.ParentNode as TObject) = (Doc as TObject), 'still under the document');
+    Assert.AreEqual('a', Root.FirstChild.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  SetTheSameRoot;
+  UseTheRoot;
+  Root := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The root replaced by another document element stays usable, as in MSXML: detached, with
+// its subtree, owned by the document, and it can be inserted again. A replaced root nothing
+// refers to goes with the replacement.
+procedure TXMLDOMTest.TestReplacedDocumentElementStaysUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  OldRoot, Item: IXMLNode;
+
+  procedure ReplaceTheRoot;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<!--c--><r><a/></r>'));
+    OldRoot := Doc.DocumentElement;
+    Item := OldRoot.FirstChild;
+    Doc.DocumentElement := Doc.CreateElement('n');
+  end;
+
+  procedure UseTheOldRoot;
+  begin
+    Assert.AreEqual('<n/>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('#comment', Doc.DocumentElement.PreviousSibling.NodeName, 'the new root takes the place of the old one');
+    Assert.AreEqual('<r><a/></r>', OldRoot.Xml);
+    Assert.IsNull(OldRoot.ParentNode, 'the replaced root is detached');
+    Assert.IsNull(OldRoot.PreviousSibling, 'the comment is no sibling of it any more');
+    Assert.IsTrue(OldRoot.OwnerDocument = Doc, 'the document still owns it');
+    Assert.IsTrue((Item.ParentNode as TObject) = (OldRoot as TObject), 'the subtree stays');
+    Doc.DocumentElement.AppendChild(OldRoot);
+    Assert.AreEqual('<n><r><a/></r></n>', Doc.DocumentElement.Xml, 'inserted again');
+  end;
+
+  procedure ReplaceAgain;
+  begin
+    Doc.DocumentElement := Doc.CreateElement('m');
+    Assert.AreEqual('<m/>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  ReplaceTheRoot;
+  UseTheOldRoot;
+  OldRoot := nil;
+  Item := nil;
+  ReplaceAgain;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// An element of the root's own subtree may become the document element, as in MSXML: it
+// leaves the old root, which keeps the rest. The new root keeps the namespaces it used from
+// the old one, also once the old root is gone.
+procedure TXMLDOMTest.TestDocumentElementFromItsOwnSubtree;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  OldRoot: IXMLNode;
+
+  procedure PromoteTheChild;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p"><p:a p:at="1"><b/></p:a><c/></r>'));
+    OldRoot := Doc.DocumentElement;
+    Doc.DocumentElement := OldRoot.FirstChild as IXMLElement;
+  end;
+
+  procedure UseBoth;
+  begin
+    Assert.AreEqual('<p:a xmlns:p="urn:p" p:at="1"><b/></p:a>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('<r xmlns:p="urn:p"><c/></r>', OldRoot.Xml);
+    Assert.IsNull(OldRoot.ParentNode, 'the old root is detached');
+  end;
+
+  procedure UseTheNewRoot;
+  begin
+    var Root := Doc.DocumentElement;
+    Assert.AreEqual('urn:p', Root.NamespaceURI);
+    Assert.AreEqual('urn:p', Root.GetAttributeNode('p:at').NamespaceURI);
+    Assert.AreEqual('<p:a xmlns:p="urn:p" p:at="1"><b/></p:a>', Root.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  PromoteTheChild;
+  UseBoth;
+  OldRoot := nil;   // the old root goes, and the namespace declaration on it
+  UseTheNewRoot;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// ReplaceChild returns the replaced child usable, as in MSXML: detached, with its subtree,
+// owned by the document, and it can be inserted again. A sibling of the replaced child may
+// take its place.
+procedure TXMLDOMTest.TestReplaceChildReturnsTheOldChild;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Old, Inner, Returned: IXMLNode;
+
+  procedure Replace;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><b/></a><c/></r>'));
+    Old := Doc.DocumentElement.FirstChild;
+    Inner := Old.FirstChild;
+    Returned := Doc.DocumentElement.ReplaceChild(Doc.CreateElement('n'), Old);
+  end;
+
+  procedure UseTheOldChild;
+  begin
+    Assert.AreEqual('<r><n/><c/></r>', Doc.DocumentElement.Xml);
+    Assert.IsTrue((Returned as TObject) = (Old as TObject), 'the old child is returned');
+    Assert.AreEqual('<a><b/></a>', Old.Xml);
+    Assert.IsNull(Old.ParentNode, 'the old child is detached');
+    Assert.IsNull(Old.NextSibling);
+    Assert.IsTrue(Old.OwnerDocument = Doc, 'the document still owns it');
+    Assert.IsTrue((Inner.ParentNode as TObject) = (Old as TObject), 'the subtree stays');
+    Doc.DocumentElement.InsertBefore(Old, Doc.DocumentElement.LastChild);
+    Assert.AreEqual('<r><n/><a><b/></a><c/></r>', Doc.DocumentElement.Xml, 'inserted again');
+  end;
+
+  procedure ReplaceWithASibling;
+  begin
+    var Root := Doc.DocumentElement;
+    Assert.AreEqual('n', Root.ReplaceChild(Root.LastChild, Root.FirstChild).NodeName);
+    Assert.AreEqual('<r><c/><a><b/></a></r>', Root.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Replace;
+  UseTheOldChild;
+  ReplaceWithASibling;
+  Returned := nil;
+  Old := nil;
+  Inner := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Replacing a child with itself changes nothing, as in MSXML, and returns the child.
+procedure TXMLDOMTest.TestReplaceChildWithItself;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Child: IXMLNode;
+
+  procedure ReplaceWithItself;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a/><c/></r>'));
+    Child := Doc.DocumentElement.FirstChild;
+    Assert.IsTrue((Doc.DocumentElement.ReplaceChild(Child, Child) as TObject) = (Child as TObject),
+      'the child is returned');
+  end;
+
+  procedure UseTheChild;
+  begin
+    Assert.AreEqual('<r><a/><c/></r>', Doc.DocumentElement.Xml);
+    Assert.IsTrue((Child.ParentNode as TObject) = (Doc.DocumentElement as TObject), 'the child stays in place');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  ReplaceWithItself;
+  UseTheChild;
+  Child := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The replaced child keeps the namespaces it used from its parent, as in MSXML: they are
+// declared on it, and stay with it when the former parent is gone.
+procedure TXMLDOMTest.TestReplacedChildKeepsItsNamespaces;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Old: IXMLNode;
+
+  procedure Replace;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p"><p:a><p:b p:at="1"/></p:a></r>'));
+    Old := Doc.DocumentElement.ReplaceChild(Doc.CreateElement('n'), Doc.DocumentElement.FirstChild);
+    Assert.AreEqual('<p:a xmlns:p="urn:p"><p:b p:at="1"/></p:a>', Old.Xml, 'as MSXML writes it');
+  end;
+
+  // Nothing refers to the former parent, and it goes
+  procedure ReplaceTheParent;
+  begin
+    Doc.DocumentElement := Doc.CreateElement('s');
+  end;
+
+  procedure UseTheOldChild;
+  begin
+    Assert.AreEqual('urn:p', Old.NamespaceURI);
+    var Inner := Old.FirstChild as IXMLElement;
+    Assert.AreEqual('urn:p', Inner.NamespaceURI);
+    Assert.AreEqual('urn:p', Inner.GetAttributeNode('p:at').NamespaceURI);
+    Doc.DocumentElement.AppendChild(Old);
+    Assert.AreEqual('<s><p:a xmlns:p="urn:p"><p:b p:at="1"/></p:a></s>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Replace;
+  ReplaceTheParent;
+  UseTheOldChild;
+  Old := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A removed child keeps the namespaces it used from its parent in the same way.
+procedure TXMLDOMTest.TestRemovedChildKeepsItsNamespaces;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Old: IXMLNode;
+
+  procedure Remove;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p"><p:a><p:b p:at="1"/></p:a></r>'));
+    Old := Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild);
+    Assert.AreEqual('<p:a xmlns:p="urn:p"><p:b p:at="1"/></p:a>', Old.Xml, 'as MSXML writes it');
+  end;
+
+  // Nothing refers to the former parent, and it goes
+  procedure ReplaceTheParent;
+  begin
+    Doc.DocumentElement := Doc.CreateElement('s');
+  end;
+
+  procedure UseTheOldChild;
+  begin
+    Assert.AreEqual('urn:p', Old.NamespaceURI);
+    var Inner := Old.FirstChild as IXMLElement;
+    Assert.AreEqual('urn:p', Inner.NamespaceURI);
+    Assert.AreEqual('urn:p', Inner.GetAttributeNode('p:at').NamespaceURI);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Remove;
+  ReplaceTheParent;
+  UseTheOldChild;
+  Old := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
 end;
 
 // The compiled schema document belongs to the collection; the wrapper returned by

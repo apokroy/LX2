@@ -528,9 +528,19 @@ type
     function  GetAttributeNs(const NamespaceURI, Name: string): string;
 
     /// <summary>
-    ///
+    /// Live list of the descendant elements with the qualified name
+    /// <paramref name="TagName"/> ('*' for all) in document order, as in MSXML; the element
+    /// itself is not in the list.
     /// </summary>
     function  GetElementsByTagName(const TagName: string): IXMLNodeList;
+
+    /// <summary>
+    /// Live list of the descendant elements with the namespace
+    /// <paramref name="NamespaceURI"/> and the local name <paramref name="LocalName"/> in
+    /// document order, as in DOM Level 2: '*' matches any namespace or any local name, an
+    /// empty URI means no namespace; the element itself is not in the list.
+    /// </summary>
+    function  GetElementsByTagNameNS(const NamespaceURI, LocalName: string): IXMLNodeList;
 
     /// <summary>
     ///
@@ -724,7 +734,14 @@ type
     function  CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
     function  CreateTextNode(const data: string): IXMLText;
     function  GetElementById(const elementId: string): IXMLElement;
+    /// <summary>Live list of the elements of the document, the root element included, with
+    /// the qualified name <paramref name="tagName"/> ('*' for all) in document order, as in
+    /// MSXML; empty while the document has no root.</summary>
     function  GetElementsByTagName(const tagName: string): IXMLNodeList;
+    /// <summary>Live list of the elements of the document with the namespace
+    /// <paramref name="namespaceURI"/> and the local name <paramref name="localName"/>, as in
+    /// DOM Level 2: '*' matches any namespace or any local name, an empty URI means no
+    /// namespace.</summary>
     function  GetElementsByTagNameNS(const namespaceURI, localName: string): IXMLNodeList;
     function  GetErrors: IXMLErrors;
     function  GetXSLTErrors: IXSLTErrors;
