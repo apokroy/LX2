@@ -56,6 +56,10 @@ type
     procedure TestEscapeOfEmptyValueIsEmpty;
     [Test]
     procedure TestSAXAttributeStringsAreReleased;
+    [Test]
+    procedure TestCreateRootAndChildDeclareTheirNamespaces;
+    [Test]
+    procedure TestRemoveAndReplaceLeaveTheParentAlone;
   end;
 
   [TestFixture]
@@ -152,9 +156,53 @@ type
     [Test]
     procedure TestReplaceChildWithItself;
     [Test]
+    procedure TestDescendantsOfRemovedNodeStayUsable;
+    [Test]
+    procedure TestDescendantsOfReplacedChildStayUsable;
+    [Test]
+    procedure TestDescendantsOfReplacedRootStayUsable;
+    [Test]
+    procedure TestDetachedSubtreeGoesWithTheLastReference;
+    [Test]
+    procedure TestRestOfDetachedSubtreeGoesWhenTheNodeMoves;
+    [Test]
+    procedure TestKeptSubtreeMovesToAnotherDocument;
+    [Test]
+    procedure TestNodeOfKeptSubtreeMovesToAnotherDocument;
+    [Test]
+    procedure TestKeptSubtreeSurvivesReload;
+    [Test]
+    procedure TestSelectedNodesOfRemovedNodeStayUsable;
+    [Test]
+    procedure TestWalkInKeptSubtreeIsLinear;
+    [Test]
     procedure TestReplacedChildKeepsItsNamespaces;
     [Test]
     procedure TestRemovedChildKeepsItsNamespaces;
+    [Test]
+    procedure TestCreateRootDeclaresItsNamespace;
+    [Test]
+    procedure TestCreateRootKeepsTheReplacedRoot;
+    [Test]
+    procedure TestCreateChildDeclaresItsNamespace;
+    [Test]
+    procedure TestCreateChildUnderDefaultNamespace;
+    [Test]
+    procedure TestCreateChildResolveNamespace;
+    [Test]
+    procedure TestCreateChildWithoutParentCreatesTheRoot;
+    [Test]
+    procedure TestRemoveChildLeavesTheParentAlone;
+    [Test]
+    procedure TestReplaceChildDeclaresWhatTheNewChildUses;
+    [Test]
+    procedure TestMovedSubtreeKeepsItsNestedDeclarations;
+    [Test]
+    procedure TestNodeThatIsNotAChildIsRefused;
+    [Test]
+    procedure TestNodeIsNotInsertedUnderItself;
+    [Test]
+    procedure TestRemovedAttributeKeepsItsNamespace;
   end;
 
   // XML Schema validation over documents that live only in memory: no schema file exists
@@ -687,6 +735,76 @@ begin
   finally
     Parser.Free;
   end;
+end;
+
+// CreateRoot and CreateChild declare the namespace of the element on the element itself,
+// unless a declaration in scope of the parent serves it, and the declaration goes with the
+// document. The output is what MSXML writes for createNode followed by appendChild.
+procedure TXMLHelpersTest.TestCreateRootAndChildDeclareTheirNamespaces;
+begin
+  LX2Lib.Initialize;
+  var Used := xmlMemUsed;
+  var Doc := xmlDoc.Create;
+  try
+    var Root := Doc.CreateRoot('p:r', 'urn:p');
+    Assert.AreEqual<RawByteString>('urn:p', Root.NamespaceURI);
+    Doc.CreateChild(Root, 'p:a', 'urn:p');
+    Doc.CreateChild(Root, 'q:b', 'urn:q', False, 'x<y');
+    Doc.CreateChild(Root, 'c', 'urn:p');
+    Doc.CreateChild(Root, 'p:d');
+    Doc.CreateChild(Root, 'e', 'urn:p', True);
+    Assert.AreEqual<RawByteString>('<p:r xmlns:p="urn:p"><p:a/><q:b xmlns:q="urn:q">x&lt;y</q:b>' +
+      '<c xmlns="urn:p"/><p:d/><p:e/></p:r>', Root.Xml);
+    Assert.AreEqual<RawByteString>('urn:p', Root.LastChild.PreviousSibling.NamespaceURI, 'p:d');
+  finally
+    xmlFreeDoc(Doc);
+  end;
+  Assert.AreEqual<NativeUInt>(Used, xmlMemUsed, 'libxml2 memory');
+end;
+
+// RemoveChild, ReplaceChild and RemoveAttributeNode of the helpers change the node they work
+// on and nothing else: no declaration lands on the parent, and what stays keeps its prefixes
+// even where two prefixes are bound to one namespace. A node that is not a child is refused
+// with nil, and so is a node put under itself.
+procedure TXMLHelpersTest.TestRemoveAndReplaceLeaveTheParentAlone;
+const
+  Source = '<r xmlns:a="urn:u" xmlns:b="urn:u"><s xmlns:q="urn:q" q:at="1"><b:x/></s><t/><u/></r>';
+begin
+  LX2Lib.Initialize;
+  var Used := xmlMemUsed;
+  var Doc := xmlDoc.Create(Source, []);
+  try
+    var Root := Doc.documentElement;
+    var S := Root.FirstElementChild;
+    var T := S.NextElementSibling;
+    xmlFreeNode(Root.RemoveChild(T.NextElementSibling));
+    Assert.AreEqual<RawByteString>('<r xmlns:a="urn:u" xmlns:b="urn:u"><s xmlns:q="urn:q" q:at="1"><b:x/></s>' +
+      '<t/></r>', Root.Xml, 'RemoveChild');
+    xmlFreeNode(Root.ReplaceChild(Doc.CreateElement('n'), T));
+    Assert.AreEqual<RawByteString>('<r xmlns:a="urn:u" xmlns:b="urn:u"><s xmlns:q="urn:q" q:at="1"><b:x/></s>' +
+      '<n/></r>', Root.Xml, 'ReplaceChild');
+    S.RemoveAttributeNode(S.properties);
+    Assert.AreEqual<RawByteString>('<r xmlns:a="urn:u" xmlns:b="urn:u"><s xmlns:q="urn:q"><b:x/></s><n/></r>',
+      Root.Xml, 'RemoveAttributeNode');
+
+    var X := S.FirstElementChild;
+    var M := Doc.CreateElement('m');
+    try
+      Assert.IsTrue(Root.RemoveChild(X) = nil, 'RemoveChild of a grandchild');
+      Assert.IsTrue(Root.ReplaceChild(M, X) = nil, 'ReplaceChild of a grandchild');
+      Assert.IsTrue(Root.InsertBefore(M, X) = nil, 'InsertBefore a grandchild');
+      Assert.IsTrue(S.ReplaceChild(Root, X) = nil, 'ReplaceChild with an ancestor');
+      Assert.IsTrue(S.AppendChild(Root) = nil, 'AppendChild of an ancestor');
+      Assert.IsTrue(S.InsertBefore(S, X) = nil, 'InsertBefore of the node itself');
+      Assert.AreEqual<RawByteString>('<r xmlns:a="urn:u" xmlns:b="urn:u"><s xmlns:q="urn:q"><b:x/></s><n/></r>',
+        Root.Xml, 'refused');
+    finally
+      xmlFreeNode(M);
+    end;
+  finally
+    xmlFreeDoc(Doc);
+  end;
+  Assert.AreEqual<NativeUInt>(Used, xmlMemUsed, 'libxml2 memory');
 end;
 
 { TXMLDOMTest }
@@ -2092,6 +2210,419 @@ begin
   Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
 end;
 
+// A descendant of a removed node stays usable once nothing refers to the removed node, as
+// in MSXML: its parent chain leads to the removed node, which has no parent, the document
+// owns them, and the text of an attribute in the subtree stays as well. The subtree goes
+// with the last reference into it.
+procedure TXMLDOMTest.TestDescendantsOfRemovedNodeStayUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Inner, Text: IXMLNode;
+
+  procedure RemoveAndLetGo;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p"><p:a x="1"><b><c/></b>t</p:a><z/></r>'));
+    var Removed := Doc.DocumentElement.FirstChild;
+    Inner := Removed.FirstChild;
+    Text := (Removed as IXMLElement).GetAttributeNode('x').FirstChild;
+    Doc.DocumentElement.RemoveChild(Removed);
+  end;
+
+  procedure UseTheDescendants;
+  begin
+    Assert.AreEqual('<b><c/></b>', Inner.Xml);
+    var Top := Inner.ParentNode;
+    Assert.AreEqual('p:a', Top.NodeName, 'the removed node is the parent still');
+    Assert.IsNull(Top.ParentNode, 'the removed node is detached');
+    Assert.AreEqual('<p:a xmlns:p="urn:p" x="1"><b><c/></b>t</p:a>', Top.Xml, 'as MSXML writes it');
+    Assert.IsTrue(Inner.OwnerDocument = Doc, 'the document owns the subtree');
+    Assert.AreEqual('1', Text.NodeValue, 'the text of an attribute in the subtree');
+    Assert.AreEqual('z', Doc.DocumentElement.FirstChild.NodeName);
+  end;
+
+  procedure UseWithoutTheDocument;
+  begin
+    Assert.AreEqual('c', Inner.FirstChild.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  var Wrappers := DebugObjectCount;
+  RemoveAndLetGo;
+  UseTheDescendants;
+  Text := nil;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the descendant keeps the document alive');
+  UseWithoutTheDocument;
+  Inner := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeInt>(Wrappers, DebugObjectCount, 'wrappers');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A descendant of the child ReplaceChild has replaced stays usable in the same way once
+// nothing refers to the replaced child, and can be put back into the document.
+procedure TXMLDOMTest.TestDescendantsOfReplacedChildStayUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure ReplaceAndLetGo;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><b><c/></b><x/></a><z/></r>'));
+    Inner := Doc.DocumentElement.FirstChild.FirstChild;
+    Doc.DocumentElement.ReplaceChild(Doc.CreateElement('n'), Doc.DocumentElement.FirstChild);
+  end;
+
+  procedure UseTheDescendant;
+  begin
+    Assert.AreEqual('<r><n/><z/></r>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('<b><c/></b>', Inner.Xml);
+    Assert.AreEqual('<a><b><c/></b><x/></a>', Inner.ParentNode.Xml, 'the replaced child is the parent still');
+    Assert.IsNull(Inner.ParentNode.ParentNode, 'the replaced child is detached');
+    Doc.DocumentElement.AppendChild(Inner);
+    Assert.AreEqual('<r><n/><z/><b><c/></b></r>', Doc.DocumentElement.Xml, 'put back');
+    Assert.AreEqual('c', Inner.FirstChild.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  ReplaceAndLetGo;
+  UseTheDescendant;
+  Inner := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A descendant of the document element stays usable after another element has taken its
+// place and nothing refers to the replaced root, as in MSXML: its parent chain leads to the
+// replaced root, which has no parent.
+procedure TXMLDOMTest.TestDescendantsOfReplacedRootStayUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure Load;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<!--c--><r><a><b/></a></r>'));
+    Inner := Doc.DocumentElement.FirstChild.FirstChild;
+  end;
+
+  // Nothing refers to the root while it is replaced
+  procedure ReplaceTheRoot;
+  begin
+    Doc.DocumentElement := Doc.CreateElement('n');
+  end;
+
+  procedure UseTheDescendant;
+  begin
+    Assert.AreEqual('<n/>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('a', Inner.ParentNode.NodeName);
+    Assert.AreEqual('<r><a><b/></a></r>', Inner.ParentNode.ParentNode.Xml, 'the replaced root');
+    Assert.IsNull(Inner.ParentNode.ParentNode.ParentNode, 'the replaced root is detached');
+    Assert.IsTrue(Inner.OwnerDocument = Doc, 'the document owns it');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Load;
+  ReplaceTheRoot;
+  UseTheDescendant;
+  Inner := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A kept detached subtree goes with the last reference into it, while its document lives
+// on. A node of the subtree reached later keeps it too. The checks of memory need a debug
+// build, where libxml2 counts what it holds.
+procedure TXMLDOMTest.TestDetachedSubtreeGoesWithTheLastReference;
+var
+  Doc: IXMLDocument;
+  First, Second: IXMLNode;
+  Kept: NativeUInt;
+
+  procedure RemoveAndLetGo;
+  begin
+    Assert.IsTrue(Doc.LoadXML('<r><a><b/><c><d/></c><e>text</e></a><z/></r>'));
+    var Removed := Doc.DocumentElement.FirstChild;
+    First := Removed.FirstChild;
+    Second := Removed.FirstChild.NextSibling.FirstChild;
+    Doc.DocumentElement.RemoveChild(Removed);
+  end;
+
+  procedure WalkFromTheSecond;
+  begin
+    var Parent := Second.ParentNode;
+    Second := nil;
+    Assert.AreEqual<NativeUInt>(Kept, LibraryMemoryInUse, 'kept for the node reached from the second');
+    Assert.AreEqual('<a><b/><c><d/></c><e>text</e></a>', Parent.ParentNode.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Doc := CoCreateXMLDocument;
+  RemoveAndLetGo;
+  Kept := LibraryMemoryInUse;
+  First := nil;
+  Assert.AreEqual<NativeUInt>(Kept, LibraryMemoryInUse, 'kept for the second reference');
+  WalkFromTheSecond;
+  if Kept > 0 then
+    Assert.IsTrue(LibraryMemoryInUse < Kept, 'the subtree goes with the last reference');
+  Doc := nil;
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Once the only node referred to has moved out of a kept detached subtree, the rest of the
+// subtree goes at once; the moved node keeps its own subtree.
+procedure TXMLDOMTest.TestRestOfDetachedSubtreeGoesWhenTheNodeMoves;
+var
+  Doc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure RemoveAndLetGo;
+  begin
+    var Xml := '<r><a><b><c/></b>';
+    for var I := 1 to 20 do
+      Xml := Xml + '<x>' + I.ToString + '</x>';
+    Assert.IsTrue(Doc.LoadXML(Xml + '</a></r>'));
+    Inner := Doc.DocumentElement.FirstChild.FirstChild;
+    Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild);
+  end;
+
+  procedure PutBack;
+  begin
+    Doc.DocumentElement.AppendChild(Inner);
+  end;
+
+  procedure UseThePutBackNode;
+  begin
+    Assert.AreEqual('<r><b><c/></b></r>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('c', Inner.FirstChild.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Doc := CoCreateXMLDocument;
+  RemoveAndLetGo;
+  var Kept := LibraryMemoryInUse;
+  PutBack;
+  if Kept > 0 then
+    Assert.IsTrue(LibraryMemoryInUse < Kept, 'the rest of the subtree goes with the move');
+  UseThePutBackNode;
+  Inner := nil;
+  Doc := nil;
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A kept detached subtree moved into another document leaves its document, which goes once
+// nothing else refers to it; the other document owns the nodes of the subtree.
+procedure TXMLDOMTest.TestKeptSubtreeMovesToAnotherDocument;
+var
+  [Weak] Source: IXMLDocument;
+  [Weak] Target: IXMLDocument;
+  ToDoc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure RemoveAndLetGo;
+  begin
+    var FromDoc := CoCreateXMLDocument;
+    Source := FromDoc;
+    Assert.IsTrue(FromDoc.LoadXML('<r><a><b><c/></b><x/></a></r>'));
+    Inner := FromDoc.DocumentElement.FirstChild.FirstChild;
+    FromDoc.DocumentElement.RemoveChild(FromDoc.DocumentElement.FirstChild);
+  end;
+
+  procedure MoveTheSubtree;
+  begin
+    ToDoc := CoCreateXMLDocument;
+    Target := ToDoc;
+    Assert.IsTrue(ToDoc.LoadXML('<s/>'));
+    ToDoc.DocumentElement.AppendChild(Inner.ParentNode);
+    Assert.AreEqual('<s><a><b><c/></b><x/></a></s>', ToDoc.DocumentElement.Xml);
+  end;
+
+  procedure UseTheMovedNode;
+  begin
+    Assert.IsTrue(Inner.OwnerDocument = ToDoc, 'the other document owns it');
+    Assert.AreEqual('s', Inner.ParentNode.ParentNode.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  RemoveAndLetGo;
+  Assert.IsTrue(Source <> nil, 'the kept subtree keeps its document alive');
+  MoveTheSubtree;
+  Assert.IsTrue(Source = nil, 'the document goes once the subtree has left it');
+  UseTheMovedNode;
+  ToDoc := nil;
+  Assert.IsTrue(Target <> nil, 'the moved node keeps the other document alive');
+  Inner := nil;
+  Assert.IsTrue(Target = nil, 'the other document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A node moved out of a kept detached subtree into another document takes nothing of the
+// rest along: the rest goes, and its document with it.
+procedure TXMLDOMTest.TestNodeOfKeptSubtreeMovesToAnotherDocument;
+var
+  [Weak] Source: IXMLDocument;
+  [Weak] Target: IXMLDocument;
+  ToDoc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure RemoveAndLetGo;
+  begin
+    var FromDoc := CoCreateXMLDocument;
+    Source := FromDoc;
+    Assert.IsTrue(FromDoc.LoadXML('<r><a><b><c/></b><x/></a></r>'));
+    Inner := FromDoc.DocumentElement.FirstChild.FirstChild;
+    FromDoc.DocumentElement.RemoveChild(FromDoc.DocumentElement.FirstChild);
+  end;
+
+  procedure MoveTheNode;
+  begin
+    ToDoc := CoCreateXMLDocument;
+    Target := ToDoc;
+    Assert.IsTrue(ToDoc.LoadXML('<s/>'));
+    ToDoc.DocumentElement.AppendChild(Inner);
+    Assert.AreEqual('<s><b><c/></b></s>', ToDoc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  RemoveAndLetGo;
+  MoveTheNode;
+  Assert.IsTrue(Source = nil, 'the rest of the subtree goes, and its document with it');
+  ToDoc := nil;
+  Assert.IsTrue(Target <> nil, 'the moved node keeps the other document alive');
+  Inner := nil;
+  Assert.IsTrue(Target = nil, 'the other document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A kept detached subtree survives a reload of its document, as the detached nodes of the
+// replaced content do (see TestRemovedRootSurvivesReload).
+procedure TXMLDOMTest.TestKeptSubtreeSurvivesReload;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Inner: IXMLNode;
+
+  procedure RemoveAndLetGo;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><b><c/></b><x/></a></r>'));
+    Inner := Doc.DocumentElement.FirstChild.FirstChild;
+    Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild);
+  end;
+
+  procedure Reload;
+  begin
+    Assert.IsTrue(Doc.LoadXML('<new/>'));
+  end;
+
+  procedure UseTheDescendant;
+  begin
+    Assert.AreEqual('<a><b><c/></b><x/></a>', Inner.ParentNode.Xml);
+    Assert.IsNull(Inner.ParentNode.ParentNode, 'the removed node is detached');
+    Assert.IsTrue(Inner.OwnerDocument = Doc, 'the reloaded document owns it, as in MSXML');
+    Assert.AreEqual('<new/>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  RemoveAndLetGo;
+  Reload;
+  UseTheDescendant;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the descendant keeps the document alive');
+  Inner := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The list SelectNodes returns holds the node the nodes were selected from: the nodes
+// selected from a removed node stay usable once nothing else refers to the removed node.
+procedure TXMLDOMTest.TestSelectedNodesOfRemovedNodeStayUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  List: IXMLNodeList;
+
+  procedure SelectAndLetGo;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><i n="1"/><i n="2"/></a></r>'));
+    List := Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild).SelectNodes('i');
+  end;
+
+  procedure UseTheList;
+  begin
+    Assert.AreEqual<NativeInt>(2, List.Length);
+    Assert.AreEqual('2', (List[1] as IXMLElement).GetAttribute('n'));
+    Assert.AreEqual('a', List[0].ParentNode.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  SelectAndLetGo;
+  UseTheList;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the list keeps the document alive');
+  List := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Walking a kept detached subtree with one reference at a time costs a step per node: the
+// node reached keeps the subtree before the previous one lets it go, so the subtree is not
+// searched for references on the way.
+procedure TXMLDOMTest.TestWalkInKeptSubtreeIsLinear;
+const
+  Count = 50000;
+var
+  Doc: IXMLDocument;
+  Node: IXMLNode;
+
+  procedure BuildAndRemove;
+  begin
+    Assert.IsTrue(Doc.LoadXML('<r><a/></r>'));
+    var Removed := Doc.DocumentElement.FirstChild as IXMLElement;
+    for var I := 1 to Count do
+      Removed.AddChild('i');
+    Node := Removed.FirstChild;
+    Doc.DocumentElement.RemoveChild(Removed);
+  end;
+
+begin
+  Doc := CoCreateXMLDocument;
+  BuildAndRemove;
+  var Steps := 0;
+  var Watch := TStopwatch.StartNew;
+  while Node <> nil do
+  begin
+    Node := Node.NextSibling;
+    Inc(Steps);
+  end;
+  Watch.Stop;
+  Assert.AreEqual(Count, Steps);
+  Assert.IsTrue(Watch.ElapsedMilliseconds < 2000, Format('%d ms', [Watch.ElapsedMilliseconds]));
+end;
+
 // The replaced child keeps the namespaces it used from its parent, as in MSXML: they are
 // declared on it, and stay with it when the former parent is gone.
 procedure TXMLDOMTest.TestReplacedChildKeepsItsNamespaces;
@@ -2177,6 +2708,211 @@ begin
   Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
 end;
 
+// CreateRoot makes the root as MSXML's createNode does and sets it as the document element:
+// the namespace is declared on the root, under the prefix of a qualified name or as the
+// default namespace of a local name. A prefix without a namespace URI stays in the name, as
+// in CreateElement. The declaration goes with the document.
+procedure TXMLDOMTest.TestCreateRootDeclaresItsNamespace;
+var
+  [Weak] Released: IXMLDocument;
+
+  function RootXml(const Name, NamespaceURI: string; const Content: string = ''): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    var Root := Doc.CreateRoot(Name, NamespaceURI, Content);
+    Assert.IsTrue((Doc.DocumentElement as TObject) = (Root as TObject), 'the root is the document element');
+    Assert.AreEqual(Name, Root.NodeName);
+    Assert.AreEqual(NamespaceURI, Root.NamespaceURI, Name);
+    Result := Root.Xml;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Assert.AreEqual('<p:r xmlns:p="urn:p"/>', RootXml('p:r', 'urn:p'));
+  Assert.AreEqual('<r xmlns="urn:p"/>', RootXml('r', 'urn:p'));
+  Assert.AreEqual('<p:r xmlns:p="urn:p">a&lt;b</p:r>', RootXml('p:r', 'urn:p', 'a<b'));
+  Assert.AreEqual('<p:r/>', RootXml('p:r', ''));
+  Assert.AreEqual('<r/>', RootXml('r', ''));
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// CreateRoot on a document that has a root puts the new root in its place as setting
+// DocumentElement does, as in MSXML: the replaced root stays usable for as long as it is
+// referenced.
+procedure TXMLDOMTest.TestCreateRootKeepsTheReplacedRoot;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  OldRoot: IXMLNode;
+
+  procedure CreateAnotherRoot;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<old><a/></old>'));
+    OldRoot := Doc.DocumentElement;
+    Doc.CreateRoot('p:r', 'urn:p');
+  end;
+
+  procedure UseBoth;
+  begin
+    Assert.AreEqual('<p:r xmlns:p="urn:p"/>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('<old><a/></old>', OldRoot.Xml);
+    Assert.IsNull(OldRoot.ParentNode, 'the replaced root is detached');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateAnotherRoot;
+  UseBoth;
+  OldRoot := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// CreateChild makes the child as MSXML's createNode followed by appendChild does: a
+// declaration of the parent that binds the prefix of the name to the namespace URI serves
+// the child, any other namespace is declared on the child. Without a namespace URI a prefix
+// means what it means at the parent, and stays in the name when nothing declares it.
+procedure TXMLDOMTest.TestCreateChildDeclaresItsNamespace;
+const
+  NamespaceURIs: array[0..6] of string = ('urn:p', 'urn:q', 'urn:p', 'urn:other', '', 'urn:p', '');
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure CreateChildren;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    var Root := Doc.CreateRoot('p:r', 'urn:p');
+    Doc.CreateChild(Root, 'p:a', 'urn:p');
+    Doc.CreateChild(Root, 'q:b', 'urn:q');
+    Doc.CreateChild(Root, 'c', 'urn:p');
+    Doc.CreateChild(Root, 'p:d', 'urn:other');
+    Doc.CreateChild(Root, 'e');
+    Doc.CreateChild(Root, 'p:f');
+    Doc.CreateChild(Root, 'q:g');
+  end;
+
+  procedure UseTheChildren;
+  begin
+    var Root := Doc.DocumentElement;
+    Assert.AreEqual('<p:r xmlns:p="urn:p"><p:a/><q:b xmlns:q="urn:q"/><c xmlns="urn:p"/>' +
+      '<p:d xmlns:p="urn:other"/><e/><p:f/><q:g/></p:r>', Root.Xml, 'as MSXML writes it');
+    var Child := Root.FirstChild;
+    for var URI in NamespaceURIs do
+    begin
+      Assert.AreEqual(URI, Child.NamespaceURI, Child.NodeName);
+      Child := Child.NextSibling;
+    end;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateChildren;
+  UseTheChildren;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Under a default namespace the same rule holds: the default namespace of the parent serves
+// a local name in it, another namespace URI is declared on the child.
+procedure TXMLDOMTest.TestCreateChildUnderDefaultNamespace;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure CreateChildren;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    var Root := Doc.CreateRoot('r', 'urn:p');
+    Doc.CreateChild(Root, 'a', 'urn:p', False, 'x&y');
+    Doc.CreateChild(Root, 'b', 'urn:q');
+    Doc.CreateChild(Root, 'p:c', 'urn:p');
+  end;
+
+  procedure UseTheChildren;
+  begin
+    Assert.AreEqual('<r xmlns="urn:p"><a>x&amp;y</a><b xmlns="urn:q"/><p:c xmlns:p="urn:p"/></r>',
+      Doc.DocumentElement.Xml, 'as MSXML writes it');
+    Assert.AreEqual('urn:p', Doc.DocumentElement.FirstChild.NamespaceURI);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateChildren;
+  UseTheChildren;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A child in a namespace the parent binds to another prefix keeps the name it was given, as
+// in MSXML; with ResolveNamespace it takes the prefix bound to the namespace URI in scope
+// instead, and only a namespace URI bound to none is declared on the child.
+procedure TXMLDOMTest.TestCreateChildResolveNamespace;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure CreateChildren;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:q="urn:p"/>'));
+    var Root := Doc.DocumentElement;
+    Doc.CreateChild(Root, 'a', 'urn:p');
+    Doc.CreateChild(Root, 'p:b', 'urn:p');
+    Doc.CreateChild(Root, 'c', 'urn:p', True);
+    Doc.CreateChild(Root, 'p:d', 'urn:p', True);
+    Doc.CreateChild(Root, 'e', 'urn:x', True);
+    Doc.CreateChild(Root, 'p:f', 'urn:x', True);
+  end;
+
+  procedure UseTheChildren;
+  begin
+    Assert.AreEqual('<r xmlns:q="urn:p"><a xmlns="urn:p"/><p:b xmlns:p="urn:p"/><q:c/><q:d/>' +
+      '<e xmlns="urn:x"/><p:f xmlns:p="urn:x"/></r>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateChildren;
+  UseTheChildren;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// Without a parent CreateChild creates the root, as CreateRoot does.
+procedure TXMLDOMTest.TestCreateChildWithoutParentCreatesTheRoot;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure CreateTheRoot;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    var Root := Doc.CreateChild(nil, 'p:r', 'urn:p', False, 'text');
+    Assert.IsTrue((Doc.DocumentElement as TObject) = (Root as TObject), 'the child is the document element');
+    Assert.AreEqual('<p:r xmlns:p="urn:p">text</p:r>', Root.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateTheRoot;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
 // The compiled schema document belongs to the collection; the wrapper returned by
 // Get must not free it, and a later Get must not find a dead wrapper via _private.
 procedure TXMLDOMTest.TestSchemaCollectionGetDoesNotFreeTheSchema;
@@ -2199,6 +2935,240 @@ begin
 
   schemas.Remove('urn:t');
   Assert.AreEqual<NativeInt>(0, schemas.Length);
+end;
+
+// RemoveChild takes the child out and changes nothing else, as in MSXML: no declaration
+// lands on the parent, and what stays keeps its prefixes even where two prefixes are bound
+// to one namespace. The removed child declares what it uses.
+procedure TXMLDOMTest.TestRemoveChildLeavesTheParentAlone;
+var
+  [Weak] Released: IXMLDocument;
+
+  function RemoveLast(const Xml: string; out Removed: string): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML(Xml));
+    var Root := Doc.DocumentElement;
+    Removed := Root.RemoveChild(Root.LastChild).Xml;
+    Result := Root.Xml;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  var Removed: string;
+  Assert.AreEqual('<r><a xmlns:q="urn:q"><q:x/></a></r>',
+    RemoveLast('<r><a xmlns:q="urn:q"><q:x/></a><b/></r>', Removed));
+  Assert.AreEqual('<r xmlns:a="urn:u" xmlns:b="urn:u"><b:x b:y="1"/></r>',
+    RemoveLast('<r xmlns:a="urn:u" xmlns:b="urn:u"><b:x b:y="1"/><c/></r>', Removed));
+  Assert.AreEqual('<r xmlns:p="urn:p"><p:a/></r>',
+    RemoveLast('<r xmlns:p="urn:p"><p:a/><p:b><c xmlns:q="urn:q"><q:d/></c></p:b></r>', Removed));
+  Assert.AreEqual('<p:b xmlns:p="urn:p"><c xmlns:q="urn:q"><q:d/></c></p:b>', Removed, 'as MSXML writes it');
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// ReplaceChild makes the new child hold at its place and changes nothing else, as in MSXML.
+// A namespace the new child brings from elsewhere in the document is declared on it, under
+// its own prefix even where the parent binds the URI to another one, unless the same prefix
+// is bound to the same URI in scope. The parent gets no declaration, and a reference that
+// holds keeps its prefix.
+procedure TXMLDOMTest.TestReplaceChildDeclaresWhatTheNewChildUses;
+var
+  [Weak] Released: IXMLDocument;
+
+  // Puts the element named NewName (a new element n when empty) in place of the element
+  // named OldName
+  function Replace(const Xml, NewName, OldName: string): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML(Xml));
+    var NewNode: IXMLNode;
+    if NewName = '' then
+      NewNode := Doc.CreateElement('n')
+    else
+      NewNode := Doc.SelectSingleNode('//*[local-name()="' + NewName + '"]');
+    var OldNode := Doc.SelectSingleNode('//*[local-name()="' + OldName + '"]');
+    OldNode.ParentNode.ReplaceChild(NewNode, OldNode);
+    Result := Doc.DocumentElement.Xml;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Assert.AreEqual('<r><a xmlns:q="urn:q"><q:x/></a><n/></r>',
+    Replace('<r><a xmlns:q="urn:q"><q:x/></a><b/></r>', '', 'b'));
+  Assert.AreEqual('<r><s xmlns:p="urn:p"/><p:m xmlns:p="urn:p" p:at="1"/></r>',
+    Replace('<r><s xmlns:p="urn:p"><p:m p:at="1"/></s><t/></r>', 'm', 't'));
+  Assert.AreEqual('<r xmlns:z="urn:p"><s xmlns:p="urn:p"/><p:m xmlns:p="urn:p" p:at="1"/></r>',
+    Replace('<r xmlns:z="urn:p"><s xmlns:p="urn:p"><p:m p:at="1"/></s><t/></r>', 'm', 't'));
+  Assert.AreEqual('<r xmlns:p="urn:p"><s xmlns:p="urn:p"/><p:m/></r>',
+    Replace('<r xmlns:p="urn:p"><s xmlns:p="urn:p"><p:m/></s><t/></r>', 'm', 't'));
+  Assert.AreEqual('<r><s xmlns:p="urn:p"/><t xmlns:p="urn:other"><p:m xmlns:p="urn:p"/></t></r>',
+    Replace('<r><s xmlns:p="urn:p"><p:m/></s><t xmlns:p="urn:other"><u/></t></r>', 'm', 'u'));
+  Assert.AreEqual('<r xmlns:a="urn:u"><s xmlns:b="urn:u"><b:x/></s></r>',
+    Replace('<r xmlns:a="urn:u"><s xmlns:b="urn:u"><b:x/><t/></s></r>', 'x', 't'));
+  Assert.AreEqual('<r xmlns:p="urn:p"><p:a/><p:b/></r>',
+    Replace('<r xmlns:p="urn:p"><p:a><p:b/></p:a><p:c/></r>', 'b', 'c'));
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// AppendChild and InsertBefore leave a moved subtree its own declarations, as MSXML does:
+// a namespace declared within the subtree is not declared once more on its top, and a
+// reference that holds at the new place keeps its prefix.
+procedure TXMLDOMTest.TestMovedSubtreeKeepsItsNestedDeclarations;
+var
+  [Weak] Released: IXMLDocument;
+
+  // Moves the element named Name under the element named ParentName, before its first
+  // child when Before is set
+  function Move(const Xml, Name, ParentName: string; Before: Boolean = False): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML(Xml));
+    var Node := Doc.SelectSingleNode('//*[local-name()="' + Name + '"]');
+    var Parent := Doc.SelectSingleNode('//*[local-name()="' + ParentName + '"]');
+    if Before then
+      Parent.InsertBefore(Node, Parent.FirstChild)
+    else
+      Parent.AppendChild(Node);
+    Result := Doc.DocumentElement.Xml;
+  end;
+
+  function AppendCreated: string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r/>'));
+    var W := Doc.CreateElement('w');
+    W.AppendChild(Doc.CreateNode(NODE_ELEMENT, 'p:e', 'urn:p'));
+    Doc.DocumentElement.AppendChild(W);
+    Result := Doc.DocumentElement.Xml;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Assert.AreEqual('<r><z><w><a xmlns:q="urn:q"><q:x/></a></w></z></r>',
+    Move('<r><w><a xmlns:q="urn:q"><q:x/></a></w><z/></r>', 'w', 'z'));
+  Assert.AreEqual('<r><z><w><a xmlns:q="urn:q"><q:x/></a></w><y/></z></r>',
+    Move('<r><w><a xmlns:q="urn:q"><q:x/></a></w><z><y/></z></r>', 'w', 'z', True));
+  Assert.AreEqual('<r xmlns:a="urn:u"><s xmlns:b="urn:u"><t/><b:x/></s></r>',
+    Move('<r xmlns:a="urn:u"><s xmlns:b="urn:u"><b:x/><t/></s></r>', 'x', 's'));
+  Assert.AreEqual('<r><w><p:e xmlns:p="urn:p"/></w></r>', AppendCreated);
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// RemoveChild, ReplaceChild and InsertBefore refuse a node that is not a child with
+// EXmlError, as MSXML does, and the tree stays as it was: libxml2 would act on the node
+// wherever it is.
+procedure TXMLDOMTest.TestNodeThatIsNotAChildIsRefused;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure Refuse;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><b/></a><c/></r>'));
+    var Root := Doc.DocumentElement;
+    var Grandchild := Root.FirstChild.FirstChild;
+    var Detached := Doc.CreateElement('x');
+    Assert.WillRaise(procedure begin Root.RemoveChild(Grandchild) end, EXmlError, 'RemoveChild of a grandchild');
+    Assert.WillRaise(procedure begin Root.RemoveChild(Detached) end, EXmlError, 'RemoveChild of a detached node');
+    Assert.WillRaise(procedure begin Root.ReplaceChild(Doc.CreateElement('n'), Grandchild) end, EXmlError,
+      'ReplaceChild of a grandchild');
+    Assert.WillRaise(procedure begin Root.ReplaceChild(Doc.CreateElement('n'), Detached) end, EXmlError,
+      'ReplaceChild of a detached node');
+    Assert.WillRaise(procedure begin Root.ReplaceChild(Doc.CreateElement('n'), Root) end, EXmlError,
+      'ReplaceChild of the node itself');
+    Assert.WillRaise(procedure begin Root.InsertBefore(Doc.CreateElement('n'), Grandchild) end, EXmlError,
+      'InsertBefore a grandchild');
+    Assert.AreEqual('<r><a><b/></a><c/></r>', Root.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Refuse;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A node put under itself or one of its descendants is refused with EXmlError, as in MSXML:
+// libxml2 would link it and make the tree a loop.
+procedure TXMLDOMTest.TestNodeIsNotInsertedUnderItself;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure Refuse;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a><b/></a></r>'));
+    var Root := Doc.DocumentElement;
+    var A := Root.FirstChild;
+    Assert.WillRaise(procedure begin A.AppendChild(Root) end, EXmlError, 'AppendChild of an ancestor');
+    Assert.WillRaise(procedure begin A.AppendChild(A) end, EXmlError, 'AppendChild of the node itself');
+    Assert.WillRaise(procedure begin A.InsertBefore(Root, A.FirstChild) end, EXmlError, 'InsertBefore of an ancestor');
+    Assert.WillRaise(procedure begin A.ReplaceChild(A, A.FirstChild) end, EXmlError, 'ReplaceChild with the node itself');
+    Assert.WillRaise(procedure begin A.ReplaceChild(Root, A.FirstChild) end, EXmlError, 'ReplaceChild with an ancestor');
+    Assert.AreEqual('<r><a><b/></a></r>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Refuse;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// An attribute taken from its element (RemoveAttributeNode, RemoveNamedItem) keeps its name
+// and namespace after the element and the declaration on it are gone, as in MSXML, and set
+// on another element brings the declaration along.
+procedure TXMLDOMTest.TestRemovedAttributeKeepsItsNamespace;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  A, B: IXMLAttribute;
+
+  procedure RemoveAndDropTheElement;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><e xmlns:p="urn:p" p:a="1" p:b="2"/><f/><g/></r>'));
+    var E := Doc.DocumentElement.FirstChild as IXMLElement;
+    A := E.RemoveAttributeNode(E.GetAttributeNode('p:a'));
+    B := E.Attributes.RemoveNamedItem('p:b') as IXMLAttribute;
+    Assert.AreEqual('<e xmlns:p="urn:p"/>', E.Xml);
+    Doc.DocumentElement.RemoveChild(E);
+  end;
+
+  procedure UseTheAttributes;
+  begin
+    Assert.AreEqual('p:a', A.Name);
+    Assert.AreEqual('urn:p', A.NamespaceURI);
+    Assert.AreEqual('p:b', B.Name);
+    Assert.AreEqual('urn:p', B.NamespaceURI);
+    Doc.DocumentElement.FirstChild.Attributes.SetNamedItem(A);
+    Doc.DocumentElement.LastChild.Attributes.SetNamedItem(B);
+    Assert.AreEqual('<r><f xmlns:p="urn:p" p:a="1"/><g xmlns:p="urn:p" p:b="2"/></r>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  RemoveAndDropTheElement;
+  UseTheAttributes;
+  A := nil;
+  B := nil;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
 end;
 
 { TXMLSchemaTest }

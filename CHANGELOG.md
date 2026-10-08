@@ -1,5 +1,76 @@
 ﻿# Changelog
 
+## Unreleased
+
+### Fixed
+
+- `RemoveChild`, `ReplaceChild` and `xmlNodeHelper.RemoveAttributeNode` ran
+  `xmlReconciliateNs` over the whole parent after the change, and `AppendChild`,
+  `InsertBefore` and `setNamedItem` over the inserted subtree. That function declares every
+  namespace declared within the subtree once more on its top and resolves the other
+  references by URI: `<r><a xmlns:q="urn:q"><q:x/></a><b/></r>` with `b` removed became
+  `<r xmlns:q="urn:q"><a xmlns:q="urn:q"><q:x/></a></r>`, a moved element got the
+  declarations of its descendants, a node put in place by `ReplaceChild` had the namespace it
+  brought declared on its new parent under the prefix found there, and where two prefixes
+  were bound to one URI, removing a sibling turned `b:x` into `a:x`. The parent is no longer
+  touched: a removal cannot break the references of what stays. A node put in place or moved
+  is reconciled alone, as MSXML keeps it: `xmlNodeHelper.DeclareOuterNamespaces` now leaves a
+  reference that holds as it is, points one whose declaration is out of scope to the
+  declaration in scope with the same prefix and URI, and otherwise declares the namespace on
+  the element that uses it under its own prefix. It no longer goes through
+  `xmlDOMWrapReconcileNamespaces`, which resolves references to the declarations of the
+  ancestors by URI, the outermost first, and changes a prefix that held.
+- `RemoveChild` and `ReplaceChild` acted on the node they were given wherever it was: a
+  grandchild was removed or replaced, `ReplaceChild` of a node in no tree returned nil and
+  `RemoveChild` of one returned it, and `InsertBefore` inserted next to a reference node that
+  is not a child. `AppendChild`, `InsertBefore` and `ReplaceChild` linked a node under itself
+  or its descendant, which made the tree a loop: the next walk of it never ended. The DOM now
+  raises `EXmlError` with the messages of MSXML (`SNotAChild`, `SRefNotAChild`,
+  `SInsertUnderItself`) and changes nothing; `setNamedItem` of a node map refuses a node put
+  under itself the same way. The helpers `RemoveChild`, `ReplaceChild`, `InsertBefore` and
+  `AppendChild` return nil in these cases.
+- An attribute taken from its element (`RemoveAttributeNode`, `RemoveNamedItem`,
+  `RemoveQualifiedItem`) kept pointing at the declaration of its namespace on the element.
+  Set on another element, it was written without a declaration (`<f p:a="1"/>`), and once
+  the element went, its name and namespace were read from freed memory. The attribute now
+  keeps its namespace in a declaration owned by the document (its `oldNs` list, where
+  libxml2 keeps the namespaces of attributes adopted without an element), and an element it
+  is set on declares the namespace, as in MSXML: `<f xmlns:p="urn:p" p:a="1"/>`. When that
+  element binds the prefix to another URI, the attribute takes a new prefix (`p1`) where
+  MSXML refuses with a namespace conflict.
+- `xmlDocHelper.CreateRoot` and `CreateChild`, and `CreateRoot` and `CreateChild` of the DOM
+  document, made the namespace of the element a declaration attached to no node. Nothing
+  freed it, so each call with a namespace URI leaked one. `CreateRoot` also passed the
+  qualified name together with a namespace of its prefix, so a root `p:r` was written
+  `<p:p:r xmlns:p="urn:p">`. The namespace is now declared on the element itself, as MSXML's
+  `createNode` declares it: `<p:r xmlns:p="urn:p"/>`, and `<r xmlns="urn:p"/>` for a name
+  without a prefix.
+- `CreateChild` did not keep the name it was given. A namespace bound in scope to another
+  prefix gave the child that prefix (`p:c` became `q:c`). A namespace not in scope was
+  declared under a made-up prefix (`<default:c xmlns:default="urn:q"/>`, `p1:d` when the
+  parent bound `p` to another URI). A prefixed name without a namespace URI lost its prefix,
+  because the prefix was looked up among namespace URIs (`xmlSearchNsByHref`). The child now
+  gets the name it was given, as `createNode` followed by `appendChild` give it in MSXML: a
+  declaration in scope of the parent serves it only if that declaration binds the same
+  prefix to the same URI, and any other namespace is declared on the child. A prefix without
+  a namespace URI takes the declaration in scope, or stays in the name when there is none.
+  `ResolveNamespace` used to be ignored; it now gives the child the prefix bound to the
+  namespace URI in scope, if there is one.
+- `CreateRoot` of the DOM document freed the root it replaced, so a reference to that root
+  lost its node. The root is now replaced the way setting `DocumentElement` replaces it, and
+  the old root stays usable. `CreateChild` of the DOM document with a nil parent raised an
+  access violation; it now creates the root, as `xmlDocHelper.CreateChild` does.
+- A detached node (removed, replaced, or a replaced document element) was freed with its
+  whole subtree as soon as the last reference to the node itself went, although references
+  to its descendants were alive: any use of them raised an access violation. A replaced
+  document element nothing referred to was freed at once, with the same effect on
+  references into it, and so was the context node of a `SelectNodes` list. A detached
+  subtree now lives while anything refers into it and goes with the last such reference,
+  as in MSXML: a descendant keeps its parent chain up to the detached node, which has no
+  parent, and can be put back into a document; a `SelectNodes` list holds the node it was
+  selected from. Freeing a detached node walks its subtree once to look for such
+  references; while none is kept, nothing else costs more than before.
+
 ## v1.2.0 — 2026-10-08
 
 ### Changed

@@ -28,6 +28,14 @@
 /// <see cref="TXMLNode.Create"/> and <see cref="TXMLNode.Destroy"/>.
 /// </para>
 /// <para>
+/// <b>Detached subtrees:</b> a node outside the tree of its document (removed, replaced,
+/// created and never inserted) is freed with its subtree once nothing refers into the subtree.
+/// The wrapper of the node frees it when it goes, unless wrappers of other nodes in the
+/// subtree are alive: then the subtree is kept for them and goes with the last of them
+/// (<see cref="TXMLDetachedTree"/>), as MSXML keeps the descendants of a removed node usable
+/// with their parent chain.
+/// </para>
+/// <para>
 /// <b>Global libxml2 node-deregister hook:</b> <see cref="NodeFreeCallback"/> is
 /// registered once through <c>xmlDeregisterNodeDefault</c> and is invoked by libxml2
 /// whenever libxml2 itself (rather than this wrapper) physically frees an
@@ -238,13 +246,16 @@ type
     // The document of the selected nodes, held as a node wrapper holds it
     // (TXMLNode.FHeldDoc): the list keeps it alive, through a reload as well.
     FHeldDoc: xmlDocPtr;
+    // The node the nodes were selected from. The list holds it, and with it a detached
+    // subtree the node and the nodes are in (TXMLDetachedTree).
+    FContext: TXMLNode;
   protected
     function  DoNextNode: xmlNodePtr; override;
     function  CreateEnumerator: TXMLNodeEnumerator; override;
   public
-    /// <summary>The nodes of <paramref name="Obj"/>, a node set selected in
-    /// <paramref name="Doc"/>; the list owns the object.</summary>
-    constructor Create(Obj: xmlXPathObjectPtr; Doc: xmlDocPtr);
+    /// <summary>The nodes of <paramref name="Obj"/>, a node set selected from
+    /// <paramref name="Context"/>; the list owns the object.</summary>
+    constructor Create(Obj: xmlXPathObjectPtr; Context: TXMLNode);
     destructor Destroy; override;
     { MSXMLDOMNodeList }
     function  Get_Item(Index: NativeInt): IXMLNode; override;
@@ -453,9 +464,54 @@ type
     property  NamespaceURI: string read FNamespaceURI;
   end;
 
+  /// <summary>
+  /// A detached subtree (removed, replaced or never inserted) kept alive for the wrappers of
+  /// its nodes after its top node has lost its own wrapper, as MSXML keeps the descendants of
+  /// a removed node usable with their parent chain. The wrappers that keep it point here
+  /// (<see cref="TXMLNode.FDetachedTree"/>), a wrapper created later in the subtree as well,
+  /// and the last of them to go frees the subtree.
+  /// </summary>
+  /// <remarks>
+  /// <para>
+  /// A detached top that has a wrapper needs no record: the wrapper frees the subtree when it
+  /// goes, and only then is a record made, for the wrappers a walk over the subtree finds in
+  /// it (<see cref="TXMLDocument.ReleaseDetached"/>). A record frees its subtree after such a
+  /// walk too, so a count gone wrong may keep a subtree longer than needed but never frees it
+  /// under a living wrapper.
+  /// </para>
+  /// <para>
+  /// The records belong to the libxml2 document of the subtree: its document object keeps them
+  /// by top node, so that a wrapper created in the subtree finds its record, and each record
+  /// holds a reference on that object, as a wrapper does. A node moved to another document
+  /// leaves its record (<see cref="Forget"/>).
+  /// </para>
+  /// </remarks>
+  TXMLDetachedTree = class
+  private
+    // The top node of the subtree, nil once the record stands for it no longer: libxml2 has
+    // freed the node, or it has moved to another document
+    FTop: xmlNodePtr;
+    // How many wrappers keep the subtree
+    FWrappers: NativeInt;
+    // The libxml2 document whose object the record holds a reference on (see TXMLNode.FHeldDoc)
+    FHeldDoc: xmlDocPtr;
+    constructor Create(Top: xmlNodePtr);
+    /// <summary>One wrapper keeps the subtree no longer. After the last one the subtree goes,
+    /// unless a walk over it finds wrappers the count missed.</summary>
+    procedure ReleaseWrapper;
+    /// <summary>Takes the record out of its document's records: it stands for its top node no
+    /// longer and goes with the wrappers that still keep it.</summary>
+    procedure Forget;
+    /// <summary>Frees the record and then releases its reference on the document.</summary>
+    procedure Drop;
+  end;
+
   TXMLNode = class(TXMLBase, IXMLNode)
   private
     FXSLTErrors: TXSLTErrors;
+    // The detached subtree this wrapper keeps alive, nil when its node is in none: in the tree
+    // of a document, or in a detached subtree whose top has a wrapper and no record
+    FDetachedTree: TXMLDetachedTree;
     // The child last found by ChildAt and how many children there are (-1 while unknown).
     // Valid while NodePtr is still FChildOwner and xmlTreeGeneration is still
     // FChildGeneration: the document is marked by KeepListPositions, so any change of its
@@ -467,6 +523,7 @@ type
     FChildCount: NativeInt;
     function  KeepsChildPosition: Boolean; inline;
     procedure CheckChildPosition;
+    procedure SetDetachedTree(Tree: TXMLDetachedTree);
     procedure XPathErrorHandler(const error: xmlError);
     procedure XSLTError(const Msg: string); virtual;
   protected
@@ -530,6 +587,12 @@ type
     /// that document's object and releases the one held before, if they differ.
     /// </summary>
     procedure HoldDocument;
+    /// <summary>
+    /// Makes the wrappers of the node's subtree keep the detached subtree the node is in now,
+    /// or none in the tree of a document. Called after the node has moved; the subtree is
+    /// walked only when the node has left or entered a kept detached subtree.
+    /// </summary>
+    procedure FollowDetachedTree;
   public
     destructor Destroy; override;
     procedure ReconciliateNs; virtual;
@@ -883,9 +946,24 @@ type
     // Set on a retired document only: the document object that was reloaded. It owns the
     // retired nodes for the DOM and is kept alive as long as they are.
     FSuccessor: TXMLDocument;
+    // The detached subtrees kept for wrappers (TXMLDetachedTree) by top node, nil until the
+    // first one. They belong to the libxml2 document, and a reload passes them on with it.
+    FDetachedTrees: TDictionary<xmlNodePtr, TXMLDetachedTree>;
     procedure AddNodeRef;
     procedure ReleaseNodeRef;
     procedure Retire;
+    /// <summary>The record that keeps the detached subtree of <paramref name="Top"/>, nil if
+    /// none.</summary>
+    function  DetachedTree(Top: xmlNodePtr): TXMLDetachedTree;
+    /// <summary>The record that keeps the detached subtree <paramref name="Node"/> is in, nil
+    /// if none. Walks up to the top only while the document keeps records.</summary>
+    function  DetachedTreeOf(Node: xmlNodePtr): TXMLDetachedTree;
+    /// <summary>
+    /// Lets go of <paramref name="Top"/>, a detached top of this document that has no wrapper
+    /// (any more): the subtree is freed, unless wrappers of its nodes are alive, and then a
+    /// record keeps it for them. A subtree a record keeps already is left to the record.
+    /// </summary>
+    procedure ReleaseDetached(Top: xmlNodePtr);
     /// <summary>The document object reported as the owner of this document's nodes: the
     /// document itself, or for a retired one the document that was reloaded.</summary>
     function  LiveDocument: TXMLDocument;
@@ -1043,13 +1121,19 @@ end;
 /// in an access violation on dereferencing <c>nil</c>, but that is strictly preferable to
 /// silent data corruption.
 /// </description></item>
+/// <item><description>
+/// Takes the record of a kept detached subtree whose top the node is out of its document's
+/// records (<see cref="TXMLDetachedTree.Forget"/>).
+/// </description></item>
 /// </list>
 /// </para>
 /// <para>
 /// The reference the wrapper holds on its document (<see cref="TXMLNode.FHeldDoc"/>) is
 /// NOT released here but in <see cref="TXMLNode.Destroy"/>: releasing it could destroy the
 /// document in the middle of the libxml2 call that frees the node, and libxml2 reads the
-/// node's document after this callback returns.
+/// node's document after this callback returns. For the same reason the wrapper keeps its
+/// detached subtree (<see cref="TXMLNode.FDetachedTree"/>) until it goes: the subtree may be
+/// the one libxml2 is freeing nodes of right now.
 /// </para>
 /// </remarks>
 procedure NodeFreeCallback(Node: xmlNodePtr); cdecl;
@@ -1060,14 +1144,18 @@ begin
 
   if Node._private <> nil then
   begin
-    var Ns := TXMLNode(Node._private).NodePtr.nsDef;
+    var Wrapper := TXMLNode(Node._private);
+    var Ns := Wrapper.NodePtr.nsDef;
     while Ns <> nil do
     begin
       if Ns._private <> nil then
         TXMLNsNode(Ns._private).NsPtr := nil;
       Ns := Ns.next;
     end;
-    TXMLNode(Node._private).NodePtr := nil;
+    // The record of a kept subtree this node was the top of stands for it no longer
+    if (Wrapper.FDetachedTree <> nil) and (Wrapper.FDetachedTree.FTop = Node) then
+      Wrapper.FDetachedTree.Forget;
+    Wrapper.NodePtr := nil;
   end;
 end;
 
@@ -1075,6 +1163,32 @@ procedure CheckNotNode(const Node: IXMLNode);
 begin
   if (Node <> nil) and not (TObject(Node) is TXMLNode) then
     raise EXmlUnsupported.CreateResFmt(@SUnsupportedBy, [NodeTypeName(xmlElementType(Node.NodeType))]);
+end;
+
+/// <summary>
+/// Raises <see cref="EXmlError"/> with the message <paramref name="Msg"/> unless
+/// <paramref name="Child"/> wraps a child of <paramref name="Parent"/>, as MSXML refuses
+/// to remove or replace a node, or insert before a node, that is not a child.
+/// </summary>
+/// <remarks>
+/// libxml2 does not check this: <c>xmlUnlinkNode</c>, <c>xmlReplaceNode</c> and
+/// <c>xmlAddPrevSibling</c> act on the node wherever it is.
+/// </remarks>
+procedure CheckChild(Parent: xmlNodePtr; Child: TXMLNode; Msg: PResStringRec);
+begin
+  if (Child = nil) or (Child.NodePtr = nil) or (Child.NodePtr.parent <> Parent) then
+    raise EXmlError.CreateRes(Msg);
+end;
+
+/// <summary>
+/// Raises <see cref="EXmlError"/> when <paramref name="Node"/> is <paramref name="Parent"/>
+/// itself or one of its ancestors, as MSXML refuses to insert a node there: libxml2 would
+/// link it and make the tree a loop.
+/// </summary>
+procedure CheckNotAncestor(Parent: xmlNodePtr; Node: TXMLNode);
+begin
+  if (Node.NodePtr <> nil) and Node.NodePtr.Contains(Parent) then
+    raise EXmlError.CreateRes(@SInsertUnderItself);
 end;
 
 /// <summary>
@@ -1253,56 +1367,102 @@ begin
 end;
 
 /// <summary>
+/// The node after <paramref name="Node"/> in the subtree of <paramref name="Top"/>, in
+/// document order; nil after the last one. The subtree includes the attributes of its
+/// elements, each followed by its text, before the children of the element. The children of
+/// an entity reference and of a DTD are declarations of the DTD, not part of the subtree.
+/// </summary>
+function NextInSubtree(Top, Node: xmlNodePtr): xmlNodePtr;
+begin
+  if (Node.&type = XML_ELEMENT_NODE) and (Node.properties <> nil) then
+    Exit(xmlNodePtr(Node.properties));
+  if (Node.children <> nil) and not (Node.&type in [XML_ENTITY_REF_NODE, XML_DTD_NODE]) then
+    Exit(Node.children);
+
+  while Node <> Top do
+  begin
+    if Node.next <> nil then
+      Exit(Node.next);
+    var Parent := Node.parent;
+    // The last attribute of an element is followed by the children of the element
+    if (Node.&type = XML_ATTRIBUTE_NODE) and (Parent.children <> nil) then
+      Exit(Parent.children);
+    Node := Parent;
+  end;
+  Result := nil;
+end;
+
+/// <summary>
 /// Makes every wrapper in the subtree of <paramref name="Node"/> hold the document its node
 /// belongs to now (<see cref="TXMLNode.HoldDocument"/>). Called after a node has moved to
 /// another document: libxml2 moves the whole subtree, and a wrapper of any node in it must
 /// keep the new document alive, not the old one.
 /// </summary>
-/// <remarks>
-/// The subtree includes the attributes of its elements and their text. The children of
-/// an entity reference and of a DTD are declarations of the DTD, not part of the subtree.
-/// </remarks>
 procedure FollowDocument(Node: xmlNodePtr);
-
-  procedure Follow(Node: xmlNodePtr); inline;
-  begin
-    if Node._private <> nil then
-      TXMLNode(Node._private).HoldDocument;
-  end;
-
 begin
   var Cur := Node;
   while Cur <> nil do
   begin
-    Follow(Cur);
-    if Cur.&type = XML_ELEMENT_NODE then
-    begin
-      var Attr := Cur.properties;
-      while Attr <> nil do
-      begin
-        Follow(xmlNodePtr(Attr));
-        var Text := Attr.children;
-        while Text <> nil do
-        begin
-          Follow(Text);
-          Text := Text.next;
-        end;
-        Attr := Attr.next;
-      end;
-    end;
-
-    if (Cur.children <> nil) and not (Cur.&type in [XML_ENTITY_REF_NODE, XML_DTD_NODE]) then
-      Cur := Cur.children
-    else
-    begin
-      while (Cur <> Node) and (Cur.next = nil) do
-        Cur := Cur.parent;
-      if Cur = Node then
-        Cur := nil
-      else
-        Cur := Cur.next;
-    end;
+    if Cur._private <> nil then
+      TXMLNode(Cur._private).HoldDocument;
+    Cur := NextInSubtree(Node, Cur);
   end;
+end;
+
+/// <summary>
+/// Frees the detached subtree of <paramref name="Top"/>, whose top has no wrapper, unless a
+/// walk over the subtree finds wrappers of its nodes: then they keep it, through
+/// <paramref name="Tree"/>, or through a new record if that is nil (see
+/// <see cref="TXMLDetachedTree"/>).
+/// </summary>
+/// <remarks>
+/// The walk costs about as much as freeing the subtree would. It is what lets a subtree go
+/// only when nothing refers to it, whatever the counts of the records say.
+/// </remarks>
+procedure FreeOrKeepDetached(Top: xmlNodePtr; Tree: TXMLDetachedTree);
+begin
+  var Node := Top;
+  while Node <> nil do
+  begin
+    if Node._private <> nil then
+    begin
+      if Tree = nil then
+        Tree := TXMLDetachedTree.Create(Top);
+      TXMLNode(Node._private).SetDetachedTree(Tree);
+    end;
+    Node := NextInSubtree(Top, Node);
+  end;
+
+  if (Tree <> nil) and (Tree.FWrappers > 0) then
+    Exit;
+  xmlFreeNode(Top);
+  if Tree <> nil then
+    Tree.Drop;
+end;
+
+/// <summary>
+/// The wrapper of <paramref name="Node"/>, which a DOM operation has just detached and
+/// returns, after the wrappers of its subtree have followed it out of the kept detached
+/// subtree it may have been in (<see cref="TXMLNode.FollowDetachedTree"/>).
+/// </summary>
+function CastRemoved(Node: xmlNodePtr): TXMLNode;
+begin
+  Result := Cast(Node);
+  Result.FollowDetachedTree;
+end;
+
+/// <summary>
+/// Settles <paramref name="Node"/>, which a DOM operation has just detached and does not
+/// return: a wrapper of it follows the move (<see cref="TXMLNode.FollowDetachedTree"/>), and
+/// a node without one goes, unless wrappers in its subtree keep it
+/// (<see cref="TXMLDocument.ReleaseDetached"/>).
+/// </summary>
+procedure ReleaseRemoved(Node: xmlNodePtr);
+begin
+  if Node._private <> nil then
+    TXMLNode(Node._private).FollowDetachedTree
+  else if (Node.doc <> nil) and (Node.doc._private <> nil) then
+    TXMLDocument(Node.doc._private).ReleaseDetached(Node);
 end;
 
 /// <summary>
@@ -1313,6 +1473,12 @@ end;
 /// the new document (<see cref="FollowDocument"/>). Nothing of the subtree refers to the old
 /// document afterwards, so the old document may go.
 /// </summary>
+/// <remarks>
+/// A kept detached subtree (<see cref="TXMLDetachedTree"/>) is kept within its document. The
+/// record of a node adopted as a kept top is forgotten: it goes with the wrappers that still
+/// keep it, and they move to the subtree the node is linked into
+/// (<see cref="TXMLNode.FollowDetachedTree"/>).
+/// </remarks>
 /// <returns>False if libxml2 cannot adopt the node (a fragment or a DTD node from
 /// another document).</returns>
 function AdoptForeign(Node, Parent: xmlNodePtr): Boolean;
@@ -1320,6 +1486,12 @@ begin
   if Node.doc = Parent.doc then
     Exit(True);
 
+  if (Node.doc <> nil) and (Node.doc._private <> nil) then
+  begin
+    var Tree := TXMLDocument(Node.doc._private).DetachedTree(Node);
+    if Tree <> nil then
+      Tree.Forget;
+  end;
   Node.TreeChanged;
   Result := xmlDOMWrapAdoptNode(nil, nil, Node, Parent.doc, Parent, 0) = 0;
   if Result then
@@ -1614,11 +1786,14 @@ end;
 
 { TXPathList }
 
-constructor TXPathList.Create(Obj: xmlXPathObjectPtr; Doc: xmlDocPtr);
+constructor TXPathList.Create(Obj: xmlXPathObjectPtr; Context: TXMLNode);
 begin
   inherited Create;
   FObj := Obj;
   FIndex := -1;
+  FContext := Context;
+  FContext._AddRef;
+  var Doc := Context.NodePtr.doc;
   if (Doc <> nil) and (Doc._private <> nil) then
   begin
     FHeldDoc := Doc;
@@ -1630,6 +1805,8 @@ destructor TXPathList.Destroy;
 begin
   xmlXPathFreeObject(FObj);
   inherited;
+  if FContext <> nil then
+    FContext._Release;
   if FHeldDoc <> nil then
     TXMLDocument(FHeldDoc._private).ReleaseNodeRef;
 end;
@@ -1694,7 +1871,7 @@ begin
     Exit(nil);
 
   RemoveNode(Node);
-  Result := Cast(Node);
+  Result := CastRemoved(Node);
 end;
 
 function TXMLCustomNamedNodeMap.removeNamedItemNS(const namespaceURI, localName: string): IXMLNode;
@@ -1706,6 +1883,7 @@ procedure TXMLCustomNamedNodeMap.RemoveNode(Node: xmlNodePtr);
 begin
   Node.TreeChanged;
   xmlUnlinkNode(Node);
+  Node.DeclareOuterNamespaces;
 end;
 
 function TXMLCustomNamedNodeMap.removeQualifiedItem(const BaseName, NamespaceURI: string): IXMLNode;
@@ -1715,7 +1893,7 @@ begin
     Exit(nil);
 
   RemoveNode(Node);
-  Result := Cast(Node);
+  Result := CastRemoved(Node);
 end;
 
 function TXMLCustomNamedNodeMap.setNamedItem(const NewItem: IXMLNode): IXMLNode;
@@ -1734,16 +1912,23 @@ begin
   begin
     var OldNode := FindQualifiedItem(xmlCharToStr(NewNode.name), xmlCharToStr(NewNode.ns.href));
     if OldNode <> nil then
-     RemoveNode(OldNode);
+    begin
+      RemoveNode(OldNode);
+      ReleaseRemoved(OldNode);
+    end;
   end
   else
   begin
     var OldNode := FindItem(xmlCharToStr(NewNode.name));
     if OldNode <> nil then
+    begin
       RemoveNode(OldNode);
+      ReleaseRemoved(OldNode);
+    end;
   end;
 
   Result := Cast(InsertNode(NewNode, nil));
+  TXMLNode(NewItem).FollowDetachedTree;
 end;
 
 function TXMLCustomNamedNodeMap.setNamedItemNS(const NewItem: IXMLNode): IXMLNode;
@@ -1766,6 +1951,8 @@ end;
 
 function TXMLNodeNamedNodeMap.InsertNode(NewNode, AfterNode: xmlNodePtr): xmlNodePtr;
 begin
+  if NewNode.Contains(Parent) then
+    raise EXmlError.CreateRes(@SInsertUnderItself);
   if not AdoptForeign(NewNode, Parent) then
     Exit(nil);
 
@@ -1779,7 +1966,7 @@ begin
 
   if Result <> nil then
   begin
-    xmlReconciliateNs(Result.doc, Result);
+    Result.DeclareOuterNamespaces;
     if Moved and (Result.doc <> nil) then
       Result.doc.ElementsChanged;
   end;
@@ -2053,7 +2240,8 @@ begin
   if Attr <> nil then
   begin
     xmlUnlinkNode(xmlNodePtr(Attr));
-    Exit(Cast(Attr));
+    xmlNodePtr(Attr).DeclareOuterNamespaces;
+    Exit(CastRemoved(xmlNodePtr(Attr)));
   end;
 
   Result := nil;
@@ -2077,7 +2265,8 @@ begin
   if Attr <> nil then
   begin
     xmlUnlinkNode(xmlNodePtr(Attr));
-    Exit(Cast(Attr));
+    xmlNodePtr(Attr).DeclareOuterNamespaces;
+    Exit(CastRemoved(xmlNodePtr(Attr)));
   end;
 
   Result := nil;
@@ -2105,8 +2294,9 @@ begin
     ResolveUnlinked(Parent, Attr);
     var Child := xmlAddChild(Parent, xmlNodePtr(Attr.AttrPtr));
     if Child <> nil then
-      xmlReconciliateNs(Child.doc, Child);
+      Child.DeclareOuterNamespaces;
     Result := Cast(Child);
+    Attr.FollowDetachedTree;
   end
   else
     Result := nil;
@@ -2576,6 +2766,46 @@ begin
   FEnum.Reset;
 end;
 
+{ TXMLDetachedTree }
+
+constructor TXMLDetachedTree.Create(Top: xmlNodePtr);
+begin
+  inherited Create;
+  FTop := Top;
+  FHeldDoc := Top.doc;
+  var Doc := TXMLDocument(FHeldDoc._private);
+  if Doc.FDetachedTrees = nil then
+    Doc.FDetachedTrees := TDictionary<xmlNodePtr, TXMLDetachedTree>.Create;
+  Doc.FDetachedTrees.Add(Top, Self);
+  Doc.AddNodeRef;
+end;
+
+procedure TXMLDetachedTree.ReleaseWrapper;
+begin
+  Dec(FWrappers);
+  if FWrappers > 0 then
+    Exit;
+  if (FTop <> nil) and (FTop.parent = nil) then
+    FreeOrKeepDetached(FTop, Self)
+  else
+    Drop;   // the top has gone into a tree, or the record stands for it no longer
+end;
+
+procedure TXMLDetachedTree.Forget;
+begin
+  TXMLDocument(FHeldDoc._private).FDetachedTrees.Remove(FTop);
+  FTop := nil;
+end;
+
+procedure TXMLDetachedTree.Drop;
+begin
+  var Doc := TXMLDocument(FHeldDoc._private);
+  if FTop <> nil then
+    Doc.FDetachedTrees.Remove(FTop);
+  Free;
+  Doc.ReleaseNodeRef;   // last: it may free the document, whose dictionary the subtree used
+end;
+
 { TXMLNode }
 
 /// <summary>
@@ -2604,6 +2834,10 @@ end;
 /// may change meanwhile, from the reloaded document to the retired one that took over its
 /// references (<see cref="TXMLDocument.Retire"/>), and it is that one the reference goes to.
 /// </para>
+/// <para>
+/// A wrapper of a node in a kept detached subtree keeps it as well
+/// (<see cref="TXMLDetachedTree"/>).
+/// </para>
 /// </remarks>
 constructor TXMLNode.Create(Node: xmlNodePtr);
 begin
@@ -2611,6 +2845,8 @@ begin
   NodePtr := Node;
   NodePtr._private := Self;
   HoldDocument;
+  if FHeldDoc <> nil then
+    SetDetachedTree(TXMLDocument(FHeldDoc._private).DetachedTreeOf(NodePtr));
 
   FXSLTErrors := TXSLTErrors.Create;
   FXSLTErrors._AddRef;
@@ -2621,20 +2857,32 @@ begin
 end;
 
 /// <remarks>
+/// <para>
+/// The wrapper of a detached top lets go of the subtree: it is freed, unless wrappers of
+/// other nodes in it are alive, which then keep it (<see cref="TXMLDocument.ReleaseDetached"/>).
+/// A wrapper that keeps a detached subtree releases it (<see cref="TXMLDetachedTree"/>), and the
+/// last one frees it.
+/// </para>
+/// <para>
 /// A wrapper that took no reference also frees no node: its document is not managed by
 /// this unit. The reference is released last, because freeing a detached node reads the
 /// dictionary of its document.
+/// </para>
 /// </remarks>
 destructor TXMLNode.Destroy;
 begin
   var Held := FHeldDoc;
   FHeldDoc := nil;
+  var Tree := FDetachedTree;
+  FDetachedTree := nil;
   if (NodePtr <> nil) and (NodePtr._private = Self) then
   begin
     NodePtr._private := nil;
-    if (Held <> nil) and (NodePtr.parent = nil) then
-      xmlFreeNode(NodePtr);
+    if (Held <> nil) and (NodePtr.parent = nil) and ((Tree = nil) or (Tree.FTop <> NodePtr)) then
+      TXMLDocument(Held._private).ReleaseDetached(NodePtr);
   end;
+  if Tree <> nil then
+    Tree.ReleaseWrapper;
 
   if FXSLTErrors <> nil then
     FXSLTErrors._Release;
@@ -2665,6 +2913,40 @@ begin
     TXMLDocument(Held._private).ReleaseNodeRef;
 end;
 
+procedure TXMLNode.SetDetachedTree(Tree: TXMLDetachedTree);
+begin
+  if Tree = FDetachedTree then
+    Exit;
+  var Old := FDetachedTree;
+  FDetachedTree := Tree;
+  if Tree <> nil then
+    Inc(Tree.FWrappers);
+  if Old <> nil then
+    Old.ReleaseWrapper;
+end;
+
+procedure TXMLNode.FollowDetachedTree;
+begin
+  var Tree: TXMLDetachedTree := nil;
+  if (NodePtr <> nil) and (FHeldDoc <> nil) then
+    Tree := TXMLDocument(FHeldDoc._private).DetachedTreeOf(NodePtr);
+  if Tree = FDetachedTree then
+    Exit;
+
+  if NodePtr = nil then
+  begin
+    SetDetachedTree(nil);   // libxml2 has merged the node into a neighbour and freed it
+    Exit;
+  end;
+  var Node := NodePtr;
+  while Node <> nil do
+  begin
+    if Node._private <> nil then
+      TXMLNode(Node._private).SetDetachedTree(Tree);
+    Node := NextInSubtree(NodePtr, Node);
+  end;
+end;
+
 function TXMLNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
 begin
   if TObject(NewChild) is TXMLNsNode then
@@ -2676,6 +2958,7 @@ begin
   else
   begin
     var NewNode := TXMLNode(NewChild);
+    CheckNotAncestor(NodePtr, NewNode);
     if NewNode.NodePtr.doc = NodePtr.doc then
     begin
       ResolveUnlinked(NodePtr, NewNode);
@@ -2686,6 +2969,7 @@ begin
       Result := Cast(NodePtr.AppendChild(NewNode.NodePtr))
     else
       Result := nil;
+    NewNode.FollowDetachedTree;
   end;
 end;
 
@@ -2700,17 +2984,22 @@ begin
   else
   begin
     var NewNode := TXMLNode(NewChild);
+    // A nil RefChild means "append", as in DOM: insertBefore(x, parent.firstChild) on an empty parent
+    var RefNode: xmlNodePtr := nil;
+    if RefChild <> nil then
+    begin
+      CheckChild(NodePtr, TXMLNode(RefChild), @SRefNotAChild);
+      RefNode := TXMLNode(RefChild).NodePtr;
+    end;
+    CheckNotAncestor(NodePtr, NewNode);
     if not AdoptForeign(NewNode.NodePtr, NodePtr) then
       Exit(nil);
 
     ResolveUnlinked(NodePtr, NewNode);
-    // A nil RefChild means "append", as in DOM: insertBefore(x, parent.firstChild) on an empty parent
-    var RefNode: xmlNodePtr := nil;
-    if RefChild <> nil then
-      RefNode := TXMLNode(RefChild).NodePtr;
     // A text node merged into its neighbour is freed (its NodePtr turns nil); its wrapper
     // keeps the document reference until it goes
     Result := Cast(NodePtr.InsertBefore(NewNode.NodePtr, RefNode));
+    NewNode.FollowDetachedTree;
   end;
 end;
 
@@ -2988,20 +3277,26 @@ end;
 
 function TXMLNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
 begin
-  Result := ChildNode;
   var Node := TXMLNode(ChildNode);
+  CheckChild(NodePtr, Node, @SNotAChild);
   NodePtr.RemoveChild(Node.NodePtr);
+  Node.FollowDetachedTree;
+  Result := ChildNode;
 end;
 
 function TXMLNode.ReplaceChild(const NewChild, OldChild: IXMLNode): IXMLNode;
 begin
   var New := TXMLNode(NewChild);
   var Old := TXMLNode(OldChild);
+  CheckChild(NodePtr, Old, @SRefNotAChild);
+  CheckNotAncestor(NodePtr, New);
   if not AdoptForeign(New.NodePtr, NodePtr) then
     Exit(nil);
   // The replaced child stays detached and usable, as in MSXML: its wrapper (the caller
-  // passed it in) frees it when it goes, see Destroy
+  // passed it in) frees it when it goes, or the last wrapper in its subtree, see Destroy
   Result := Cast(NodePtr.ReplaceChild(New.NodePtr, Old.NodePtr));
+  New.FollowDetachedTree;
+  Old.FollowDetachedTree;
 end;
 
 function TXMLNode.SelectNodes(const QueryString: string): IXMLNodeList;
@@ -3009,7 +3304,7 @@ begin
   var Obj := NodePtr.XPathEval(Utf8Encode(QueryString), nil, XPathErrorHandler);
   if Obj = nil then
     Exit(nil);
-  Result := TXPathList.Create(Obj, NodePtr.doc);
+  Result := TXPathList.Create(Obj, Self);
 end;
 
 function TXMLNode.SelectSingleNode(const QueryString: string): IXMLNode;
@@ -3332,6 +3627,9 @@ begin
   begin
     Result := Attribute;
     xmlUnlinkNode(Attr.NodePtr);
+    // The declaration of its namespace stays with the element, the attribute keeps its own
+    Attr.NodePtr.DeclareOuterNamespaces;
+    Attr.FollowDetachedTree;
   end
   else
     Result := nil;
@@ -3682,6 +3980,7 @@ begin
     FSuccessError._Release;
   if FSuccessor <> nil then
     FSuccessor._Release;
+  FDetachedTrees.Free;   // empty: each record holds a reference on this object
 end;
 
 procedure TXMLDocument.AddNodeRef;
@@ -3701,6 +4000,27 @@ begin
   Result := Self;
   while Result.FSuccessor <> nil do
     Result := Result.FSuccessor;
+end;
+
+function TXMLDocument.DetachedTree(Top: xmlNodePtr): TXMLDetachedTree;
+begin
+  if (FDetachedTrees = nil) or not FDetachedTrees.TryGetValue(Top, Result) then
+    Result := nil;
+end;
+
+function TXMLDocument.DetachedTreeOf(Node: xmlNodePtr): TXMLDetachedTree;
+begin
+  if (FDetachedTrees = nil) or (FDetachedTrees.Count = 0) then
+    Exit(nil);
+  while Node.parent <> nil do
+    Node := Node.parent;
+  Result := DetachedTree(Node);
+end;
+
+procedure TXMLDocument.ReleaseDetached(Top: xmlNodePtr);
+begin
+  if DetachedTree(Top) = nil then
+    FreeOrKeepDetached(Top, nil);
 end;
 
 /// <summary>
@@ -3723,6 +4043,10 @@ end;
 /// nodes (<see cref="LiveDocument"/>), lives as long as they do, and the top-level nodes of
 /// the retired content show neither parent nor siblings (<see cref="IsRetiredTop"/>).
 /// </para>
+/// <para>
+/// The records of the kept detached subtrees (<see cref="TXMLDetachedTree"/>) pass to the
+/// retired object along with the references they hold.
+/// </para>
 /// </remarks>
 procedure TXMLDocument.Retire;
 begin
@@ -3738,6 +4062,8 @@ begin
 
   var Retired := TXMLDocument.Create(Old, FDocOwner);
   Retired.FSuccessor := Self;
+  Retired.FDetachedTrees := FDetachedTrees;
+  FDetachedTrees := nil;
   _AddRef;
   for var I := 1 to Refs do
   begin
@@ -3831,14 +4157,24 @@ begin
   Result := Cast(xmlDocPtr(NodePtr).CreateElementNs(Utf8Encode(NamespaceURI), Utf8Encode(Name))) as IXMLElement;
 end;
 
+/// <remarks>
+/// The MSXML sequence of <c>createNode</c> and setting <c>documentElement</c>: the namespace
+/// is declared on the root itself, and a root the document already has is replaced as
+/// <see cref="Set_documentElement"/> replaces it, so a reference to it stays usable.
+/// </remarks>
 function TXMLDocument.CreateRoot(const RootName: string; const NamespaceURI: string = ''; Content: string = ''): IXMLElement;
 begin
-  Result := Cast(xmlDocPtr(NodePtr).CreateRoot(Utf8Encode(RootName), Utf8Encode(NamespaceURI), Utf8Encode(Content))) as IXMLElement;
+  Result := CreateNode(NODE_ELEMENT, RootName, NamespaceURI) as IXMLElement;
+  if Content <> '' then
+    Result.AppendChild(CreateTextNode(Content));
+  Set_documentElement(Result);
 end;
 
 function TXMLDocument.CreateChild(const Parent: IXMLElement; const Name: string; const NamespaceURI: string = ''; ResolveNamespace: Boolean = False; Content: string = ''): IXMLElement;
 begin
   CheckNotNode(Parent);
+  if Parent = nil then
+    Exit(CreateRoot(Name, NamespaceURI, Content));
   Result := Cast(xmlDocPtr(NodePtr).CreateChild(TXMLNode(Parent).NodePtr, Utf8Encode(Name), Utf8Encode(NamespaceURI), ResolveNamespace, Utf8Encode(Content))) as IXMLElement;
 end;
 
@@ -4113,10 +4449,9 @@ begin
 end;
 
 /// <remarks>
-/// The replaced root stays detached and usable, as in MSXML, for as long as its wrapper
-/// lives: the wrapper frees it when it goes (see <see cref="TXMLNode.Destroy"/>). A root
-/// without a wrapper is freed at once, as a removed node is when its wrapper goes, and
-/// wrappers of its descendants lose their nodes.
+/// The replaced root stays detached and usable, as in MSXML, for as long as a wrapper of it
+/// or of a node in its subtree lives, and goes with the last of them (see
+/// <see cref="TXMLNode.Destroy"/>). A root nothing refers to is freed at once.
 /// </remarks>
 procedure TXMLDocument.Set_documentElement(const Element: IXMLElement);
 begin
@@ -4128,8 +4463,10 @@ begin
       LX2InternalError;
   end;
   var Old := xmlDocPtr(NodePtr).ReplaceDocumentElement(Root);
-  if (Old <> nil) and (Old._private = nil) then
-    xmlFreeNode(Old);
+  if Element <> nil then
+    TXMLNode(Element).FollowDetachedTree;
+  if Old <> nil then
+    ReleaseRemoved(Old);
 end;
 
 procedure TXMLDocument.Set_preserveWhiteSpace(isPreserving: Boolean);

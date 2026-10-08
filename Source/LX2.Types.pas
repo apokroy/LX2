@@ -594,6 +594,9 @@ resourcestring
   SXmlNsHrefNotFound     = 'Namespace with URI "%s" not found';
   SUnsupportedByAttrDecl = 'Operation unsupported by namespace declarations';
   SUnsupportedBy         = 'Operation unsupported by %s';
+  SNotAChild             = 'The parameter node is not a child of this node';
+  SRefNotAChild          = 'Insert position node must be a child of the node to insert under';
+  SInsertUnderItself     = 'Inserting a node or its ancestor under itself is not allowed';
 
 implementation
 

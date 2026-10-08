@@ -148,8 +148,10 @@ type
     /// <param name="Content">Optional text content.</param>
     function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
     /// <summary>
-    /// Appends <paramref name="NewChild"/> as the last child of this node and
-    /// reconciles namespace declarations across the moved subtree.
+    /// Appends <paramref name="NewChild"/> as the last child of this node and makes the
+    /// namespace references of the moved subtree hold at the new place
+    /// (<see cref="DeclareOuterNamespaces"/>). Returns <c>nil</c> and changes nothing when
+    /// NewChild is this node or one of its ancestors.
     /// </summary>
     function  AppendChild(const NewChild: xmlNodePtr): xmlNodePtr; inline;
     /// <summary>Returns the number of direct element children (ignores text/comment nodes).</summary>
@@ -167,13 +169,24 @@ type
     /// </summary>
     function  Contains(const Node: xmlNodePtr): Boolean; inline;
     /// <summary>
-    /// Makes this element, out of its tree, self-contained in namespaces: a namespace its
-    /// subtree uses through a declaration outside the subtree is declared anew on the
-    /// element that uses it (<c>xmlDOMWrapReconcileNamespaces</c>). The declaration outside
-    /// belongs to the tree and goes with it, and the element written out alone declares
-    /// what it uses, as in MSXML. Declarations within the subtree stay as they are. Nodes
-    /// of other types use no declarations and are left alone.
+    /// Makes the namespace references of this element's subtree, or of this attribute, hold
+    /// at the node's current place, as MSXML keeps them. A reference to a declaration in
+    /// scope stays as it is. A reference whose declaration is out of scope (left in the old
+    /// place by a move, or bound over by a nearer declaration of the prefix) goes to the
+    /// declaration in scope that binds the same prefix to the same URI, or else to a
+    /// declaration made anew on the element that uses it (the element of an attribute).
+    /// The prefix changes only when that element binds it to another URI itself, or an
+    /// attribute uses a namespace without prefix: then a declaration in scope with the URI
+    /// serves, or one is made under a new prefix. An attribute out of any element gets a
+    /// declaration owned by the document (kept in its <c>oldNs</c>).
     /// </summary>
+    /// <remarks>
+    /// An element out of its tree becomes self-contained this way: the declarations outside
+    /// belong to the tree and go with it, and the element written out alone declares what it
+    /// uses. No declaration is removed, and none is made above the element that needs it,
+    /// unlike <c>xmlReconciliateNs</c>, which declares every namespace declared within the
+    /// subtree once more on its top. Nodes of other types are left alone.
+    /// </remarks>
     procedure DeclareOuterNamespaces;
     function  FirstElementChild: xmlNodePtr; inline;
     /// <summary>
@@ -230,6 +243,13 @@ type
     function  HasAttributeNs(const NamespaceURI, Name: RawByteString): Boolean; inline;
     function  HasAttributes: Boolean; inline;
     function  HasChildNodes: Boolean; inline;
+    /// <summary>
+    /// Inserts <paramref name="NewChild"/> before <paramref name="RefChild"/>, or appends it
+    /// when RefChild is <c>nil</c>, and makes the namespace references of the moved subtree
+    /// hold at the new place (<see cref="DeclareOuterNamespaces"/>). Returns <c>nil</c> and
+    /// changes nothing when RefChild is not a child of this node, or NewChild is this node
+    /// or one of its ancestors.
+    /// </summary>
     function  InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
     function  IsBlank: Boolean; inline;
     function  IsDefaultNamespace(const namespaceURI: RawByteString): Boolean; inline;
@@ -241,21 +261,26 @@ type
     /// <summary>Removes the attribute with the given name, if present.</summary>
     procedure RemoveAttribute(const name: RawByteString); inline;
     /// <summary>
-    /// Detaches and frees the given attribute node, then reconciles namespaces
-    /// on this node.
+    /// Detaches and frees the given attribute node. What stays under this node keeps its
+    /// namespace references: none of them can point into the attribute.
     /// </summary>
     procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
     /// <summary>
     /// Unlinks <paramref name="ChildNode"/> and returns it, not freed and self-contained in
-    /// namespaces (<see cref="DeclareOuterNamespaces"/>).
+    /// namespaces (<see cref="DeclareOuterNamespaces"/>). Returns <c>nil</c> and changes
+    /// nothing when ChildNode is not a child of this node. The namespace references of what
+    /// stays under this node hold as before and are not touched.
     /// </summary>
     function  RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr; inline;
     /// <summary>
     /// Puts <paramref name="NewChild"/> in place of <paramref name="OldChild"/> and returns
-    /// OldChild, unlinked, not freed and self-contained in namespaces
+    /// OldChild, unlinked, not freed and self-contained in namespaces. The namespace
+    /// references of NewChild, which may come from another place of the document, are made
+    /// to hold at the new place; the rest of this node's subtree is not touched
     /// (<see cref="DeclareOuterNamespaces"/>). A child replaced by itself stays in place
-    /// and is returned. Returns <c>nil</c> when nothing is replaced: OldChild has no parent,
-    /// or one of the two is an attribute and the other is not.
+    /// and is returned. Returns <c>nil</c> when nothing is replaced: OldChild is not a child
+    /// of this node, NewChild is this node or one of its ancestors, or one of the two is an
+    /// attribute and the other is not.
     /// </summary>
     function  ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
     function  SearchNs(const Prefix: RawByteString): xmlNsPtr; overload; inline;
@@ -472,6 +497,16 @@ type
     /// the previous root (if any).
     /// </summary>
     procedure SetDocumentElement(const Value: xmlNodePtr);
+    /// <summary>
+    /// Creates an element of this document with the text <paramref name="Content"/>, linked
+    /// nowhere. <paramref name="Ns"/>, when given, is a declaration in scope of the place the
+    /// element goes to, and the local part of <paramref name="Name"/> is put into it.
+    /// Otherwise a <paramref name="NamespaceURI"/> is declared on the element itself, under
+    /// the prefix of Name or as the default namespace of a name without one, and without a
+    /// namespace URI Name is kept whole, prefix included, for a declaration made later to
+    /// bind it.
+    /// </summary>
+    function  NewElement(const Name, NamespaceURI, Content: RawByteString; Ns: xmlNsPtr): xmlNodePtr;
   public
     /// <summary>Creates an empty document with only an XML declaration.</summary>
     class function Create(const Version: RawByteString = '1.0'): xmlDocPtr; overload; static; inline;
@@ -498,26 +533,38 @@ type
     /// <summary>Parses an XML document by reading from a <c>TStream</c> via a custom libxml2 IO callback.</summary>
     class function Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler = nil): xmlDocPtr; overload; static;
     /// <summary>
-    /// Creates and attaches the root element of this (assumed empty) document.
+    /// Creates the root element and sets it as the document element, as MSXML's
+    /// <c>createNode</c> followed by setting <c>documentElement</c> does. A root the
+    /// document already has is freed (<see cref="SetDocumentElement"/>).
     /// </summary>
-    /// <param name="RootName">
-    /// Root element name, optionally qualified as "prefix:local". If qualified,
-    /// a NEW namespace declaration is always created with <paramref name="NamespaceURI"/>
-    /// bound to that prefix — this does not search for an existing namespace
-    /// in scope (there can be none yet, since this is the root).
+    /// <param name="RootName">Root element name, optionally qualified as "prefix:local".</param>
+    /// <param name="NamespaceURI">
+    /// Namespace URI of the root, declared on the root itself under the prefix of
+    /// <paramref name="RootName"/>, or as the default namespace of a name without one.
+    /// Without it a prefixed name is kept whole, as in <see cref="CreateElement"/>, for a
+    /// declaration made later to bind it.
     /// </param>
-    /// <param name="NamespaceURI">Namespace URI</param>
-    /// <param name="Content">Content if any</param>
+    /// <param name="Content">Text content if any.</param>
     function  CreateRoot(const RootName: RawByteString; const NamespaceURI: RawByteString = ''; const Content: RawByteString = ''): xmlNodePtr;
     /// <summary>
-    /// Creates a new element and appends it under <paramref name="Parent"/>,
-    /// or creates the document root if <paramref name="Parent"/> is <c>nil</c>.
+    /// Creates an element and appends it under <paramref name="Parent"/>, as MSXML's
+    /// <c>createNode</c> followed by <c>appendChild</c> does, or creates the document root
+    /// (<see cref="CreateRoot"/>) if <paramref name="Parent"/> is <c>nil</c>.
     /// </summary>
-    /// <param name="Parent">Parent node, can be nil for create detached node</param>
-    /// <param name="Name">Name of node, can be qualified name</param>
-    /// <param name="NamespaceURI">Namespace URI</param>
-    /// <param name="ResolveNamespace">Currently unused by the implementation — reserved.</param>
-    /// <param name="Content">Content if any.</param>
+    /// <param name="Parent">Parent node, or nil for the root.</param>
+    /// <param name="Name">Element name, optionally qualified as "prefix:local".</param>
+    /// <param name="NamespaceURI">
+    /// Namespace URI of the element. A declaration in scope of <paramref name="Parent"/>
+    /// that binds the prefix of <paramref name="Name"/> (the default namespace for a name
+    /// without one) to this URI serves the element; otherwise the namespace is declared on
+    /// the element itself. Without a namespace URI the prefix of Name means what it means
+    /// at Parent, and stays in the name when nothing in scope declares it.
+    /// </param>
+    /// <param name="ResolveNamespace">
+    /// With a namespace URI: the element takes whatever prefix is bound to the URI in scope
+    /// of Parent, and the namespace is declared on the element only if none is.
+    /// </param>
+    /// <param name="Content">Text content if any.</param>
     function  CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString = ''; ResolveNamespace: Boolean = False; Content: RawByteString = ''): xmlNodePtr;
     procedure Free; inline;
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
@@ -1000,13 +1047,16 @@ end;
 
 function xmlNodeHelper.AppendChild(const NewChild: xmlNodePtr): xmlNodePtr;
 begin
+  // libxml2 links a node under itself or its descendant, and the tree becomes a loop
+  if NewChild.Contains(@Self) then
+    Exit(nil);
   var Moved := NewChild.CarriesElementOrder;
   NewChild.TreeChanged;
   TreeChanged;
   Result := xmlAddChild(@Self, newChild);
   if Result <> nil then
   begin
-    xmlReconciliateNs(doc, Result);
+    Result.DeclareOuterNamespaces;
     if Moved and (doc <> nil) then
       doc.ElementsChanged;
   end;
@@ -1035,12 +1085,126 @@ begin
   Result := False;
 end;
 
-procedure xmlNodeHelper.DeclareOuterNamespaces;
+/// <summary>
+/// Returns a declaration binding <paramref name="Prefix"/> to <paramref name="Href"/> that
+/// belongs to the document itself: an entry of its list <c>oldNs</c>, which starts with the
+/// declaration of the xml prefix and is freed with the document. A node out of any element
+/// keeps its namespace there, as libxml2 keeps the namespaces of attributes it adopts
+/// without an element.
+/// </summary>
+function DocumentNs(Doc: xmlDocPtr; Href, Prefix: xmlCharPtr): xmlNsPtr;
 begin
-  if &type <> XML_ELEMENT_NODE then
+  // xmlSearchNs starts oldNs with the declaration of the xml prefix when there is none
+  Result := xmlSearchNs(Doc, xmlNodePtr(Doc), xmlCharPtr(PAnsiChar('xml')));
+  var Last: xmlNsPtr := nil;
+  while Result <> nil do
+  begin
+    if xmlStrSame(Result.prefix, Prefix) and xmlStrSame(Result.href, Href) then
+      Exit;
+    Last := Result;
+    Result := Result.next;
+  end;
+  if Last = nil then
+    Exit(nil);
+  Result := xmlNewNs(nil, Href, Prefix);
+  Last.next := Result;
+end;
+
+/// <summary>
+/// Returns the declaration that <paramref name="Ns"/>, used by the element
+/// <paramref name="Owner"/> or by one of its attributes (<paramref name="Attribute"/>), is
+/// to go to at Owner's place (see <see cref="xmlNodeHelper.DeclareOuterNamespaces"/>), or
+/// <c>nil</c> when no declaration can be made.
+/// </summary>
+function HeldNs(Owner: xmlNodePtr; Ns: xmlNsPtr; Attribute: Boolean): xmlNsPtr;
+begin
+  // An attribute without prefix is in no namespace whatever the default namespace is
+  if not Attribute or (Ns.prefix <> nil) then
+  begin
+    Result := xmlSearchNs(Owner.doc, Owner, Ns.prefix);
+    if (Result = Ns) or ((Result <> nil) and xmlStrSame(Result.href, Ns.href)) then
+      Exit;
+    // nil when Owner binds the prefix to another URI itself
+    Result := xmlNewNs(Owner, Ns.href, Ns.prefix);
+    if Result <> nil then
+      Exit;
+  end;
+
+  Result := xmlSearchNsByHref(Owner.doc, Owner, Ns.href);
+  if (Result <> nil) and (not Attribute or (Result.prefix <> nil)) then
     Exit;
-  TreeChanged;   // a declaration may come anew under another prefix
-  xmlDOMWrapReconcileNamespaces(nil, @Self, 0);
+  var Base := 'default';
+  if Ns.prefix <> nil then
+    Base := xmlCharToStr(Ns.prefix);
+  for var Counter := 1 to 1000 do
+  begin
+    var Prefix := UTF8Encode(Base + IntToStr(Counter));
+    if xmlSearchNs(Owner.doc, Owner, xmlStrPtr(Prefix)) = nil then
+      Exit(xmlNewNs(Owner, Ns.href, xmlStrPtr(Prefix)));
+  end;
+  Result := nil;
+end;
+
+/// <remarks>
+/// A reference holds when <c>xmlSearchNs</c> from the element that uses it finds that very
+/// declaration for its prefix. The walk visits elements only: an entity reference is a leaf,
+/// since libxml2 keeps the parsed text of an entity under its declaration.
+/// </remarks>
+procedure xmlNodeHelper.DeclareOuterNamespaces;
+
+  function Hold(Owner: xmlNodePtr; var Ns: xmlNsPtr; Attribute: Boolean): Boolean;
+  begin
+    if (Ns = nil) or (Ns.href = nil) then
+      Exit(False);
+    var Held := HeldNs(Owner, Ns, Attribute);
+    Result := (Held <> nil) and (Held <> Ns);
+    if Result then
+      Ns := Held;
+  end;
+
+begin
+  var Changed := False;
+  case &type of
+    XML_ATTRIBUTE_NODE:
+      begin
+        var Attr := xmlAttrPtr(@Self);
+        if parent <> nil then
+          Changed := Hold(parent, Attr.ns, True)
+        else if (Attr.ns <> nil) and (Attr.ns.href <> nil) and (doc <> nil) then
+        begin
+          var Kept := DocumentNs(doc, Attr.ns.href, Attr.ns.prefix);
+          Changed := (Kept <> nil) and (Kept <> Attr.ns);
+          if Changed then
+            Attr.ns := Kept;
+        end;
+      end;
+    XML_ELEMENT_NODE:
+      begin
+        var Run: xmlNodePtr := @Self;
+        while Run <> nil do
+        begin
+          if Hold(Run, Run.ns, False) then
+            Changed := True;
+          var Attr := Run.properties;
+          while Attr <> nil do
+          begin
+            if Hold(Run, Attr.ns, True) then
+              Changed := True;
+            Attr := Attr.next;
+          end;
+
+          var Following := xmlFirstElementChild(Run);
+          while (Following = nil) and (Run <> @Self) do
+          begin
+            Following := xmlNextElementSibling(Run);
+            Run := Run.parent;
+          end;
+          Run := Following;
+        end;
+      end;
+  end;
+  if Changed then
+    TreeChanged;   // a name may change its prefix
 end;
 
 function xmlNodeHelper.GetAttributeNode(const Name: RawByteString): xmlAttrPtr;
@@ -1435,6 +1599,11 @@ end;
 
 function xmlNodeHelper.InsertBefore(const NewChild, RefChild: xmlNodePtr): xmlNodePtr;
 begin
+  // xmlAddPrevSibling inserts next to RefChild wherever it is
+  if (RefChild <> nil) and (RefChild.parent <> @Self) then
+    Exit(nil);
+  if NewChild.Contains(@Self) then
+    Exit(nil);
   var Moved := NewChild.CarriesElementOrder;
   NewChild.TreeChanged;
   TreeChanged;
@@ -1444,7 +1613,7 @@ begin
     Result := xmlAddPrevSibling(RefChild, NewChild);
   if Result <> nil then
   begin
-    xmlReconciliateNs(doc, Result);
+    Result.DeclareOuterNamespaces;
     if Moved and (doc <> nil) then
       doc.ElementsChanged;
   end;
@@ -1500,23 +1669,29 @@ procedure xmlNodeHelper.RemoveAttributeNode(const Attr: xmlAttrPtr);
 begin
   TreeChanged;
   xmlRemoveProp(Attr);
-  xmlReconciliateNs(doc, @Self);
 end;
 
 function xmlNodeHelper.RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr;
 begin
+  // xmlUnlinkNode takes a node out of whatever parent it has
+  if (ChildNode = nil) or (ChildNode.parent <> @Self) then
+    Exit(nil);
   ChildNode.TreeChanged;
   xmlUnlinkNode(ChildNode);
-  Result := ChildNode;
-  xmlReconciliateNs(doc, @Self);
   ChildNode.DeclareOuterNamespaces;
+  Result := ChildNode;
 end;
 
 function xmlNodeHelper.ReplaceChild(const NewChild, OldChild: xmlNodePtr): xmlNodePtr;
 begin
+  // xmlReplaceNode replaces a node wherever it is
+  if (OldChild = nil) or (OldChild.parent <> @Self) then
+    Exit(nil);
   // xmlReplaceNode answers nil for a node put in place of itself, as for a failure
   if NewChild = OldChild then
     Exit(OldChild);
+  if NewChild.Contains(@Self) then
+    Exit(nil);
 
   var Moved := NewChild.CarriesElementOrder;
   NewChild.TreeChanged;
@@ -1525,9 +1700,11 @@ begin
   // An attribute and a node of another type: libxml2 returns OldChild still in place
   if (Result <> nil) and (Result.parent <> nil) then
     Exit(nil);
-  xmlReconciliateNs(doc, @Self);
   if Result <> nil then
+  begin
+    NewChild.DeclareOuterNamespaces;
     Result.DeclareOuterNamespaces;
+  end;
   if Moved and (doc <> nil) then
     doc.ElementsChanged;
 end;
@@ -1961,44 +2138,55 @@ begin
   xmlFreeParserCtxt(ctx);
 end;
 
-function xmlDocHelper.CreateRoot(const RootName: RawByteString; const NamespaceURI: RawByteString; const Content: RawByteString): xmlNodePtr;
+function xmlDocHelper.NewElement(const Name, NamespaceURI, Content: RawByteString; Ns: xmlNsPtr): xmlNodePtr;
 var
-  ns: xmlNsPtr;
   Prefix, LocalName: RawByteString;
 begin
-  if SplitXMLName(RootName, Prefix, LocalName) then
-    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix))
-  else if NamespaceURI <> '' then
-    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), nil)
-  else
-    ns := nil;
+  if (Ns = nil) and (NamespaceURI = '') then
+    Exit(xmlNewDocRawNode(@Self, nil, xmlStrPtr(Name), xmlStrPtr(Content)));
 
-  Result := xmlNewDocRawNode(@Self, ns, xmlStrPtr(RootName), xmlStrPtr(content));
+  SplitXMLName(Name, Prefix, LocalName);
+  Result := xmlNewDocRawNode(@Self, Ns, xmlStrPtr(LocalName), xmlStrPtr(Content));
+  // xmlNewNs only declares the namespace on the node; the element is put into it by
+  // assigning ns. The declaration belongs to the element and goes with it.
+  if (Result <> nil) and (Ns = nil) then
+    Result.ns := xmlNewNs(Result, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix));
+end;
 
+function xmlDocHelper.CreateRoot(const RootName: RawByteString; const NamespaceURI: RawByteString; const Content: RawByteString): xmlNodePtr;
+begin
+  Result := NewElement(RootName, NamespaceURI, Content, nil);
   Doc.documentElement := Result;
 end;
 
 function xmlDocHelper.CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString; ResolveNamespace: Boolean; Content: RawByteString): xmlNodePtr;
 var
-  ns: xmlNsPtr;
+  Ns: xmlNsPtr;
   Prefix, LocalName: RawByteString;
 begin
   if Parent = nil then
     Exit(CreateRoot(Name, NamespaceURI, Content));
 
-  if SplitXMLName(Name, Prefix, LocalName) then
+  // A declaration in scope of Parent is taken only when it means what the arguments ask
+  // for; any other namespace is declared on the child itself (NewElement)
+  SplitXMLName(Name, Prefix, LocalName);
+  if NamespaceURI = '' then
   begin
-    if NamespaceURI = '' then
-      ns := xmlSearchNsByHref(Parent.doc, Parent, Pointer(Prefix))
+    if Prefix = '' then
+      Ns := nil
     else
-      ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix))
+      Ns := xmlSearchNs(Parent.doc, Parent, xmlStrPtr(Prefix));
   end
-  else if NamespaceURI <> '' then
-    ns := xmlNewNs(nil, xmlStrPtr(NamespaceURI), nil)
+  else if ResolveNamespace then
+    Ns := xmlSearchNsByHref(Parent.doc, Parent, xmlStrPtr(NamespaceURI))
   else
-    ns := nil;
+  begin
+    Ns := xmlSearchNs(Parent.doc, Parent, xmlStrPtr(Prefix));
+    if (Ns <> nil) and not xmlStrSame(Ns.href, xmlStrPtr(NamespaceURI)) then
+      Ns := nil;
+  end;
 
-  Result := xmlNewDocRawNode(Parent.doc, ns, xmlStrPtr(LocalName), xmlStrPtr(Content));
+  Result := Parent.doc.NewElement(Name, NamespaceURI, Content, Ns);
   Parent.AppendChild(Result);
 end;
 
