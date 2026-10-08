@@ -135,16 +135,18 @@ type
     /// <returns>The newly created and appended node, or <c>nil</c> on failure.</returns>
     function  AddChild(const Name: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
     /// <summary>
-    /// Creates a new child element bound to the specified namespace URI,
-    /// creating and attaching the namespace declaration if it is not already
-    /// in scope.
+    /// Creates a child element in the namespace <paramref name="NamespaceURI"/> and appends
+    /// it to this node (<see cref="xmlDocHelper.CreateChild"/>).
     /// </summary>
     /// <param name="Name">
-    /// Element name, optionally qualified as "prefix:local". If a namespace
-    /// with matching URI is not found in scope, <paramref name="Name"/> is
-    /// split to obtain the desired prefix for the newly declared namespace.
+    /// Element name, optionally qualified as "prefix:local". A prefixed name keeps its
+    /// prefix, as MSXML's <c>createNode</c> keeps it: a declaration in scope that binds the
+    /// prefix to the URI serves the element, otherwise the namespace is declared on the
+    /// element under that prefix. A name without a prefix takes whatever prefix is bound to
+    /// the URI in scope, the default namespace included, and only if none is, the namespace
+    /// is declared on the element as its default one.
     /// </param>
-    /// <param name="NamespaceURI">Target namespace URI.</param>
+    /// <param name="NamespaceURI">Target namespace URI; without one the call is <see cref="AddChild"/>.</param>
     /// <param name="Content">Optional text content.</param>
     function  AddChildNs(const Name, NamespaceURI: RawByteString; const Content: RawByteString = ''): xmlNodePtr;
     /// <summary>
@@ -582,7 +584,14 @@ type
     function  CreateComment(const Data: RawByteString): xmlNodePtr; inline;
     function  CreateDocumentFragment: xmlNodePtr; inline;
     function  CreateElement(const Name: RawByteString): xmlNodePtr; inline;
-    function  CreateElementNs(const NamespaceURI, Name: RawByteString): xmlNodePtr; inline;
+    /// <summary>
+    /// Creates an element in the namespace <paramref name="NamespaceURI"/>, linked nowhere,
+    /// as MSXML's <c>createNode</c> does: the namespace is declared on the element itself,
+    /// under the prefix of <paramref name="Name"/> or as the default namespace of a name
+    /// without one. Without a namespace URI the element is the one <see cref="CreateElement"/>
+    /// makes.
+    /// </summary>
+    function  CreateElementNs(const NamespaceURI, Name: RawByteString): xmlNodePtr;
     function  CreateEntityReference(const Name: RawByteString): xmlNodePtr; inline;
     function  CreateProcessingInstruction(const Target: RawByteString; const Data: RawByteString): xmlNodePtr; inline;
     function  CreateTextNode(const Data: RawByteString): xmlNodePtr; inline;
@@ -1024,25 +1033,8 @@ function xmlNodeHelper.AddChildNs(const Name, NamespaceURI, Content: RawByteStri
 var
   Prefix, LocalName: RawByteString;
 begin
-  var Ns := xmlSearchNsByHRef(doc, @Self, xmlStrPtr(NamespaceURI));
-
-  if Ns = nil then
-  begin
-    if SplitXMLName(Name, Prefix, LocalName) then
-    begin
-      Result := xmlNewDocRawNode(doc, nil, xmlStrPtr(LocalName), xmlStrPtr(Content));
-
-      Ns := xmlNewNs(Result, xmlStrPtr(NamespaceURI), xmlStrPtr(Prefix));
-      xmlSetNs(Result, ns);
-    end
-    else
-      Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(Name), xmlStrPtr(Content));
-  end
-  else
-    Result := xmlNewDocRawNode(doc, Ns, xmlStrPtr(Name), xmlStrPtr(Content));
-
-  if Result <> nil then
-    AppendChild(Result);
+  // Only a name without a prefix is resolved by the URI; a prefix the caller names is kept
+  Result := doc.CreateChild(@Self, Name, NamespaceURI, not SplitXMLName(Name, Prefix, LocalName), Content);
 end;
 
 function xmlNodeHelper.AppendChild(const NewChild: xmlNodePtr): xmlNodePtr;
@@ -2256,8 +2248,7 @@ end;
 
 function xmlDocHelper.CreateElementNs(const NamespaceURI, Name: RawByteString): xmlNodePtr;
 begin
-  Result := xmlNewDocRawNode(@Self, nil, xmlStrPtr(Name), nil);
-  xmlSetNs(Result, xmlNewNs(Result, xmlStrPtr(NamespaceURI), nil));
+  Result := NewElement(Name, NamespaceURI, '', nil);
 end;
 
 function xmlDocHelper.CreateEntityReference(const Name: RawByteString): xmlNodePtr;

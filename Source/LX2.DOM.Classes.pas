@@ -311,6 +311,11 @@ type
   /// internal <see cref="TEnumerator"/>) carries the paired logic "walk the whole
   /// <c>nsDef</c> first, then the whole <c>properties</c>", so namespace declarations
   /// always come BEFORE ordinary attributes in indexing and enumeration order.
+  /// <para>
+  /// The list and its enumerators hold the wrapper of the element and read its current node
+  /// on every call: the element, its document and a detached subtree the element is in
+  /// (<see cref="TXMLDetachedTree"/>) live as long as the list does, as in MSXML.
+  /// </para>
   /// </remarks>
   TXMLAttributeList = class(TXMLBase, IXMLNodeList, IXMLNamedNodeMap)
   protected type
@@ -318,19 +323,23 @@ type
 
     TEnumerator = class(TDispatchInvokable, IXMLEnumerator)
     private
-      FParent: xmlNodePtr;
+      FOwner: TXMLNode;
       FCurrent: Pointer;
       FState: TEnumState;
+      function  GetParent: xmlNodePtr; inline;
     public
-      constructor Create(Parent: xmlNodePtr);
+      constructor Create(Owner: TXMLNode);
+      destructor Destroy; override;
       function  GetCurrent: IXMLNode;
       procedure Reset;
       function  MoveNext: Boolean;
+      property  Parent: xmlNodePtr read GetParent;
     end;
 
   private
     FEnum: TEnumerator;
-    FParent: xmlNodePtr;
+    FOwner: TXMLNode;
+    function  GetParent: xmlNodePtr; inline;
   public
     function  Get_Item(Index: NativeInt): IXMLNode;
     function  Get_Length: NativeInt;
@@ -339,9 +348,10 @@ type
     function  FindNs(const Name: string): xmlNsPtr;
     function  FindQAttr(const BaseName, NamespaceURI: string): xmlAttrPtr;
     function  FindQNs(const BaseName, NamespaceURI: string): xmlNsPtr;
-    property  Parent: xmlNodePtr read FParent;
+    property  Parent: xmlNodePtr read GetParent;
   public
-    constructor Create(const Parent: xmlNodePtr);
+    /// <summary>The attributes of the element <paramref name="Owner"/> wraps.</summary>
+    constructor Create(Owner: TXMLNode);
     destructor Destroy; override;
     procedure Reset;
     { IXMLNodeList }
@@ -618,7 +628,18 @@ type
   /// <summary>
   /// MS XML threats NS declartion as Node, while libxml2 does not so wee need handle this scpecial case
   /// </summary>
+  /// <remarks>
+  /// A declaration that belongs to an element holds the wrapper of the element, as an
+  /// attribute node holds its element: the element frees its declarations, so the element,
+  /// its document and a detached subtree it is in live as long as the declaration node does.
+  /// A declaration created on its own (<c>CreateAttribute('xmlns:p')</c>) or removed from its
+  /// element belongs to no element and holds nothing: the namespace keeps its own copies of
+  /// the prefix and the URI.
+  /// </remarks>
   TXMLNsNode = class(TXMLBase, IXMLNode)
+  private
+    FOwner: TXMLNode;
+    function  GetParent: xmlNodePtr; inline;
   public
     { IXMLNode }
     function  AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -659,8 +680,12 @@ type
     function  TransformNode(const stylesheet: IXMLDocument): string;
   protected
     NsPtr: xmlNsPtr;
-    Parent: xmlNodePtr;
     constructor Create(Ns: xmlNsPtr; Parent: xmlNodePtr);
+    /// <summary>Makes the declaration belong to <paramref name="Parent"/>, the element whose
+    /// <c>nsDef</c> holds it now, or to none for nil.</summary>
+    procedure SetParent(Parent: xmlNodePtr);
+    /// <summary>The element the declaration belongs to, nil if none.</summary>
+    property  Parent: xmlNodePtr read GetParent;
   public
     destructor Destroy; override;
     procedure ReconciliateNs; virtual;
@@ -1613,7 +1638,19 @@ begin
   Ns.context := Node.doc;
 
   if (Ns._private <> nil) then
-    TXMLNsNode(Ns._private).Parent := Node;
+    TXMLNsNode(Ns._private).SetParent(Node);
+end;
+
+/// <summary>
+/// Removes the namespace declaration <paramref name="Ns"/> from <paramref name="Node"/>
+/// (<see cref="xmlRemoveNsDef"/>) and returns it as a declaration node that belongs to no
+/// element.
+/// </summary>
+function RemoveNsDecl(Node: xmlNodePtr; Ns: xmlNsPtr): TXMLNsAttribute;
+begin
+  xmlRemoveNsDef(Node, Ns);
+  Result := Cast(Ns, nil);
+  Result.SetParent(nil);
 end;
 
 { TXMLNodeEnumerator }
@@ -1974,19 +2011,32 @@ end;
 
 { TXMLAttributeList.TEnumerator }
 
-constructor TXMLAttributeList.TEnumerator.Create(Parent: xmlNodePtr);
+constructor TXMLAttributeList.TEnumerator.Create(Owner: TXMLNode);
 begin
   inherited Create;
-  FParent := Parent;
+  FOwner := Owner;
+  FOwner._AddRef;
   FState := esStart;
   FCurrent := nil;
+end;
+
+destructor TXMLAttributeList.TEnumerator.Destroy;
+begin
+  if FOwner <> nil then
+    FOwner._Release;
+  inherited;
+end;
+
+function TXMLAttributeList.TEnumerator.GetParent: xmlNodePtr;
+begin
+  Result := FOwner.NodePtr;
 end;
 
 function TXMLAttributeList.TEnumerator.GetCurrent: IXMLNode;
 begin
   case FState of
     esStart: Result := nil;
-    esNs:    Result := Cast(xmlNsPtr(FCurrent), FParent);
+    esNs:    Result := Cast(xmlNsPtr(FCurrent), Parent);
     esAttr:  Result := Cast(xmlAttrPtr(FCurrent));
   end;
 end;
@@ -1995,21 +2045,20 @@ function TXMLAttributeList.TEnumerator.MoveNext: Boolean;
 begin
   if FState = esStart then
   begin
-    if FParent.nsDef <> nil then
-    begin
-      FCurrent := FParent.nsDef;
-      FState := esNs;
-    end
-    else
-    begin
-      FCurrent := FParent.properties;
-      FState := esAttr;
-    end;
+    FCurrent := Parent.nsDef;
+    FState := esNs;
   end
   else if FState = esAttr then
     FCurrent := xmlAttrPtr(FCurrent).next
   else
     FCurrent := xmlNsPtr(FCurrent).next;
+
+  // The ordinary attributes follow the last namespace declaration
+  if (FCurrent = nil) and (FState = esNs) then
+  begin
+    FCurrent := Parent.properties;
+    FState := esAttr;
+  end;
 
   Result := FCurrent <> nil;
 end;
@@ -2021,22 +2070,30 @@ end;
 
 { TXMLAttributeList }
 
-constructor TXMLAttributeList.Create(const Parent: xmlNodePtr);
+constructor TXMLAttributeList.Create(Owner: TXMLNode);
 begin
   inherited Create;
-  FParent := Parent;
-  FEnum := TEnumerator.Create(Parent);
+  FOwner := Owner;
+  FOwner._AddRef;
+  FEnum := TEnumerator.Create(Owner);
 end;
 
 destructor TXMLAttributeList.Destroy;
 begin
   FreeAndNil(FEnum);
+  if FOwner <> nil then
+    FOwner._Release;
   inherited;
+end;
+
+function TXMLAttributeList.GetParent: xmlNodePtr;
+begin
+  Result := FOwner.NodePtr;
 end;
 
 function TXMLAttributeList.GetEnumerator: IXMLEnumerator;
 begin
-  Result := TXMLAttributeList.TEnumerator.Create(Parent);
+  Result := TXMLAttributeList.TEnumerator.Create(FOwner);
 end;
 
 function TXMLAttributeList.FindNs(const Name: string): xmlNsPtr;
@@ -2231,10 +2288,7 @@ function TXMLAttributeList.RemoveNamedItem(const Name: string): IXMLNode;
 begin
   var Ns := FindNs(Name);
   if Ns <> nil then
-  begin
-    xmlRemoveNsDef(Parent, ns);
-    Exit(Cast(ns, Parent));
-  end;
+    Exit(RemoveNsDecl(Parent, Ns));
 
   var Attr := FindAttr(Name);
   if Attr <> nil then
@@ -2256,10 +2310,7 @@ function TXMLAttributeList.RemoveQualifiedItem(const BaseName, namespaceURI: str
 begin
   var Ns := FindQNs(BaseName, namespaceURI);
   if Ns <> nil then
-  begin
-    xmlRemoveNsDef(Parent, ns);
-    Exit(Cast(ns, Parent));
-  end;
+    Exit(RemoveNsDecl(Parent, Ns));
 
   var Attr := FindQAttr(BaseName, namespaceURI);
   if Attr <> nil then
@@ -2357,7 +2408,7 @@ end;
 
 function TXMLAttributes.GetEnumerator: IXMLAttributesEnumerator;
 begin
-  Result := TEnumerator.Create(Parent);
+  Result := TEnumerator.Create(FOwner);
 end;
 
 function TXMLAttributes.Get_Attr(Index: NativeInt): IXmlAttribute;
@@ -3583,7 +3634,7 @@ end;
 
 function TXMLElement.Get_Attributes: IXMLAttributes;
 begin
-  Result := TXMLAttributes.Create(NodePtr);
+  Result := TXMLAttributes.Create(Self);
 end;
 
 function TXMLElement.Get_TagName: string;
@@ -5272,9 +5323,13 @@ begin
   inherited Create;
   Self.NsPtr := Ns;
   Self.NsPtr._private := Self;
-  Self.Parent := Parent;
+  SetParent(Parent);
 end;
 
+/// <remarks>
+/// The element is let go of last: it may hold the last reference to its document or to a
+/// detached subtree, and freeing the element frees the declaration.
+/// </remarks>
 destructor TXMLNsNode.Destroy;
 begin
   if NsPtr <> nil then
@@ -5283,7 +5338,30 @@ begin
     {if NsPtr.context = nil then
       xmlFreeNs(NsPtr);}
   end;
+  NsPtr := nil;
+  SetParent(nil);
   inherited;
+end;
+
+function TXMLNsNode.GetParent: xmlNodePtr;
+begin
+  if FOwner = nil then
+    Result := nil
+  else
+    Result := FOwner.NodePtr;
+end;
+
+procedure TXMLNsNode.SetParent(Parent: xmlNodePtr);
+begin
+  var Owner := Cast(Parent);
+  if Owner = FOwner then
+    Exit;
+  if Owner <> nil then
+    Owner._AddRef;
+  var Old := FOwner;
+  FOwner := Owner;
+  if Old <> nil then
+    Old._Release;
 end;
 
 function TXMLNsNode.AppendChild(const NewChild: IXMLNode): IXMLNode;
@@ -5335,7 +5413,7 @@ function TXMLNsNode.Get_NextSibling: IXMLNode;
 begin
   if NsPtr.next <> nil then
     Result := Cast(NsPtr.next, Parent)
-  else if Parent.properties <> nil then
+  else if (Parent <> nil) and (Parent.properties <> nil) then
     Result := Cast(Parent.properties)
   else
     Result := nil;
@@ -5356,12 +5434,14 @@ begin
   Result := xmlCharToStr(NsPtr.href);
 end;
 
+// The document of the element: an xmlNs refers to no document of its own (a parsed
+// declaration leaves its context nil), so a declaration that belongs to no element has none
 function TXMLNsNode.Get_OwnerDocument: IXMLDocument;
 begin
-  if (NsPtr.context <> nil) and (NsPtr.context._private <> nil) then
-    Result := TXMLDocument(NsPtr.context._private).LiveDocument
+  if FOwner = nil then
+    Result := nil
   else
-    Result := nil;
+    Result := FOwner.Get_OwnerDocument;
 end;
 
 function TXMLNsNode.Get_ParentNode: IXMLNode;
@@ -5376,6 +5456,8 @@ end;
 
 function TXMLNsNode.Get_PreviousSibling: IXMLNode;
 begin
+  if Parent = nil then
+    Exit(nil);
   var Prop := Parent.nsDef;
   while Prop <> nil do
   begin

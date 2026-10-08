@@ -500,9 +500,11 @@ type
     function  AddChild(const Name: string; const Content: string = ''): IXMLElement;
 
     /// <summary>
-    /// Add new element to the of child node list and optionally set it content.
-    /// <param name="Name">Local name of new node</param>
-    /// <param name="NamespaceURI">Namespace URI of new node, namespace muat be accesible up to hierarchy of current node</param>
+    /// Add new element in the namespace NamespaceURI to the end of child node list and optionally set it content.
+    /// <param name="Name">Name of new node, optionally prefixed. A prefixed name keeps its prefix, as with CreateNode;
+    /// a name without one takes whatever prefix is bound to NamespaceURI here, and the namespace is declared on the
+    /// new node only if none is</param>
+    /// <param name="NamespaceURI">Namespace URI of new node; without one the call is AddChild</param>
     /// <param name="Content">Optional content</param>
     /// </summary>
     function  AddChildNs(const Name, NamespaceURI: string; const Content: string = ''): IXMLElement;

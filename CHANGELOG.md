@@ -70,6 +70,38 @@
   parent, and can be put back into a document; a `SelectNodes` list holds the node it was
   selected from. Freeing a detached node walks its subtree once to look for such
   references; while none is kept, nothing else costs more than before.
+- `CreateElementNs` of `xmlDocHelper` and of the DOM document did not split the prefix off the
+  name: `CreateElementNs('urn:p', 'p:a')` made an element named `p:a` in a default namespace,
+  written `<p:a xmlns="urn:p"/>` with the prefix `p` declared nowhere, and an empty namespace
+  URI gave a declaration without a URI. The element is now made as MSXML's `createNode` makes
+  it: `<p:a xmlns:p="urn:p"/>`, `<a xmlns="urn:p"/>` for a name without a prefix, and without
+  a namespace URI the element `CreateElement` makes.
+- `AddChildNs` of `xmlNodeHelper` and of the DOM element put the whole qualified name into a
+  namespace found in scope, so `AddChildNs('q:total', 'urn:q')` under `xmlns:p="urn:q"` gave
+  `<p:q:total/>`, and it created a child without a prefix in no namespace at all when its
+  namespace URI was not in scope: `<total/>`, which a default namespace of the parent claimed
+  once the document was read back. A prefixed name now keeps its prefix, as `createNode`
+  followed by `appendChild` keep it in MSXML: a declaration in scope serves the child only if
+  it binds that prefix to the URI, otherwise the namespace is declared on the child
+  (`<q:total xmlns:q="urn:q"/>`). A name without a prefix still takes the prefix the URI has
+  in scope, and gets `<total xmlns="urn:q"/>` when the URI has none. Without a namespace URI
+  `AddChildNs` is `AddChild`.
+- The attributes of an element (`IXMLNode.Attributes`, its enumerators) and a namespace
+  declaration taken from them as an attribute (`xmlns:p`) kept bare libxml2 pointers and held
+  nothing: once nothing else referred to the element, the element was freed under them and
+  they read freed memory. So it went with `Doc.DocumentElement.Attributes` kept after the
+  document was let go, with the attributes of a removed element or of one created and never
+  inserted, and with the attributes of the root after a reload (`LoadXML`, `Load`). The list,
+  its enumerators and a declaration that belongs to an element now hold the element, and
+  with it its document and a detached subtree it is in, as in MSXML. A declaration removed
+  from its element (`RemoveNamedItem('xmlns:p')`) is the same node and belongs to no element
+  afterwards, like one made by `CreateAttribute('xmlns:p')`, whose `NextSibling` and
+  `PreviousSibling` raised an access violation and now return nil. `OwnerDocument` of a
+  declaration is the document of its element; it was nil for the declarations of a parsed
+  document.
+- The enumerator of `Attributes` and `Attributes.NextNode` stopped after the namespace
+  declarations of an element that has any and never reached its ordinary attributes. They
+  now go through the declarations and then the attributes, in the order of `Item`.
 
 ## v1.2.0 — 2026-10-08
 
@@ -119,6 +151,16 @@
   (separators, `.` and `..`, letter case on Windows); a file added twice is compiled once.
   The neighbours of a file in a directory with non-ASCII letters or braces in its path,
   which `xmlBuildURI` refuses, are found as well.
+- `InsertBefore` of a node of the same document (one made by `CreateElement`, or one moved
+  within the tree) released a reference to the document that the wrapper of the node still
+  held, so the document could be freed while in use. The reference now moves only when the
+  node changes documents or libxml2 frees it (adjacent text nodes merged), as in
+  `AppendChild`.
+- `xmlStrSame` read through nil when one of the strings was absent, as the prefix of a
+  default namespace declaration is: looking up a namespace declaration by name
+  (`GetAttribute('xmlns:p')`, `Attributes.GetNamedItem('xmlns:p')`) on an element that
+  declares a default namespace raised an access violation. A nil string now equals only
+  nil, as in libxml2.
 - The SAX parser leaked the name and value strings of every attribute but the last one of
   each element: `NewUtf16String`, `NewRawString` and `NewUtf8String` overwrote the target
   variable without releasing what it held, and a string function's result arrives holding

@@ -59,6 +59,8 @@ type
     [Test]
     procedure TestCreateRootAndChildDeclareTheirNamespaces;
     [Test]
+    procedure TestCreateElementNsAndAddChildNsDeclareTheirNamespaces;
+    [Test]
     procedure TestRemoveAndReplaceLeaveTheParentAlone;
   end;
 
@@ -192,6 +194,10 @@ type
     [Test]
     procedure TestCreateChildWithoutParentCreatesTheRoot;
     [Test]
+    procedure TestCreateElementNsDeclaresItsNamespace;
+    [Test]
+    procedure TestAddChildNsKeepsThePrefixItIsGiven;
+    [Test]
     procedure TestRemoveChildLeavesTheParentAlone;
     [Test]
     procedure TestReplaceChildDeclaresWhatTheNewChildUses;
@@ -203,6 +209,18 @@ type
     procedure TestNodeIsNotInsertedUnderItself;
     [Test]
     procedure TestRemovedAttributeKeepsItsNamespace;
+    [Test]
+    procedure TestAttributesKeepTheDocumentAlive;
+    [Test]
+    procedure TestAttributesOfDetachedElementsStayUsable;
+    [Test]
+    procedure TestAttributesSurviveReload;
+    [Test]
+    procedure TestNamespaceDeclarationKeepsItsElement;
+    [Test]
+    procedure TestCreatedNamespaceDeclaration;
+    [Test]
+    procedure TestAttributesEnumerateDeclarationsAndAttributes;
   end;
 
   // XML Schema validation over documents that live only in memory: no schema file exists
@@ -756,6 +774,46 @@ begin
     Assert.AreEqual<RawByteString>('<p:r xmlns:p="urn:p"><p:a/><q:b xmlns:q="urn:q">x&lt;y</q:b>' +
       '<c xmlns="urn:p"/><p:d/><p:e/></p:r>', Root.Xml);
     Assert.AreEqual<RawByteString>('urn:p', Root.LastChild.PreviousSibling.NamespaceURI, 'p:d');
+  finally
+    xmlFreeDoc(Doc);
+  end;
+  Assert.AreEqual<NativeUInt>(Used, xmlMemUsed, 'libxml2 memory');
+end;
+
+// CreateElementNs declares the namespace on the element under the prefix of its name, as
+// MSXML's createNode does, and the declaration stays with the element under a parent that
+// binds the prefix to another namespace. AddChildNs keeps a prefix it is given and takes a
+// declaration in scope only when it binds that prefix; a name without a prefix takes the
+// prefix the namespace URI has in scope. Without a namespace URI both make what
+// CreateElement and AddChild make.
+procedure TXMLHelpersTest.TestCreateElementNsAndAddChildNsDeclareTheirNamespaces;
+const
+  NamespaceURIs: array[0..9] of RawByteString = ('urn:p', 'urn:p', '', '', 'urn:q', 'urn:q', 'urn:q',
+    'urn:o', 'urn:s', 'urn:q');
+begin
+  LX2Lib.Initialize;
+  var Used := xmlMemUsed;
+  var Doc := xmlDoc.Create('<r xmlns:p="urn:q"/>', []);
+  try
+    var Root := Doc.documentElement;
+    Root.AppendChild(Doc.CreateElementNs('urn:p', 'p:a'));
+    Root.AppendChild(Doc.CreateElementNs('urn:p', 'b'));
+    Root.AppendChild(Doc.CreateElementNs('', 'p:c'));
+    Root.AppendChild(Doc.CreateElementNs('', 'd'));
+    Root.AddChildNs('q:e', 'urn:q');
+    Root.AddChildNs('p:f', 'urn:q');
+    Root.AddChildNs('g', 'urn:q', 'x<y');
+    Root.AddChildNs('p:h', 'urn:o');
+    Root.AddChildNs('i', 'urn:s');
+    Root.AddChildNs('p:j', '');
+    Assert.AreEqual<RawByteString>('<r xmlns:p="urn:q"><p:a xmlns:p="urn:p"/><b xmlns="urn:p"/><p:c/><d/>' +
+      '<q:e xmlns:q="urn:q"/><p:f/><p:g>x&lt;y</p:g><p:h xmlns:p="urn:o"/><i xmlns="urn:s"/><p:j/></r>', Root.Xml);
+    var Child := Root.FirstChild;
+    for var URI in NamespaceURIs do
+    begin
+      Assert.AreEqual<RawByteString>(URI, Child.NamespaceURI, UTF8ToString(Child.Xml));
+      Child := Child.NextSibling;
+    end;
   finally
     xmlFreeDoc(Doc);
   end;
@@ -2913,6 +2971,86 @@ begin
   Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
 end;
 
+// CreateElementNs makes the element as MSXML's createNode does: the namespace is declared on
+// the element, under the prefix of a qualified name or as the default namespace of a local
+// name. Without a namespace URI it is CreateElement, and a prefix stays in the name.
+procedure TXMLDOMTest.TestCreateElementNsDeclaresItsNamespace;
+var
+  [Weak] Released: IXMLDocument;
+
+  function ElementXml(const NamespaceURI, Name: string): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Released := Doc;
+    var Element := Doc.CreateElementNs(NamespaceURI, Name);
+    Assert.AreEqual(Name, Element.NodeName);
+    Assert.AreEqual(NamespaceURI, Element.NamespaceURI, Name);
+    if NamespaceURI <> '' then
+      Assert.AreEqual(Copy(Name, 1, Pos(':', Name) - 1), Element.Prefix, Name);
+    Result := Element.Xml;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  Assert.AreEqual('<p:a xmlns:p="urn:p"/>', ElementXml('urn:p', 'p:a'));
+  Assert.AreEqual('<a xmlns="urn:p"/>', ElementXml('urn:p', 'a'));
+  Assert.AreEqual('<p:a/>', ElementXml('', 'p:a'));
+  Assert.AreEqual('<a/>', ElementXml('', 'a'));
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// AddChildNs makes a child with a prefixed name as MSXML's createNode followed by appendChild
+// does: a declaration in scope that binds the prefix to the namespace URI serves the child,
+// otherwise the namespace is declared on the child under that prefix. A name without a prefix
+// takes the prefix the namespace URI has in scope, the default namespace included (where MSXML
+// would declare it on the child once more), and a namespace URI bound to none is declared on
+// the child as its default namespace. Without a namespace URI the call is AddChild.
+procedure TXMLDOMTest.TestAddChildNsKeepsThePrefixItIsGiven;
+const
+  NamespaceURIs: array[0..7] of string = ('urn:q', 'urn:q', 'urn:q', 'urn:o', 'urn:d', 'urn:s', 'urn:s', 'urn:q');
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure AddChildren;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns="urn:d" xmlns:p="urn:q"/>'));
+    var Root := Doc.DocumentElement;
+    Root.AddChildNs('q:a', 'urn:q');
+    Root.AddChildNs('p:b', 'urn:q');
+    Root.AddChildNs('c', 'urn:q', 'x<y');
+    Root.AddChildNs('p:d', 'urn:o');
+    Root.AddChildNs('e', 'urn:d');
+    Root.AddChildNs('f', 'urn:s');
+    Root.AddChildNs('s:g', 'urn:s');
+    Root.AddChildNs('p:h', '');
+  end;
+
+  procedure UseTheChildren;
+  begin
+    var Root := Doc.DocumentElement;
+    Assert.AreEqual('<r xmlns="urn:d" xmlns:p="urn:q"><q:a xmlns:q="urn:q"/><p:b/><p:c>x&lt;y</p:c>' +
+      '<p:d xmlns:p="urn:o"/><e/><f xmlns="urn:s"/><s:g xmlns:s="urn:s"/><p:h/></r>', Root.Xml);
+    var Child := Root.FirstChild;
+    for var URI in NamespaceURIs do
+    begin
+      Assert.AreEqual(URI, Child.NamespaceURI, Child.NodeName);
+      Child := Child.NextSibling;
+    end;
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  AddChildren;
+  UseTheChildren;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
 // The compiled schema document belongs to the collection; the wrapper returned by
 // Get must not free it, and a later Get must not find a dead wrapper via _private.
 procedure TXMLDOMTest.TestSchemaCollectionGetDoesNotFreeTheSchema;
@@ -3169,6 +3307,277 @@ begin
   Doc := nil;
   Assert.IsTrue(Released = nil, 'the document goes with the last reference');
   Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The attributes of an element hold the element, as in MSXML: the list, and an enumerator
+// taken from such a list, stay usable once nothing else refers to the element or to its
+// document. The enumerator goes through the namespace declarations and then the ordinary
+// attributes. The document goes with the last of them.
+procedure TXMLDOMTest.TestAttributesKeepTheDocumentAlive;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Attrs: IXMLAttributes;
+  Enum: IXMLAttributesEnumerator;
+
+  procedure TakeTheAttributes;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p" a="1" p:b="2"/>'));
+    Attrs := Doc.DocumentElement.Attributes;
+    Enum := Doc.DocumentElement.Attributes.GetEnumerator;
+  end;
+
+  procedure UseTheAttributes;
+  begin
+    Assert.AreEqual<NativeInt>(3, Attrs.Length);
+    Assert.AreEqual('xmlns:p', Attrs[0].Name);
+    Assert.AreEqual('urn:p', Attrs[0].Value);
+    Assert.AreEqual('a', Attrs[1].Name);
+    Assert.AreEqual('2', Attrs.GetNamedItem('p:b').NodeValue);
+    Assert.AreEqual('r', Attrs[2].OwnerElement.NodeName);
+    var Names := '';
+    while Enum.MoveNext do
+      Names := Names + ' ' + Enum.Current.Name;
+    Assert.AreEqual(' xmlns:p a p:b', Names, 'the enumerator');
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  TakeTheAttributes;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the attributes keep the document alive');
+  UseTheAttributes;
+  Attrs := nil;
+  Assert.IsTrue(Released <> nil, 'the enumerator keeps the document alive');
+  Enum := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The attributes of an element outside the tree, created and never inserted or removed from
+// it, hold the element as well: they stay usable once nothing else refers to the element, as
+// in MSXML, and the element goes with them.
+procedure TXMLDOMTest.TestAttributesOfDetachedElementsStayUsable;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Created, Removed: IXMLAttributes;
+
+  procedure TakeTheAttributes;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><e xmlns:q="urn:q" y="2"><c/></e></r>'));
+    var E := Doc.CreateElement('n');
+    E.SetAttribute('x', '1');
+    Created := E.Attributes;
+    Removed := Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild).Attributes;
+  end;
+
+  procedure UseTheAttributes;
+  begin
+    Assert.AreEqual<NativeInt>(1, Created.Length);
+    Assert.AreEqual('1', Created[0].Value);
+    Assert.AreEqual('<n x="1"/>', Created[0].OwnerElement.Xml);
+    Assert.AreEqual<NativeInt>(2, Removed.Length);
+    Assert.AreEqual('urn:q', Removed[0].Value);
+    Assert.AreEqual('2', Removed.GetNamedItem('y').NodeValue);
+    Assert.AreEqual('<e xmlns:q="urn:q" y="2"><c/></e>', Removed[1].OwnerElement.Xml);
+    Assert.AreEqual('<r/>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  var Wrappers := DebugObjectCount;
+  TakeTheAttributes;
+  UseTheAttributes;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the attributes keep the document alive');
+  Created := nil;
+  Removed := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeInt>(Wrappers, DebugObjectCount, 'wrappers');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The attributes of the root survive a reload of the document, as in MSXML: they stay the
+// attributes of the old root, which the reloaded document owns.
+procedure TXMLDOMTest.TestAttributesSurviveReload;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  Attrs: IXMLAttributes;
+
+  procedure TakeAndReload;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p" a="1"/>'));
+    Attrs := Doc.DocumentElement.Attributes;
+  end;
+
+  procedure Reload;
+  begin
+    Assert.IsTrue(Doc.LoadXML('<s b="2"/>'));
+  end;
+
+  procedure UseTheAttributes;
+  begin
+    Assert.AreEqual<NativeInt>(2, Attrs.Length);
+    Assert.AreEqual('xmlns:p', Attrs[0].Name);
+    Assert.AreEqual('1', Attrs.GetNamedItem('a').NodeValue);
+    Assert.IsTrue(Attrs[1].OwnerDocument = Doc, 'the reloaded document owns them, as in MSXML');
+    Assert.IsTrue(Attrs[0].OwnerDocument = Doc, 'the declaration as well');
+    Assert.AreEqual('<s b="2"/>', Doc.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  TakeAndReload;
+  Reload;
+  UseTheAttributes;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the attributes keep the document alive');
+  Attrs := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A namespace declaration taken as an attribute (xmlns:p) holds its element as an attribute
+// does, as in MSXML: it stays usable once nothing else refers to the element or to its
+// document, the declaration of a removed element as well, and reports its element and its
+// document.
+procedure TXMLDOMTest.TestNamespaceDeclarationKeepsItsElement;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+  OfRoot, OfRemoved: IXMLAttribute;
+
+  procedure TakeTheDeclarations;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r xmlns:p="urn:p" a="1"><e xmlns:q="urn:q" y="2"/></r>'));
+    OfRoot := Doc.DocumentElement.Attributes.GetNamedItem('xmlns:p') as IXMLAttribute;
+    OfRemoved := Doc.DocumentElement.RemoveChild(Doc.DocumentElement.FirstChild).Attributes[0];
+  end;
+
+  procedure UseTheDeclarations;
+  begin
+    Assert.AreEqual('xmlns:q', OfRemoved.Name);
+    Assert.AreEqual('urn:q', OfRemoved.Value);
+    Assert.AreEqual('<e xmlns:q="urn:q" y="2"/>', OfRemoved.OwnerElement.Xml);
+    Assert.IsTrue(OfRemoved.OwnerDocument = Doc, 'the document owns the declaration');
+    Assert.IsTrue(OfRoot.OwnerDocument = Doc, 'the document of the root declaration');
+  end;
+
+  procedure UseWithoutTheDocument;
+  begin
+    Assert.AreEqual('xmlns:p', OfRoot.NodeName);
+    Assert.AreEqual('urn:p', OfRoot.Value);
+    Assert.AreEqual('r', OfRoot.OwnerElement.NodeName);
+    Assert.AreEqual('<r xmlns:p="urn:p" a="1"/>', OfRoot.OwnerDocument.DocumentElement.Xml);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  var Wrappers := DebugObjectCount;
+  TakeTheDeclarations;
+  UseTheDeclarations;
+  OfRemoved := nil;
+  Doc := nil;
+  Assert.IsTrue(Released <> nil, 'the declaration keeps the document alive');
+  UseWithoutTheDocument;
+  OfRoot := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeInt>(Wrappers, DebugObjectCount, 'wrappers');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// A namespace declaration created on its own (CreateAttribute('xmlns:p')) belongs to no
+// element: it has no parent, owner element or siblings. Set on an element it belongs to the
+// element; removed from the element it is the same node, as in MSXML, and belongs to none
+// again until it is set on another one.
+procedure TXMLDOMTest.TestCreatedNamespaceDeclaration;
+var
+  [Weak] Released: IXMLDocument;
+  Doc: IXMLDocument;
+
+  procedure CreateSetAndRemove;
+  begin
+    Doc := CoCreateXMLDocument;
+    Released := Doc;
+    Assert.IsTrue(Doc.LoadXML('<r><a/><b/></r>'));
+    var Decl := Doc.CreateAttribute('xmlns:p');
+    Decl.Value := 'urn:p';
+    Assert.AreEqual('xmlns:p', Decl.Name);
+    Assert.AreEqual('urn:p', Decl.Value);
+    Assert.IsNull(Decl.ParentNode);
+    Assert.IsNull(Decl.OwnerElement);
+    Assert.IsNull(Decl.NextSibling);
+    Assert.IsNull(Decl.PreviousSibling);
+
+    var A := Doc.DocumentElement.FirstChild;
+    A.Attributes.SetNamedItem(Decl);
+    Assert.AreEqual('<a xmlns:p="urn:p"/>', A.Xml);
+    Assert.AreEqual('a', Decl.OwnerElement.NodeName);
+    Assert.IsTrue(Decl.OwnerDocument = Doc, 'the document of the element');
+
+    var Removed := A.Attributes.RemoveNamedItem('xmlns:p');
+    Assert.IsTrue((Removed as TObject) = (Decl as TObject), 'the declaration itself, as in MSXML');
+    Assert.AreEqual('<a/>', A.Xml);
+    Assert.IsNull(Decl.ParentNode, 'removed, it belongs to no element');
+    Assert.IsNull(Decl.OwnerElement);
+    Assert.IsNull(Decl.NextSibling);
+    Assert.AreEqual('urn:p', Decl.Value);
+
+    Doc.DocumentElement.LastChild.Attributes.SetNamedItem(Decl);
+    Assert.AreEqual('<r><a/><b xmlns:p="urn:p"/></r>', Doc.DocumentElement.Xml);
+    Assert.AreEqual('b', Decl.OwnerElement.NodeName);
+  end;
+
+begin
+  var Used := LibraryMemoryInUse;
+  CreateSetAndRemove;
+  Doc := nil;
+  Assert.IsTrue(Released = nil, 'the document goes with the last reference');
+  Assert.AreEqual<NativeUInt>(Used, LibraryMemoryInUse, 'libxml2 memory');
+end;
+
+// The enumerator of the attributes and NextNode go through the namespace declarations and
+// then the ordinary attributes, in the order of Item, as nextNode of MSXML does.
+procedure TXMLDOMTest.TestAttributesEnumerateDeclarationsAndAttributes;
+
+  function Enumerated(const Xml: string): string;
+  begin
+    var Doc := CoCreateXMLDocument;
+    Assert.IsTrue(Doc.LoadXML(Xml));
+    var Attrs := Doc.DocumentElement.Attributes;
+    Result := '';
+    for var Attr in Attrs do
+      Result := Result + ' ' + Attr.Name;
+
+    var Next := '';
+    for var Pass := 1 to 2 do
+    begin
+      var Node := Attrs.NextNode;
+      while Node <> nil do
+      begin
+        Next := Next + ' ' + Node.NodeName;
+        Node := Attrs.NextNode;
+      end;
+      Attrs.Reset;
+    end;
+    Assert.AreEqual(Result + Result, Next, 'NextNode, twice with Reset');
+  end;
+
+begin
+  Assert.AreEqual(' xmlns:p xmlns:q a p:b', Enumerated('<r xmlns:p="urn:p" xmlns:q="urn:q" a="1" p:b="2"/>'));
+  Assert.AreEqual(' a b', Enumerated('<r a="1" b="2"/>'));
+  Assert.AreEqual(' xmlns:p', Enumerated('<r xmlns:p="urn:p"/>'));
+  Assert.AreEqual('', Enumerated('<r/>'));
 end;
 
 { TXMLSchemaTest }
