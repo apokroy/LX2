@@ -318,6 +318,15 @@ type
     procedure Normalize;
 
     /// <summary>
+    /// Removes and frees all child nodes at once
+    /// </summary>
+    /// <remarks>
+    /// A RemoveChild loop does per-child work over every removed subtree; here the
+    /// children are freed whole in one pass.
+    /// </remarks>
+    procedure RemoveAllChildNodes;
+
+    /// <summary>
     /// Removes ChildNode from child nodes list
     /// </summary>
     /// <param name="ChildNode">

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `IXMLNode.RemoveAllChildNodes`, with `xmlNodeHelper.RemoveAllChildNodes` and
+  `xmlDocHelper.RemoveAllChildNodes` below it: removes and frees all children in one pass. A
+  `RemoveChild` loop makes every removed subtree self-contained in namespaces, a walk per child;
+  here the children are discarded whole, and live wrappers of the freed nodes are notified. On a
+  namespace declaration node it raises `EXmlUnsupported`.
+
 ### Fixed
 
 - `RemoveChild`, `ReplaceChild` and `xmlNodeHelper.RemoveAttributeNode` ran

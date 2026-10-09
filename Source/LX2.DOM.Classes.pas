@@ -572,6 +572,7 @@ type
     function  HasChildNodes: Boolean;
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
     procedure Normalize;
+    procedure RemoveAllChildNodes; virtual;
     function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
     function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
     function  SelectNodes(const QueryString: string): IXMLNodeList;
@@ -665,6 +666,7 @@ type
     function  HasChildNodes: Boolean;
     function  InsertBefore(const NewChild: IXMLNode; RefChild: IXMLNode): IXMLNode;
     procedure Normalize;
+    procedure RemoveAllChildNodes;
     function  RemoveChild(const ChildNode: IXMLNode): IXMLNode;
     function  ReplaceChild(const NewChild: IXMLNode; const OldChild: IXMLNode): IXMLNode;
     function  SelectNodes(const QueryString: string): IXMLNodeList;
@@ -1028,6 +1030,7 @@ type
     function  GetErrors: IXMLErrors;
     function  importNode(const node: IXMLNode; deep: Boolean): IXMLNode;
     function  NodeFromID(const IdString: string): IXMLNode;
+    procedure RemoveAllChildNodes; override;
     procedure Save(const Url: string); overload;
     procedure Set_documentElement(const Element: IXMLElement);
     procedure Set_PreserveWhiteSpace(IsPreserving: Boolean);
@@ -3326,6 +3329,12 @@ begin
   NodePtr.ReconciliateNs;
 end;
 
+procedure TXMLNode.RemoveAllChildNodes;
+begin
+  if NodePtr <> nil then
+    NodePtr.RemoveAllChildNodes;
+end;
+
 function TXMLNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
 begin
   var Node := TXMLNode(ChildNode);
@@ -4136,6 +4145,12 @@ end;
 function TXMLDocument.CanonicalizeToStream(const Stream: TStream; Mode: TXmlC14NMode; Comments: Boolean): Boolean;
 begin
   Result := xmlDocPtr(NodePtr).CanonicalizeTo(Stream, Mode, Comments);
+end;
+
+procedure TXMLDocument.RemoveAllChildNodes;
+begin
+  if NodePtr <> nil then
+    xmlDocPtr(NodePtr).RemoveAllChildNodes;
 end;
 
 function TXMLDocument.Clone(Recursive: Boolean): IXMLDocument;
@@ -5501,6 +5516,11 @@ end;
 procedure TXMLNsNode.ReconciliateNs;
 begin
 
+end;
+
+procedure TXMLNsNode.RemoveAllChildNodes;
+begin
+  raise EXmlUnsupported.CreateRes(@SUnsupportedByAttrDecl);
 end;
 
 function TXMLNsNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;

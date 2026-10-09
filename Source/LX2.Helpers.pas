@@ -268,6 +268,17 @@ type
     /// </summary>
     procedure RemoveAttributeNode(const Attr: xmlAttrPtr); inline;
     /// <summary>
+    /// Unlinks and frees every child of this node in one pass, subtrees included.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RemoveChild"/> runs <see cref="DeclareOuterNamespaces"/> over the subtree
+    /// of every child it removes, so freeing the children one by one costs a subtree walk
+    /// per child. Here the children are discarded whole: nothing remains whose namespaces
+    /// would have to hold somewhere else. Live wrappers of the freed nodes are notified
+    /// through the node-deregister hook.
+    /// </remarks>
+    procedure RemoveAllChildNodes;
+    /// <summary>
     /// Unlinks <paramref name="ChildNode"/> and returns it, not freed and self-contained in
     /// namespaces (<see cref="DeclareOuterNamespaces"/>). Returns <c>nil</c> and changes
     /// nothing when ChildNode is not a child of this node. The namespace references of what
@@ -569,6 +580,16 @@ type
     /// <param name="Content">Text content if any.</param>
     function  CreateChild(const Parent: xmlNodePtr; const Name: RawByteString; const NamespaceURI: RawByteString = ''; ResolveNamespace: Boolean = False; Content: RawByteString = ''): xmlNodePtr;
     procedure Free; inline;
+    /// <summary>
+    /// Unlinks and frees every document-level node (root element, DTD, comments,
+    /// processing instructions) in one pass.
+    /// </summary>
+    /// <remarks>
+    /// Same rationale as <see cref="xmlNodeHelper.RemoveAllChildNodes"/>: a RemoveChild
+    /// loop does a subtree walk per child it removes, which adds up when the document
+    /// holds many nodes.
+    /// </remarks>
+    procedure RemoveAllChildNodes;
     function  CanonicalizeTo(const FileName: string; Mode: TXmlC14NMode = TXmlC14NMode.xmlC14N; Comments: Boolean = False): Boolean; overload;
     /// <summary>
     /// Serializes the document per the XML Canonicalization (C14N) spec directly
@@ -1663,6 +1684,21 @@ begin
   xmlRemoveProp(Attr);
 end;
 
+procedure xmlNodeHelper.RemoveAllChildNodes;
+var
+  Child, Next: xmlNodePtr;
+begin
+  TreeChanged;
+  Child := children;
+  while Child <> nil do
+  begin
+    Next := Child.next;
+    xmlUnlinkNode(Child);
+    xmlFreeNode(Child);
+    Child := Next;
+  end;
+end;
+
 function xmlNodeHelper.RemoveChild(const ChildNode: xmlNodePtr): xmlNodePtr;
 begin
   // xmlUnlinkNode takes a node out of whatever parent it has
@@ -2277,6 +2313,21 @@ end;
 procedure xmlDocHelper.Free;
 begin
   xmlFreeDoc(@Self);
+end;
+
+procedure xmlDocHelper.RemoveAllChildNodes;
+var
+  Child, Next: xmlNodePtr;
+begin
+  TreeChanged;
+  Child := children;
+  while Child <> nil do
+  begin
+    Next := Child.next;
+    xmlUnlinkNode(Child);
+    xmlFreeNode(Child);
+    Child := Next;
+  end;
 end;
 
 function xmlDocHelper.GetDocumentElement: xmlNodePtr;
