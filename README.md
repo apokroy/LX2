@@ -45,7 +45,7 @@ The library is a stack; pick the level that fits the task.
 | Unit | Layer | What it gives you |
 |---|---|---|
 | `libxml2.API`, `libxslt.API` | Raw C API | One-to-one declarations of the libxml2/libxslt types and functions. Function pointers, filled either from a shared library (`LX2Lib.Load`) or from the statically linked objects. |
-| `LX2.Static` | Linking | Generated unit: `{$L}` of the objects, the C runtime imports and the binding of the API pointers. Add it to uses and no DLL is needed. Empty on platforms other than Win64. |
+| `LX2.Static` | Linking | Generated unit: `{$L}` of the objects, the C runtime imports and the binding of the API pointers. Add it to uses and no DLL is needed. On Linux64 and WinARM64EC it binds to the archive in `Native\Lib\<platform>` instead; empty on Win32. |
 | `LX2.Types` | Common types | Delphi-style option sets (`TXmlParserOptions`, `TXmlSaveOptions`, `TXmlC14NMode`), parse error records and lists, exception classes, fast UTF-8/UTF-16 conversion helpers used by every layer above. |
 | `LX2.Helpers` | Record helpers | `xmlDoc`, `xmlNode`, `xmlAttr`, `xmlNamespaces` gain methods and properties: parse from string/file/stream, navigate, edit, XPath, XSLT, save with any encoding, canonicalize. Zero overhead over the C API: the helpers work on the native pointers. |
 | `LX2.SAX` | SAX | A thin wrapper over the libxml2 SAX2 parser (`TLX2SAXParserWrapper`), a Delphi-style parser with virtual `Do*` methods (`TSAXCustomParser`) and a handler-interface variant close to the MSXML SAX interfaces (`TSAXParser` + `ISAXContentHandler`). |
@@ -57,7 +57,8 @@ The library is a stack; pick the level that fits the task.
 
 - Delphi 10.3 Rio or later (the library relies on inline variables and record helpers with
   class methods); developed and tested with Delphi 13.1.
-- Windows x64 with static linking, or Windows x64 / Linux64 with a shared library.
+- Static linking: Windows x64, Linux64 and Windows on ARM (WinARM64EC, Delphi 13.1 or later;
+  linked, not yet run on ARM hardware). A shared library: Windows x64 and Linux64.
 - Win32 compiles but has not been tested.
 
 ## Installation
@@ -70,7 +71,7 @@ uses
   LX2.Types, LX2.Helpers,   // record helpers over the C API
   LX2.DOM,                  // MSXML-style interfaces
   LX2.SAX,                  // SAX parser
-  LX2.Static;               // static linking on Win64; omit it to load a DLL instead
+  LX2.Static;               // static linking; omit it to load a shared library instead
 ```
 
 Initialisation is implicit: the DOM and SAX layers initialise `LX2Lib` (and `XSLTLib` on
@@ -179,6 +180,8 @@ Native\Source\libxml2   libxml2 sources of the release, Copyright, VERSION
 Native\Source\libxslt   libxslt sources of the release, Copyright, VERSION
 Native\Source\shim      Win32 declarations, iconv, the printf family for the C runtime
 Native\Lib\Win64        xml_*.o, xslt_*.o, shim_*.o — committed, consumers never compile C
+Native\Lib\Linux64      liblx2native.a — the same for Linux64 (on the library path of the project)
+Native\Lib\WinARM64EC   liblx2native.a — the same for Arm64EC (on the unit search path of the project)
 Native\Import.ps1       downloads a release and refreshes Native\Source
 Native\Build.ps1        compiles the objects, checks them, generates Source\LX2.Static.pas
 Source\LX2.Static.pas   generated: {$L} per object, runtime imports, API binding

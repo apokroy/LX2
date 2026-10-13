@@ -94,6 +94,10 @@ type
     [Test]
     procedure TestLateBoundCallPicksTheOverload;
     [Test]
+    procedure TestLateBoundAnsiParamsFollowTheCodePage;
+    [Test]
+    procedure TestLateBoundNodeArguments;
+    [Test]
     procedure TestChildNodesFollowChanges;
     [Test]
     procedure TestChildNodesOutOfRange;
@@ -1165,6 +1169,114 @@ begin
 
   Assert.IsTrue(string(Doc.toString(True)).Contains('<item'));
   Assert.IsTrue(string(Doc.toString('windows-1251', False)).Contains('windows-1251'));
+end;
+
+type
+  Win1251String = type AnsiString(1251);
+
+  // Late-bound names come from the interfaces the object implements.
+  IAnsiParams = interface(IInvokable)
+    ['{6C1B0C1E-4A0E-4D3B-9B7A-1F0D2E3C4B5A}']
+    function Utf8(const S: UTF8String): string;
+    function Win1251(const S: Win1251String): string;
+    function Plain(const S: AnsiString): string;
+  end;
+
+  // Takes single-byte strings of three kinds, the way an object given to a script would, and
+  // reports what reached it: the byte length, the code page tag and the text read back.
+  TAnsiParamsProbe = class(TDispatchInvokable, IAnsiParams)
+  public
+    function Utf8(const S: UTF8String): string;
+    function Win1251(const S: Win1251String): string;
+    function Plain(const S: AnsiString): string;
+  end;
+
+function Received(const S: RawByteString): string;
+begin
+  Result := Format('%d/%d:%s', [Length(S), StringCodePage(S), string(S)]);
+end;
+
+function TAnsiParamsProbe.Utf8(const S: UTF8String): string;
+begin
+  Result := Received(S);
+end;
+
+function TAnsiParamsProbe.Win1251(const S: Win1251String): string;
+begin
+  Result := Received(S);
+end;
+
+function TAnsiParamsProbe.Plain(const S: AnsiString): string;
+begin
+  Result := Received(S);
+end;
+
+// A single-byte string parameter gets the text in the code page its type declares, not in
+// the platform page: a UTF8String keeps the characters the platform page lacks, an
+// AnsiString(1251) gets its own bytes, a plain AnsiString the platform page. A variable
+// passed by reference comes back in the code page it came with.
+procedure TXMLDOMTest.TestLateBoundAnsiParamsFollowTheCodePage;
+begin
+  var Probe: Variant := TAnsiParamsProbe.Create as IDispatch;
+  // Variables, not constants: a constant would be narrowed by the compiler in its own code
+  // page, the expected values below are what the platform page gives at run time.
+  var Text: string := 'Привет Ω';
+  var Cyrillic: string := 'Привет';
+  Assert.AreEqual('15/65001:' + Text, string(Probe.Utf8(Text)));
+  Assert.AreEqual('6/1251:' + Cyrillic, string(Probe.Win1251(Cyrillic)));
+  Assert.AreEqual(Received(AnsiString(Text)), string(Probe.Plain(Text)));
+
+  var U: UTF8String := UTF8String(Text);
+  Probe.Utf8(U);
+  Assert.AreEqual(Received(UTF8String(Text)), Received(U));
+  var W: Win1251String := Win1251String(Cyrillic);
+  Probe.Win1251(W);
+  Assert.AreEqual(Received(Win1251String(Cyrillic)), Received(W));
+end;
+
+// A node reaches a late-bound call as IDispatch, while the method takes the interface it
+// declares (IXMLNode): the argument is asked for that interface. A value computed in place
+// comes by value, a Variant variable by reference; the method gets the node either way, and
+// the call keeps no reference of its own (wrappers are counted in debug builds only). This is
+// how a script copies an element built in one document into another.
+procedure TXMLDOMTest.TestLateBoundNodeArguments;
+
+  procedure Build;
+  begin
+    var Request: Variant := CoCreateXMLDocument as IDispatch;
+    Assert.IsTrue(Boolean(Request.loadXML('<Request><Package/></Request>')));
+    var Payment: Variant := CoCreateXMLDocument as IDispatch;
+    Assert.IsTrue(Boolean(Payment.loadXML('<Payment Id="1"><Sum>1</Sum></Payment>')));
+
+    var Package: Variant := Request.documentElement.firstChild;
+    var Added: Variant := Package.appendChild(Payment.documentElement.cloneNode(True));
+    Assert.AreEqual('Payment', string(Added.nodeName));
+
+    var Copy: Variant := Payment.documentElement.cloneNode(True);
+    Copy.setAttribute('Id', '2');
+    Package.insertBefore(Copy, Added);
+    Assert.AreEqual('<Package><Payment Id="2"><Sum>1</Sum></Payment><Payment Id="1"><Sum>1</Sum></Payment></Package>',
+      string(Package.xml));
+
+    Package.removeChild(Added);
+    Assert.AreEqual('<Package><Payment Id="2"><Sum>1</Sum></Payment></Package>', string(Package.xml));
+    Assert.AreEqual('<Payment Id="1"><Sum>1</Sum></Payment>', string(Payment.documentElement.xml), 'the source document');
+
+    try
+      Package.appendChild(TAnsiParamsProbe.Create as IDispatch);
+      Assert.Fail('an object that is not a node was taken');
+    except
+      on E: EInvalidCast do
+        Assert.Contains(E.Message, 'IXMLNode', 'the message names the interface');
+    end;
+  end;
+
+begin
+  var Before := DebugObjectCount;
+  Build;
+{$IFDEF DEBUG}
+  Assert.AreEqual<NativeInt>(Before, DebugObjectCount, 'wrappers left after the documents are gone');
+{$ENDIF}
 end;
 
 // An object handed to a late-bound caller carries exactly the caller's reference: once the

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Static linking on Windows on ARM (the WinARM64EC platform of Delphi 13.1 and later): the archive
+  `Native\Lib\WinARM64EC\liblx2native.a` with libxml2 and libxslt for Arm64EC and its section in
+  `LX2.Static.pas`; `Native\Build.ps1` builds it (`-Platforms WinARM64EC`) and links the smoke test.
+  The application puts `Native\Lib\WinARM64EC` on its unit search path. See `Native\README.md`.
+
 - `IXMLNode.RemoveAllChildNodes`, with `xmlNodeHelper.RemoveAllChildNodes` and
   `xmlDocHelper.RemoveAllChildNodes` below it: removes and frees all children in one pass. A
   `RemoveChild` loop makes every removed subtree self-contained in namespaces, a walk per child;
@@ -11,6 +16,22 @@
   namespace declaration node it raises `EXmlUnsupported`.
 
 ### Fixed
+
+- `TDispatchInvokable` could not take an object as an argument. A late-bound caller passes it as
+  `IDispatch` or `IUnknown`, and `TValue.Cast` converts interfaces only along the declared
+  ancestry, so `node.appendChild(other)` and every other method with an interface parameter
+  failed with `EInvalidCast` ("Invalid class typecast"). The argument is now asked for the
+  parameter's interface; an object that does not support it raises `EInvalidCast` naming the
+  interface. A `Variant` variable passed by reference is read through the reference (an argument
+  other than a string used to reach the method empty). Only `var` and `out` parameters write
+  their value back, and a `Variant` passed by reference gets it in the caller's variable: writing
+  every argument back left a copy of the value in each by-reference slot, and nobody released it.
+
+- `TDispatchInvokable` (late-bound calls through `IDispatch`) converted `UTF8String` and
+  `AnsiString(N)` parameters with the platform code page: a `UTF8String` parameter lost every
+  character outside the system ANSI page before the call. The value now carries the code page
+  of the parameter type (`TRttiAnsiStringType.CodePage`), and a `var` parameter of such a type
+  is written back in its own code page.
 
 - `RemoveChild`, `ReplaceChild` and `xmlNodeHelper.RemoveAttributeNode` ran
   `xmlReconciliateNs` over the whole parent after the change, and `AppendChild`,

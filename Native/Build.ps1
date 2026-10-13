@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
-    Static build of libxml2 and libxslt for LX2: Win64 objects, the Linux64 archive and the
-    LX2.Static.pas unit.
+    Static build of libxml2 and libxslt for LX2: Win64 objects, the Linux64 and WinARM64EC
+    archives and the LX2.Static.pas unit.
 
 .DESCRIPTION
     The compiler is bcc64x (clang 20) shipped with RAD Studio, target x86_64-w64-windows-gnu.
@@ -34,9 +34,21 @@
     names listed in $GlibcImports; the youngest of them, stat64, sets the floor at glibc 2.33
     (the oldest target, Ubuntu 22.04, has 2.35).
 
+    WinARM64EC: the same sources with Source\shim except crt_shim.c, target
+    arm64ec-pc-windows-msvc (the C runtime headers are those of the Windows SDK and the MSVC
+    tools installed on the machine), go into the archive Lib\WinARM64EC\liblx2native.a;
+    LX2.Static.pas declares the entry points as external 'liblx2native.a', as on Linux64.
+    The C runtime is librtlhelper.a of RAD Studio, which dccarm64ec links into every
+    executable; it also imports part of kernel32, and the Win32 names of $Win32Imports it
+    lacks come from an import library made by llvm-dlltool and merged into the same archive.
+    crt_shim.c is left out: librtlhelper.a defines the same names. Arm64EC code calls a
+    function outside its object through a weak reference and an exit thunk, so the
+    invariants count weak references as external too.
+
 .PARAMETER Platforms
-    Subset of Win64, Linux64 to compile. Both by default. LX2.Static.pas is always generated
-    for both from whatever Lib\ holds.
+    Subset of Win64, Linux64, WinARM64EC to compile. All three by default; WinARM64EC is
+    skipped with a warning when the platform is not installed in RAD Studio. LX2.Static.pas
+    is always generated for all of them from whatever Lib\ holds.
 .PARAMETER LinuxSdk
     Linux64 SDK: a directory, or the name of an SDK description of the IDE; by default the
     default SDK of the IDE, else the described SDK with the oldest glibc.
@@ -47,7 +59,8 @@
     Studio version to pick from the registry ('37.0'); by default the newest.
 .PARAMETER Test
     After the build, compile Tests\LX2StaticSmoke.dpr and run it: dcc64 for Win64,
-    dcclinux64 and WSL (when present) for Linux64.
+    dcclinux64 and WSL (when present) for Linux64; for WinARM64EC dccarm64ec only compiles
+    and links it, running needs Windows on ARM.
 .PARAMETER SkipBuild
     Do not compile the objects: only generate LX2.Static.pas and run the tests.
 .PARAMETER Clang
@@ -66,8 +79,8 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Win64', 'Linux64')]
-    [string[]]$Platforms = @('Win64', 'Linux64'),
+    [ValidateSet('Win64', 'Linux64', 'WinARM64EC')]
+    [string[]]$Platforms = @('Win64', 'Linux64', 'WinARM64EC'),
     [string]$StudioRoot,
     [string]$LinuxSdk,
     [string]$BdsVersion,
@@ -85,6 +98,8 @@ $Lib     = Join-Path $Root 'Lib\Win64'
 $LibLinux = Join-Path $Root 'Lib\Linux64'
 $LinuxArchiveName = 'liblx2native.a'
 $LinuxArchive = Join-Path $LibLinux $LinuxArchiveName
+$LibArm64EC = Join-Path $Root 'Lib\WinARM64EC'
+$Arm64ECArchive = Join-Path $LibArm64EC $LinuxArchiveName
 $Gen     = Join-Path $Root 'Gen'
 $GenLinux = Join-Path $Gen 'Linux64'
 
@@ -92,25 +107,40 @@ $GenLinux = Join-Path $Gen 'Linux64'
 # Tools
 # ---------------------------------------------------------------------------
 
-# RAD Studio: -StudioRoot, else -BdsVersion, else the BDS variable that rsvars.bat sets, else
-# the newest installation the registry knows (HKCU, then HKLM). The version number is needed
-# for the SDK descriptions and the IDE keys below.
-function Find-StudioRoot([string]$Root, [string]$Version) {
-    if ($Root) { return $Root.TrimEnd('\') }
-    if (-not $Version -and $env:BDS -and (Test-Path (Join-Path $env:BDS 'bin64\bcc64x.exe'))) { return $env:BDS.TrimEnd('\') }
-    $found = @()
-    foreach ($hive in 'HKCU:\Software\Embarcadero\BDS', 'HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS') {
+# RAD Studio installations the registry knows, newest first: the three hives the IDE writes
+# (HKCU, HKLM under WOW6432Node, HKLM), one entry per version, only those with bcc64x.
+function Get-StudioInstallations {
+    $found = @{}
+    foreach ($hive in 'HKCU:\Software\Embarcadero\BDS', 'HKLM:\SOFTWARE\WOW6432Node\Embarcadero\BDS', 'HKLM:\SOFTWARE\Embarcadero\BDS') {
+        if (-not (Test-Path $hive)) { continue }
         foreach ($key in Get-ChildItem $hive -ErrorAction SilentlyContinue) {
             $v = $null
             if (-not [version]::TryParse($key.PSChildName, [ref]$v)) { continue }
-            if ($Version -and $key.PSChildName -ne $Version) { continue }
+            if ($found.ContainsKey($key.PSChildName)) { continue }
             $dir = [string](Get-ItemProperty $key.PSPath -ErrorAction SilentlyContinue).RootDir
-            if ($dir -and (Test-Path (Join-Path $dir 'bin64\bcc64x.exe'))) { $found += [pscustomobject]@{ Version = $v; Root = $dir.TrimEnd('\') } }
+            if (-not $dir) { continue }
+            $dir = $dir.TrimEnd('\')
+            if (-not (Test-Path (Join-Path $dir 'bin64\bcc64x.exe'))) { continue }
+            $found[$key.PSChildName] = [pscustomobject]@{ Version = $v; VersionText = $key.PSChildName; Root = $dir }
         }
     }
-    $best = $found | Sort-Object Version -Descending | Select-Object -First 1
-    if (-not $best) { throw "RAD Studio $(if ($Version) { $Version } else { 'with bcc64x' }) not found in the registry; pass -StudioRoot" }
-    return $best.Root
+    return @($found.Values | Sort-Object Version -Descending)
+}
+
+# RAD Studio: -StudioRoot, else -BdsVersion from the registry, else the BDS variable that
+# rsvars.bat sets (a RAD Studio command prompt), else the newest installation the registry
+# knows. The version number is needed for the SDK descriptions and the IDE keys below.
+function Find-StudioRoot([string]$Root, [string]$Version) {
+    if ($Root) { return $Root.TrimEnd('\') }
+    if ($Version) {
+        $inst = Get-StudioInstallations | Where-Object { $_.VersionText -eq $Version } | Select-Object -First 1
+        if (-not $inst) { throw "RAD Studio $Version with bcc64x not found in the registry (HKCU and HKLM, Software\Embarcadero\BDS); pass -StudioRoot" }
+        return $inst.Root
+    }
+    if ($env:BDS -and (Test-Path (Join-Path $env:BDS 'bin64\bcc64x.exe'))) { return $env:BDS.TrimEnd('\') }
+    $inst = Get-StudioInstallations | Select-Object -First 1
+    if (-not $inst) { throw 'RAD Studio with bcc64x not found in the registry; pass -StudioRoot' }
+    return $inst.Root
 }
 $StudioRoot = Find-StudioRoot $StudioRoot $BdsVersion
 if (-not $BdsVersion) { $BdsVersion = Split-Path $StudioRoot -Leaf }
@@ -118,40 +148,66 @@ $Bcc     = Join-Path $StudioRoot 'bin64\bcc64x.exe'
 $Nm      = Join-Path $StudioRoot 'bin64\llvm-nm.exe'
 $Ar      = Join-Path $StudioRoot 'bin64\llvm-ar.exe'
 $Objdump = Join-Path $StudioRoot 'bin64\llvm-objdump.exe'
-foreach ($tool in $Bcc, $Nm, $Ar, $Objdump) {
+$LlvmLib = Join-Path $StudioRoot 'bin64\llvm-lib.exe'
+$Dlltool = Join-Path $StudioRoot 'bin64\llvm-dlltool.exe'
+foreach ($tool in $Bcc, $Nm, $Ar, $Objdump, $LlvmLib, $Dlltool) {
     if (-not (Test-Path $tool)) { throw "Not found: $tool" }
 }
+# librtlhelper.a of the WinARM64EC platform: the C runtime of Arm64EC archives (see the
+# description); its presence tells whether the platform is installed.
+$Arm64ECRuntime = Join-Path $StudioRoot 'lib\winarm64ec\release\librtlhelper.a'
 $StudioShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($StudioRoot).ShortPath
 
+# glibc minor version of an SDK by usr\include\features.h; 0 when the file or the define is
+# missing, and such an SDK is never picked by glibc.
+function Get-LinuxSdkGlibc([string]$Dir) {
+    $features = Join-Path $Dir 'usr\include\features.h'
+    if (-not (Test-Path $features)) { return 0 }
+    foreach ($line in Get-Content $features) {
+        if ($line -match '^\s*#\s*define\s+__GLIBC_MINOR__\s+(\d+)') { return [int]$Matches[1] }
+    }
+    return 0
+}
+
 # Linux64 SDK directory: -LinuxSdk (a directory, or the name of an SDK description), else the
-# default SDK of the IDE, else the described SDK with the oldest glibc - the archive must load
-# on the oldest target system. The descriptions are the msbuild files the SDK Manager writes
-# to %APPDATA%\Embarcadero\BDS\<version>\<name> (Profile_sysroot is the directory).
+# default SDK of the IDE (PlatformSDKs\Default_Linux64 in the registry), else the SDK with the
+# oldest glibc - the archive must load on the oldest target system; described SDKs come
+# before bare directories in the SDK folder. The descriptions are the msbuild files the SDK
+# Manager writes to %APPDATA%\Embarcadero\BDS\<version>\<name> (Profile_sysroot is the
+# directory).
 function Resolve-LinuxSdk {
     if ($LinuxSdk -and (Test-Path -LiteralPath $LinuxSdk -PathType Container)) { return (Resolve-Path -LiteralPath $LinuxSdk).Path.TrimEnd('\') }
     $appData = Join-Path $env:APPDATA "Embarcadero\BDS\$BdsVersion"
     $sdkRoot = if ($env:BDSPLATFORMSDKSDIR) { $env:BDSPLATFORMSDKSDIR } else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Embarcadero\Studio\SDKs' }
     $sdks = @()
+    $seen = @{}
     foreach ($file in Get-ChildItem $appData -File -ErrorAction SilentlyContinue) {
         $text = Get-Content $file.FullName -Raw -ErrorAction SilentlyContinue
         if (-not $text -or $text -notmatch '<Profile_platform>\s*Linux64\s*</Profile_platform>') { continue }
         if ($text -notmatch '<Profile_sysroot>\s*([^<]+?)\s*</Profile_sysroot>') { continue }
-        $dir = ($Matches[1] -replace '\$\(BDSPLATFORMSDKSDIR\)', $sdkRoot).TrimEnd('\')
-        $features = Join-Path $dir 'usr\include\features.h'
-        if (-not (Test-Path $features)) { continue }
-        $glibc = 999
-        foreach ($line in Get-Content $features) { if ($line -match '^\s*#\s*define\s+__GLIBC_MINOR__\s+(\d+)') { $glibc = [int]$Matches[1]; break } }
-        $sdks += [pscustomobject]@{ Name = $file.Name; Dir = $dir; Glibc = $glibc }
+        $dir = ($Matches[1] -replace '\$\(BDSPLATFORMSDKSDIR\)', $sdkRoot).TrimEnd('\', '/')
+        $sdks += [pscustomobject]@{ Name = $file.Name; Dir = $dir; Described = $true; Exists = (Test-Path $dir); Glibc = (Get-LinuxSdkGlibc $dir) }
+        $seen[$dir.ToLowerInvariant()] = $true
+    }
+    foreach ($d in Get-ChildItem $sdkRoot -Directory -ErrorAction SilentlyContinue) {
+        if ($seen.ContainsKey($d.FullName.ToLowerInvariant())) { continue }
+        if (-not (Test-Path (Join-Path $d.FullName 'usr\include'))) { continue }
+        $sdks += [pscustomobject]@{ Name = $d.Name; Dir = $d.FullName; Described = $false; Exists = $true; Glibc = (Get-LinuxSdkGlibc $d.FullName) }
     }
     if ($LinuxSdk) {
-        $pick = $sdks | Where-Object { $_.Name -eq $LinuxSdk } | Select-Object -First 1
+        $pick = $sdks | Where-Object { $_.Name -eq $LinuxSdk -and $_.Exists } | Select-Object -First 1
         if (-not $pick) { throw "Linux SDK '$LinuxSdk': neither a directory nor a description in $appData" }
-        return $pick.Dir
     }
-    $default = (Get-ItemProperty "HKCU:\Software\Embarcadero\BDS\$BdsVersion\PlatformSDKs" -ErrorAction SilentlyContinue).Default_Linux64
-    $pick = $sdks | Where-Object { $_.Name -eq $default } | Select-Object -First 1
-    if (-not $pick) { $pick = $sdks | Sort-Object Glibc, Name | Select-Object -First 1 }
-    if (-not $pick) { throw "No Linux64 SDK: no descriptions in $appData; import one with the SDK Manager of the IDE or pass -LinuxSdk <directory>" }
+    else {
+        $pick = $null
+        $default = (Get-ItemProperty "HKCU:\Software\Embarcadero\BDS\$BdsVersion\PlatformSDKs" -ErrorAction SilentlyContinue).Default_Linux64
+        if ($default) { $pick = $sdks | Where-Object { $_.Name -eq $default -and $_.Exists } | Select-Object -First 1 }
+        if (-not $pick) {
+            $pick = $sdks | Where-Object { $_.Exists -and $_.Glibc -gt 0 } | Sort-Object @{ Expression = { -not $_.Described } }, Glibc, Name | Select-Object -First 1
+        }
+        if (-not $pick) { throw "No Linux64 SDK: no descriptions in $appData and no directories in $sdkRoot; import one with the SDK Manager of the IDE or pass -LinuxSdk <directory>" }
+    }
+    if (-not (Test-Path (Join-Path $pick.Dir 'usr\include\features.h'))) { throw "The SDK directory has no usr\include\features.h: $($pick.Dir)" }
     return $pick.Dir
 }
 
@@ -312,14 +368,23 @@ $CommonFlags = @('--target=x86_64-w64-windows-gnu', '-std=c11', '-O3', '-fno-mat
 $LibXml2Include = @(('-I' + (Join-Path $Gen 'libxml2')), ('-I' + (Join-Path $Root 'Source\libxml2\include')), ('-I' + (Join-Path $Root 'Source\libxml2')))
 $LibXsltInclude = @(('-I' + (Join-Path $Gen 'libxslt')), ('-I' + (Join-Path $Root 'Source')), ('-I' + (Join-Path $Root 'Source\libxslt'))) + $LibXml2Include
 
+# Runs an external program with stderr merged into the output; the exit code stays in
+# $LASTEXITCODE. Windows PowerShell 5.1 with $ErrorActionPreference = 'Stop' aborts the script
+# on the first stderr line redirected by 2>&1 (clang writes its warnings there), so the
+# preference is lifted for the duration of the call; pwsh 7 has no such trap.
+function Invoke-NativeLines([scriptblock]$Command) {
+    return @(& { $ErrorActionPreference = 'Continue'; & $Command 2>&1 } | ForEach-Object { "$_" })
+}
+
 function Invoke-Bcc([string[]]$Arguments) {
-    $out = & $Compiler @Arguments 2>&1 | Where-Object { $_ -notmatch '^Embarcadero C\+\+' }
+    $out = Invoke-NativeLines { & $Compiler @Arguments } | Where-Object { $_ -notmatch '^Embarcadero C\+\+' }
     if ($LASTEXITCODE -ne 0) { throw "$(Split-Path $Compiler -Leaf) exited with code $LASTEXITCODE`n$($out -join "`n")" }
     if ($out) { $out | ForEach-Object { Write-Host "  $_" } }
 }
 
-function Build-Group([string]$Prefix, [string]$Dir, [string[]]$Include, [string]$OutDir = $Lib, [string[]]$Flags = $CommonFlags) {
-    foreach ($src in Get-ChildItem (Join-Path $Root $Dir) -Filter *.c | Sort-Object Name) {
+function Build-Group([string]$Prefix, [string]$Dir, [string[]]$Include, [string]$OutDir = $Lib, [string[]]$Flags = $CommonFlags,
+                     [string[]]$Exclude = @()) {
+    foreach ($src in Get-ChildItem (Join-Path $Root $Dir) -Filter *.c | Where-Object { $Exclude -notcontains $_.Name } | Sort-Object Name) {
         $obj = Join-Path $OutDir ($Prefix + '_' + [IO.Path]::GetFileNameWithoutExtension($src.Name) + '.o')
         Invoke-Bcc ($Flags + $Include + @('-c', $src.FullName, '-o', $obj))
     }
@@ -391,6 +456,100 @@ function Get-LinuxDefined {
         }
     }
     return $defined
+}
+
+# Entry points the Arm64EC archive offers. An Arm64EC function is defined as '#name' (its Arm64EC
+# body) next to the plain name the linker resolves for a caller, so both forms count.
+function Get-Arm64ECDefined {
+    $defined = @{}
+    if (Test-Path $Arm64ECArchive) {
+        Invoke-NativeLines { & $Nm --defined-only $Arm64ECArchive } | ForEach-Object {
+            if ($_ -match '^\S+\s+[TDRBCW]\s+#?([^#$\s][^$\s]*)$') { $defined[$Matches[1]] = $true }
+        }
+    }
+    return $defined
+}
+
+# Names an Arm64EC object references outside itself: unresolved (U) and weak references to
+# functions (w without '#' or '$'). Arm64EC code calls a function outside its object through an
+# exit thunk and a weak reference to its name; unlike a weak reference on ELF or x64 COFF, which
+# stays null, the link fails when nothing defines it.
+function Get-Arm64ECExternalRefs([string]$Obj) {
+    Invoke-NativeLines { & $Nm $Obj } | ForEach-Object {
+        if ($_ -match '^\s*U\s+(\S+)$') { $Matches[1] }
+        elseif ($_ -match '^\s*w\s+([^#$\s][^$\s]*)$') { $Matches[1] }
+    } | Sort-Object -Unique
+}
+
+# A name is resolved when the set defines it plainly or as an Arm64EC body ('#name'); the
+# __os_arm64x_* entry points come from the loader.
+function Test-Arm64ECDefined([hashtable]$Defined, [string]$Name) {
+    return $Defined.ContainsKey($Name) -or $Defined.ContainsKey('#' + $Name) -or $Name.StartsWith('__os_arm64x_')
+}
+
+function Build-WinARM64EC {
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) "lx2-arm64ec-$PID"
+    New-Item -ItemType Directory -Force $tmp, $LibArm64EC | Out-Null
+    try {
+        # The Win64 flags and headers (Gen, Source\shim) with another target and without the
+        # -Clang/-Profile additions, which are a Win64 matter: the shim windows.h declares Win32
+        # with plain linkage, so the objects reference the functions by name.
+        $flags = @('--target=arm64ec-pc-windows-msvc', '-std=c11', '-O3', '-fno-math-errno', '-DNDEBUG',
+                   '-DLIBXML_STATIC', '-DLIBXSLT_STATIC', '-DHAVE_CONFIG_H', '-Wno-deprecated-declarations',
+                   '-Wno-unused-parameter', ('-I' + (Join-Path $Root 'Source\shim')))
+        Build-Group 'xml'  'Source\libxml2' $LibXml2Include $tmp $flags
+        Build-Group 'xslt' 'Source\libxslt' $LibXsltInclude $tmp $flags
+        Build-Group 'shim' 'Source\shim'    $LibXml2Include $tmp $flags @('crt_shim.c')
+        $objs = @(Get-ChildItem $tmp -Filter *.o | Sort-Object Name | ForEach-Object { $_.FullName })
+
+        $defined = @{}
+        foreach ($obj in $objs) { foreach ($d in Get-Symbols $obj 'D') { $defined[$d] = $true } }
+        $runtime = @{}
+        Invoke-NativeLines { & $Nm --defined-only $Arm64ECRuntime } | ForEach-Object {
+            if ($_ -match '^\S+\s+[TDRBW]\s+(\S+)$') { $runtime[$Matches[1]] = $true }
+        }
+        $win32 = @{}
+        foreach ($dll in $Win32Imports.Keys) { foreach ($s in $Win32Imports[$dll]) { $win32[$s] = $dll } }
+
+        # Every external name is a sibling's symbol, part of librtlhelper.a, or a Win32 name of
+        # $Win32Imports; the last ones librtlhelper.a does not import get an import library.
+        $imports = @{}
+        $problems = @()
+        foreach ($obj in $objs) {
+            $extra = @()
+            foreach ($r in Get-Arm64ECExternalRefs $obj) {
+                if ((Test-Arm64ECDefined $defined $r) -or (Test-Arm64ECDefined $runtime $r)) { continue }
+                if ($win32.ContainsKey($r)) { $imports[$r] = $win32[$r]; continue }
+                $extra += $r
+            }
+            if ($extra) { $problems += "$(Split-Path $obj -Leaf): $($extra -join ', ')" }
+            $sections = & $Objdump -h $obj | Where-Object { $_ -match '\.CRT\$|\.ctors|\.init_array' }
+            if ($sections) { throw "$obj has global constructor sections:`n$($sections -join "`n")" }
+        }
+        if ($problems) { throw "Arm64EC objects reference names neither librtlhelper.a nor `$Win32Imports covers:`n  $($problems -join "`n  ")" }
+
+        $implibs = @()
+        foreach ($dll in @($imports.Values | Sort-Object -Unique)) {
+            $base = [IO.Path]::GetFileNameWithoutExtension($dll)
+            $names = @($imports.Keys | Where-Object { $imports[$_] -eq $dll } | Sort-Object)
+            $def = Join-Path $tmp "$base.def"
+            [IO.File]::WriteAllLines($def, [string[]](@("LIBRARY $dll", 'EXPORTS') + $names))
+            $implib = Join-Path $tmp "$base.lib"
+            $res = Invoke-NativeLines { & $Dlltool -m arm64ec -d $def -l $implib }
+            if ($LASTEXITCODE -ne 0) { throw "llvm-dlltool exited with code $LASTEXITCODE`n$($res -join "`n")" }
+            $implibs += $implib
+            Write-Host "  imports from ${dll}: $($names -join ', ')"
+        }
+
+        # llvm-lib merges the import members into the archive: one library name on the Pascal side.
+        Remove-Item $Arm64ECArchive -ErrorAction SilentlyContinue
+        $res = Invoke-NativeLines { & $LlvmLib /machine:arm64ec "/out:$Arm64ECArchive" @objs @implibs }
+        if ($LASTEXITCODE -ne 0) { throw "llvm-lib exited with code $LASTEXITCODE`n$($res -join "`n")" }
+        Write-Host ("  {0}: {1} objects, {2:N0} bytes" -f $LinuxArchiveName, $objs.Count, (Get-Item $Arm64ECArchive).Length)
+    }
+    finally {
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -496,6 +655,42 @@ function Get-ApiBindings([string]$UnitFile) {
     }
 }
 
+# A section that binds the entry points to an archive on the library path (Linux64, WinARM64EC):
+# only the names the archive defines are declared, the others keep their pointers nil. Returns
+# the API names it leaves unbound.
+function Write-ArchiveSection($Write, [string]$Open, [string]$Close, [string]$Uses, [hashtable]$Defined, $Xml, $Xslt) {
+    & $Write $Open
+    & $Write ""
+    & $Write "uses"
+    & $Write "  $Uses;"
+    & $Write ""
+    & $Write "const"
+    & $Write "  NativeLib = '$LinuxArchiveName';"
+    & $Write ""
+    $unbound = @()
+    foreach ($group in @(@{ Title = 'libxml2'; Unit = 'libxml2.API'; Items = $Xml; Binder = 'BindLibXml2' },
+                         @{ Title = 'libxslt'; Unit = 'libxslt.API'; Items = $Xslt; Binder = 'BindLibXslt' })) {
+        $bound = @($group.Items | Where-Object { $Defined.ContainsKey($_.Name) })
+        $unbound += @($group.Items | Where-Object { -not $Defined.ContainsKey($_.Name) } | ForEach-Object { $_.Name })
+        & $Write "{`$region '$($group.Title)'}"
+        foreach ($b in $bound) {
+            $sig = if ($b.Kind -eq 'function') { "function $($b.Name)$($b.Params)$($b.Ret); cdecl; external NativeLib name '$($b.Name)';" }
+                   else { "procedure $($b.Name)$($b.Params); cdecl; external NativeLib name '$($b.Name)';" }
+            & $Write $sig
+        }
+        & $Write ""
+        & $Write "procedure $($group.Binder);"
+        & $Write "begin"
+        foreach ($b in $bound) { & $Write "  $($group.Unit).$($b.Name) := @$($b.Name);" }
+        & $Write "end;"
+        & $Write "{`$endregion}"
+        & $Write ""
+    }
+    & $Write $Close
+    & $Write ""
+    return $unbound
+}
+
 function Write-StaticUnit($Symbols) {
     # dcc matches object references to declarations by the Pascal identifier, so every
     # symbol is declared under its exact name: API entry points with their signature,
@@ -516,16 +711,18 @@ function Write-StaticUnit($Symbols) {
     & $w "//"
     & $w "// Static linking of libxml2 and libxslt. Win64: the objects from Native\Lib\Win64, the C"
     & $w "// runtime from ucrtbase.dll, Win32 from kernel32/bcrypt. Linux64: the archive"
-    & $w "// Native\Lib\Linux64\$LinuxArchiveName on the library path, the C runtime is glibc. Adding the"
-    & $w "// unit to a uses clause makes LX2Lib.Load and XSLTLib.Load bind to the static code instead"
-    & $w "// of loading a library file."
+    & $w "// Native\Lib\Linux64\$LinuxArchiveName on the library path, the C runtime is glibc. WinARM64EC:"
+    & $w "// the archive Native\Lib\WinARM64EC\$LinuxArchiveName on the library path, the C runtime is"
+    & $w "// librtlhelper.a of RAD Studio, Win32 is imported by the archive itself. Adding the unit to a"
+    & $w "// uses clause makes LX2Lib.Load and XSLTLib.Load bind to the static code instead of loading a"
+    & $w "// library file."
     & $w ""
     & $w "interface"
     & $w ""
     & $w "implementation"
     & $w ""
     & $w "// On the other platforms the unit is empty and Load keeps loading the library file."
-    & $w "{`$IFDEF WIN64}"
+    & $w "{`$IF Defined(WIN64) and not Defined(LLVM)}"
     & $w ""
     & $w "uses"
     & $w "  Winapi.Windows, System.Types, System.SysUtils, libxml2.API, libxslt.API;"
@@ -594,38 +791,12 @@ function Write-StaticUnit($Symbols) {
         & $w "{`$endregion}"
         & $w ""
     }
-    & $w "{`$ENDIF WIN64}"
+    & $w "{`$ENDIF WIN64 and !LLVM}"
     & $w ""
     $linuxDefined = Get-LinuxDefined
-    & $w "{`$IFDEF LINUX64}"
-    & $w ""
-    & $w "uses"
-    & $w "  Posix.StdDef, System.Types, System.SysUtils, libxml2.API, libxslt.API;"
-    & $w ""
-    & $w "const"
-    & $w "  NativeLib = '$LinuxArchiveName';"
-    & $w ""
-    $unboundLinux = @()
-    foreach ($group in @(@{ Title = 'libxml2'; Unit = 'libxml2.API'; Items = $xml; Binder = 'BindLibXml2' },
-                         @{ Title = 'libxslt'; Unit = 'libxslt.API'; Items = $xslt; Binder = 'BindLibXslt' })) {
-        $bound = @($group.Items | Where-Object { $linuxDefined.ContainsKey($_.Name) })
-        $unboundLinux += @($group.Items | Where-Object { -not $linuxDefined.ContainsKey($_.Name) } | ForEach-Object { $_.Name })
-        & $w "{`$region '$($group.Title)'}"
-        foreach ($b in $bound) {
-            $sig = if ($b.Kind -eq 'function') { "function $($b.Name)$($b.Params)$($b.Ret); cdecl; external NativeLib name '$($b.Name)';" }
-                   else { "procedure $($b.Name)$($b.Params); cdecl; external NativeLib name '$($b.Name)';" }
-            & $w $sig
-        }
-        & $w ""
-        & $w "procedure $($group.Binder);"
-        & $w "begin"
-        foreach ($b in $bound) { & $w "  $($group.Unit).$($b.Name) := @$($b.Name);" }
-        & $w "end;"
-        & $w "{`$endregion}"
-        & $w ""
-    }
-    & $w "{`$ENDIF LINUX64}"
-    & $w ""
+    $unboundLinux = @(Write-ArchiveSection $w '{$IFDEF LINUX64}' '{$ENDIF LINUX64}' 'Posix.StdDef, System.Types, System.SysUtils, libxml2.API, libxslt.API' $linuxDefined $xml $xslt)
+    $arm64ECDefined = Get-Arm64ECDefined
+    $unboundArm64EC = @(Write-ArchiveSection $w '{$IF Defined(WIN64) and Defined(LLVM)}' '{$ENDIF WIN64 and LLVM}' 'Winapi.Windows, System.Types, System.SysUtils, libxml2.API, libxslt.API' $arm64ECDefined $xml $xslt)
     & $w "{`$IF Defined(WIN64) or Defined(LINUX64)}"
     & $w "initialization"
     & $w "  LX2Lib.StaticBinder := BindLibXml2;"
@@ -646,6 +817,13 @@ function Write-StaticUnit($Symbols) {
     else {
         $diff = @(Compare-Object @($unbound | Sort-Object) @($unboundLinux | Sort-Object) | ForEach-Object { "$($_.InputObject) $($_.SideIndicator)" })
         if ($diff) { Write-Host "  bound differently on Win64 (<=) and Linux64 (=>): $($diff -join ', ')" -ForegroundColor Yellow }
+    }
+    if (-not $arm64ECDefined.Count) {
+        Write-Host "  no WinARM64EC ${LinuxArchiveName}: the Arm64EC part of the unit binds nothing" -ForegroundColor Yellow
+    }
+    else {
+        $diff = @(Compare-Object @($unbound | Sort-Object) @($unboundArm64EC | Sort-Object) | ForEach-Object { "$($_.InputObject) $($_.SideIndicator)" })
+        if ($diff) { Write-Host "  bound differently on Win64 (<=) and WinARM64EC (=>): $($diff -join ', ')" -ForegroundColor Yellow }
     }
 }
 
@@ -673,6 +851,16 @@ if (-not $SkipBuild) {
         $saved = $Compiler; $Compiler = $Bcc
         try { Build-Linux64 } finally { $Compiler = $saved }
     }
+    if ($Platforms -contains 'WinARM64EC') {
+        if (Test-Path $Arm64ECRuntime) {
+            Write-Host '== compile WinARM64EC (bcc64x.exe) ==' -ForegroundColor Cyan
+            $saved = $Compiler; $Compiler = $Bcc
+            try { Build-WinARM64EC } finally { $Compiler = $saved }
+        }
+        else {
+            Write-Host "== WinARM64EC skipped: the platform is not installed (no $Arm64ECRuntime) ==" -ForegroundColor Yellow
+        }
+    }
 }
 Write-Host '== invariants ==' -ForegroundColor Cyan
 $symbols = Assert-ObjectInvariants
@@ -692,7 +880,7 @@ if ($Test -and ($Platforms -contains 'Linux64')) {
                  (Get-LinuxGccDir $sdk), (Join-Path $sdk 'lib64'), $LibLinux) -join ';'
     $argList = @('-B', '-Q', "-E$out", "-N0$out", '-NSSystem;Posix', "-U$LX2Src", ('-U' + (Join-Path $StudioShort 'lib\linux64\release')),
                  "--syslibroot:$sdk", "--libpath:$libPath", '-$O+', (Join-Path $Root 'Tests\LX2StaticSmoke.dpr'))
-    $res = & (Join-Path $StudioRoot 'bin\dcclinux64.exe') @argList 2>&1
+    $res = Invoke-NativeLines { & (Join-Path $StudioRoot 'bin\dcclinux64.exe') @argList }
     if ($LASTEXITCODE -ne 0) { throw "dcclinux64 exited with code $LASTEXITCODE`n$($res -join "`n")" }
     if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
         $wslPath = (& wsl.exe wslpath -u ((Join-Path $out 'LX2StaticSmoke') -replace '\\', '/')).Trim()
@@ -710,10 +898,23 @@ if ($Test -and ($Platforms -contains 'Win64')) {
     New-Item -ItemType Directory -Force $out | Out-Null
     $argList = @('-B', '-Q', "-E$out", "-N0$out", '-NSSystem;Winapi', "-U$LX2Src", ('-U' + (Join-Path $StudioShort 'lib\win64\release')),
                  '-$O+', (Join-Path $Root 'Tests\LX2StaticSmoke.dpr'))
-    $res = & (Join-Path $StudioRoot 'bin\dcc64.exe') @argList 2>&1
+    $res = Invoke-NativeLines { & (Join-Path $StudioRoot 'bin\dcc64.exe') @argList }
     if ($LASTEXITCODE -ne 0) { throw "dcc64 exited with code $LASTEXITCODE`n$($res -join "`n")" }
     & (Join-Path $out 'LX2StaticSmoke.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Smoke test failed' }
+}
+
+if ($Test -and ($Platforms -contains 'WinARM64EC') -and (Test-Path $Arm64ECArchive)) {
+    Write-Host '== test WinARM64EC: compiled and linked, not run ==' -ForegroundColor Cyan
+    $out = Join-Path $Root 'Tests\WinARM64EC'
+    New-Item -ItemType Directory -Force $out | Out-Null
+    # dccarm64ec splits the paths it passes to the linker at spaces: the library path goes short.
+    $libShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($LibArm64EC).ShortPath
+    $argList = @('-B', '-Q', "-E$out", "-N0$out", '-NSSystem;Winapi', "-U$LX2Src", ('-U' + (Join-Path $StudioShort 'lib\winarm64ec\release')),
+                 "--libpath:$libShort", '-$O+', (Join-Path $Root 'Tests\LX2StaticSmoke.dpr'))
+    $res = Invoke-NativeLines { & (Join-Path $StudioRoot 'bin64\dccarm64ec.exe') @argList }
+    if ($LASTEXITCODE -ne 0) { throw "dccarm64ec exited with code $LASTEXITCODE`n$($res -join "`n")" }
+    if (-not (Test-Path (Join-Path $out 'LX2StaticSmoke.exe'))) { throw 'WinARM64EC smoke test is not linked' }
 }
 
 Write-Host 'Done.' -ForegroundColor Green

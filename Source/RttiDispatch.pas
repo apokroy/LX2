@@ -269,21 +269,67 @@ type
 resourcestring
   SVarNotObject = 'Variant does not reference an dispatch object';
   SNoMethod = 'Method ''%s'' not supported by dispatch object';
+  SNoInterface = 'The object passed does not support %s';
 
 implementation
 
 uses
   System.AnsiStrings;
 
+// Text for a single-byte string parameter, encoded in the code page its type declares:
+// UTF8String gets UTF-8, AnsiString(1251) gets 1251, AnsiString and RawByteString the
+// platform page. Encoding straight into the parameter's page keeps the characters the
+// platform page has no place for; the value carries the parameter's own type, so
+// TRttiMethod.Invoke passes it as is and takes it for a var parameter too.
+function AnsiValue(const S: string; const Typ: TRttiType): TValue;
+var
+  Raw: RawByteString;
+  CodePage: Word;
+begin
+  CodePage := TRttiAnsiStringType(Typ).CodePage;
+  if CodePage = $FFFF then
+    CodePage := 0;
+  SetAnsiString(@Raw, PWideChar(S), Length(S), CodePage);
+  TValue.Make(@Raw, Typ.Handle, Result);
+end;
+
+// An object reaches a late-bound method as IDispatch or IUnknown, while the parameter
+// declares the interface it takes. TValue.Cast converts interfaces only along the declared
+// ancestry, and IDispatch is no ancestor of IXMLNode, so the object itself is asked for the
+// parameter's interface.
+function InterfaceValue(const Intf: IInterface; const Typ: TRttiInterfaceType): TValue;
+var
+  Obj: IInterface;
+begin
+  if Intf = nil then
+    TValue.Make(nil, Typ.Handle, Result)
+  else if Supports(Intf, Typ.GUID, Obj) then
+    TValue.Make(@Obj, Typ.Handle, Result)
+  else
+    raise EInvalidCast.CreateResFmt(@SNoInterface, [Typ.Name]);
+end;
+
 function ValueFromVariant(const Value: TVarData; const Typ: TRttiType): TValue;
 begin
 //TRttiStringKind = (skShortString, skAnsiString, skWideString, skUnicodeString);
+
+  // A Variant variable passed by reference: the argument is the value it holds
+  if Value.VType = varByRef or varVariant then
+    Exit(ValueFromVariant(PVarData(Value.VPointer)^, Typ));
+
+  if (Typ is TRttiInterfaceType) and (ifHasGuid in TRttiInterfaceType(Typ).IntfFlags) then
+    case Value.VType of
+      varDispatch, varUnknown:
+        Exit(InterfaceValue(IInterface(Value.VUnknown), TRttiInterfaceType(Typ)));
+      varByRef or varDispatch, varByRef or varUnknown:
+        Exit(InterfaceValue(IInterface(PPointer(Value.VPointer)^), TRttiInterfaceType(Typ)));
+    end;
 
   if Typ is TRttiStringType then
   begin
     case TRttiStringType(Typ).StringKind of
       skShortString: Result := TValue.From<ShortString>(ShortString(VarToStr(Variant(Value))));
-      skAnsiString:  Result := TValue.From<AnsiString>(AnsiString(VarToStr(Variant(Value))));
+      skAnsiString:  Result := AnsiValue(VarToStr(Variant(Value)), Typ);
       skWideString:  Result := TValue.From<WideString>(WideString(VarToStr(Variant(Value))));
     else
       Result := TValue.From<string>(VarToStr(Variant(Value)));
@@ -475,6 +521,8 @@ function ArgumentFit(const Arg: TVarData; ParamType: TRttiType): Integer;
 begin
   if ParamType = nil then
     Exit(1);
+  if Arg.VType = varByRef or varVariant then
+    Exit(ArgumentFit(PVarData(Arg.VPointer)^, ParamType));
 
   var IsDateTime := ParamType.Handle = TypeInfo(TDateTime);
   var IsBoolean := ParamType.Handle = TypeInfo(Boolean);
@@ -679,8 +727,18 @@ begin
   if Res <> nil then
     Res^ := VariantFromValue(Value);
 
+  // Only a var or out parameter gives a value back. The other arguments stay as they came: a
+  // by-value one may hold a reference the caller releases itself, a Variant passed by
+  // reference points at the caller's variable and gets the value there.
   for var I := 0 to DispParams.cArgs - 1 do
-    Variant(TVarData(DispParams.rgvarg[I])) := Args[DispParams.cArgs - I - 1].AsVariant;
+    if [pfVar, pfOut] * Pars[I].Flags <> [] then
+    begin
+      var Arg := PVarData(@DispParams.rgvarg[DispParams.cArgs - I - 1]);
+      if Arg.VType = varByRef or varVariant then
+        PVariant(Arg.VPointer)^ := Args[I].AsVariant
+      else
+        Variant(Arg^) := Args[I].AsVariant;
+    end;
 
   Result := S_OK;
 end;
@@ -762,8 +820,12 @@ begin
   begin
     if Pointer(Strings[I].Wide) = nil then
       Break;
+    // The caller's variable gets its text back in the code page it came with: a UTF8String
+    // passed by reference stays UTF-8, not the platform page. An empty variable reports the
+    // platform page, and that is what it gets.
     if Strings[I].Ansi <> nil then
-      Strings[I].Ansi^ := AnsiString(Strings[I].Wide)
+      SetAnsiString(Strings[I].Ansi, PWideChar(Strings[I].Wide), Length(Strings[I].Wide),
+        StringCodePage(Strings[I].Ansi^))
     else if Strings[I].Unicode <> nil then
       Strings[I].Unicode^ := UnicodeString(Strings[I].Wide)
   end;

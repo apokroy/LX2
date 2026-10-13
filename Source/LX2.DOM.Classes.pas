@@ -493,7 +493,7 @@ type
   /// The records belong to the libxml2 document of the subtree: its document object keeps them
   /// by top node, so that a wrapper created in the subtree finds its record, and each record
   /// holds a reference on that object, as a wrapper does. A node moved to another document
-  /// leaves its record (<see cref="Forget"/>).
+  /// leaves its record (<see cref="TXMLDetachedTree.Forget"/>).
   /// </para>
   /// </remarks>
   TXMLDetachedTree = class
