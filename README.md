@@ -29,6 +29,7 @@ Bundled versions: libxml2 2.15.4, libxslt 1.1.45.
 - [Static linking (Windows x64)](#static-linking-windows-x64)
 - [Loading a shared library](#loading-a-shared-library)
 - [Strings and encodings](#strings-and-encodings)
+- [External entities and DTDs](#external-entities-and-dtds)
 - [LX2.Types](#lx2types)
 - [LX2.Helpers](#lx2helpers)
 - [LX2.DOM](#lx2dom)
@@ -240,6 +241,18 @@ LX2 cannot use, so deploy the bundled `.so` files with the application.
 - `TXmlParserOptions` mirrors `XML_PARSE_*` one to one; `DefaultParserOptions` enables
   entity substitution, DTD attribute defaults, big lines and huge documents.
 
+## External entities and DTDs
+
+LX2 never loads external entities or the external DTD subset, and no option turns loading
+on. `XmlParserOptions` adds `XML_PARSE_NO_XXE` to every set, so `xmlParseNoXXE` is always
+on and `xmlParseExternalDTD` reads nothing. Entities the document declares itself are still
+expanded with `xmlParseSubstituteEntity`. Attribute defaults and validation
+(`xmlParseDTDAttrs`, `xmlParseDTDValidation`) use the internal subset only. The same holds for
+the DOM document (`ResolveExternals` is kept for MSXML compatibility and changes nothing),
+the SAX parser, schema compilation, the documents XSLT loads (`xsl:import`, `xsl:include`,
+`document()`) and DTD validation, which takes the external subset only from a
+`ResourceLoader` the caller passes.
+
 ## LX2.Types
 
 Everything the upper layers share:
@@ -330,8 +343,9 @@ var Bytes := Doc.ToBytes('UTF-16');
 var Canonical := Doc.Canonicalize(TXmlC14NMode.xmlC14NExclusive);   // also CanonicalizeTo(file/stream)
 ```
 
-Validation against XML Schema uses `Doc.Validate(ErrorHandler, ResourceLoader)` and
-`Doc.ValidateNode(Node)`.
+Validation against the DTD uses `Doc.Validate(ErrorHandler, ResourceLoader)` and
+`Doc.ValidateNode(Node)`. The external DTD subset comes only from `ResourceLoader`; without
+one it is not read. XML Schema validation goes through `IXMLSchemaCollection` (LX2.DOM).
 
 ## LX2.DOM
 

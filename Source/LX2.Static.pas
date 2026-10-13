@@ -2088,7 +2088,9 @@ function xsltSaveResultTo(buf: xmlOutputBufferPtr; result: xmlDocPtr; style: xsl
 function xsltSaveResultToFd(fd: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external;
 function xsltSaveResultToFilename(URI: PUTF8Char; result: xmlDocPtr; style: xsltStylesheetPtr; compression: Integer): Integer; cdecl; external;
 function xsltSaveResultToString(var doc_txt_ptr: xmlCharPtr; var doc_txt_len: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external;
+function xsltSetCtxtParseOptions(ctxt: xsltTransformContextPtr; options: Integer): Integer; cdecl; external;
 procedure xsltSetGenericErrorFunc(ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external;
+procedure xsltSetLoaderFunc(f: xsltDocLoaderFunc); cdecl; external;
 procedure xsltSetTransformErrorFunc(ctxt: xsltTransformContextPtr; ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external;
 procedure xsltSetXIncludeDefault(xinclude: Integer); cdecl; external;
 
@@ -2111,7 +2113,9 @@ begin
   libxslt.API.xsltSaveResultToFd := @xsltSaveResultToFd;
   libxslt.API.xsltSaveResultToFilename := @xsltSaveResultToFilename;
   libxslt.API.xsltSaveResultToString := @xsltSaveResultToString;
+  libxslt.API.xsltSetCtxtParseOptions := @xsltSetCtxtParseOptions;
   libxslt.API.xsltSetGenericErrorFunc := @xsltSetGenericErrorFunc;
+  libxslt.API.xsltSetLoaderFunc := @xsltSetLoaderFunc;
   libxslt.API.xsltSetTransformErrorFunc := @xsltSetTransformErrorFunc;
   libxslt.API.xsltSetXIncludeDefault := @xsltSetXIncludeDefault;
 end;
@@ -3534,7 +3538,9 @@ function xsltSaveResultTo(buf: xmlOutputBufferPtr; result: xmlDocPtr; style: xsl
 function xsltSaveResultToFd(fd: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external NativeLib name 'xsltSaveResultToFd';
 function xsltSaveResultToFilename(URI: PUTF8Char; result: xmlDocPtr; style: xsltStylesheetPtr; compression: Integer): Integer; cdecl; external NativeLib name 'xsltSaveResultToFilename';
 function xsltSaveResultToString(var doc_txt_ptr: xmlCharPtr; var doc_txt_len: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external NativeLib name 'xsltSaveResultToString';
+function xsltSetCtxtParseOptions(ctxt: xsltTransformContextPtr; options: Integer): Integer; cdecl; external NativeLib name 'xsltSetCtxtParseOptions';
 procedure xsltSetGenericErrorFunc(ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external NativeLib name 'xsltSetGenericErrorFunc';
+procedure xsltSetLoaderFunc(f: xsltDocLoaderFunc); cdecl; external NativeLib name 'xsltSetLoaderFunc';
 procedure xsltSetTransformErrorFunc(ctxt: xsltTransformContextPtr; ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external NativeLib name 'xsltSetTransformErrorFunc';
 procedure xsltSetXIncludeDefault(xinclude: Integer); cdecl; external NativeLib name 'xsltSetXIncludeDefault';
 
@@ -3557,7 +3563,9 @@ begin
   libxslt.API.xsltSaveResultToFd := @xsltSaveResultToFd;
   libxslt.API.xsltSaveResultToFilename := @xsltSaveResultToFilename;
   libxslt.API.xsltSaveResultToString := @xsltSaveResultToString;
+  libxslt.API.xsltSetCtxtParseOptions := @xsltSetCtxtParseOptions;
   libxslt.API.xsltSetGenericErrorFunc := @xsltSetGenericErrorFunc;
+  libxslt.API.xsltSetLoaderFunc := @xsltSetLoaderFunc;
   libxslt.API.xsltSetTransformErrorFunc := @xsltSetTransformErrorFunc;
   libxslt.API.xsltSetXIncludeDefault := @xsltSetXIncludeDefault;
 end;
@@ -4980,7 +4988,9 @@ function xsltSaveResultTo(buf: xmlOutputBufferPtr; result: xmlDocPtr; style: xsl
 function xsltSaveResultToFd(fd: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external NativeLib name 'xsltSaveResultToFd';
 function xsltSaveResultToFilename(URI: PUTF8Char; result: xmlDocPtr; style: xsltStylesheetPtr; compression: Integer): Integer; cdecl; external NativeLib name 'xsltSaveResultToFilename';
 function xsltSaveResultToString(var doc_txt_ptr: xmlCharPtr; var doc_txt_len: Integer; result: xmlDocPtr; style: xsltStylesheetPtr): Integer; cdecl; external NativeLib name 'xsltSaveResultToString';
+function xsltSetCtxtParseOptions(ctxt: xsltTransformContextPtr; options: Integer): Integer; cdecl; external NativeLib name 'xsltSetCtxtParseOptions';
 procedure xsltSetGenericErrorFunc(ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external NativeLib name 'xsltSetGenericErrorFunc';
+procedure xsltSetLoaderFunc(f: xsltDocLoaderFunc); cdecl; external NativeLib name 'xsltSetLoaderFunc';
 procedure xsltSetTransformErrorFunc(ctxt: xsltTransformContextPtr; ctx: Pointer; handler: xmlGenericErrorFunc); cdecl; external NativeLib name 'xsltSetTransformErrorFunc';
 procedure xsltSetXIncludeDefault(xinclude: Integer); cdecl; external NativeLib name 'xsltSetXIncludeDefault';
 
@@ -5003,7 +5013,9 @@ begin
   libxslt.API.xsltSaveResultToFd := @xsltSaveResultToFd;
   libxslt.API.xsltSaveResultToFilename := @xsltSaveResultToFilename;
   libxslt.API.xsltSaveResultToString := @xsltSaveResultToString;
+  libxslt.API.xsltSetCtxtParseOptions := @xsltSetCtxtParseOptions;
   libxslt.API.xsltSetGenericErrorFunc := @xsltSetGenericErrorFunc;
+  libxslt.API.xsltSetLoaderFunc := @xsltSetLoaderFunc;
   libxslt.API.xsltSetTransformErrorFunc := @xsltSetTransformErrorFunc;
   libxslt.API.xsltSetXIncludeDefault := @xsltSetXIncludeDefault;
 end;

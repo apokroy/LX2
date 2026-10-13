@@ -1,5 +1,38 @@
 ﻿# Changelog
 
+## Unreleased
+
+### Security
+
+- External entities and the external DTD subset are never loaded, and no option, property or
+  parameter turns loading on. `XmlParserOptions` adds `XML_PARSE_NO_XXE` to every set.
+  `DefaultParserOptions` substitutes entities (`XML_PARSE_NOENT`), which without that flag also
+  loads external ones: a document could make `xmlDoc.Create`, `CreateFromFile`, the DOM `Load*`
+  methods and the SAX parser read any file or URL its entities named, the content ending up in
+  the parsed tree. Entities declared in the document itself are still expanded.
+  `xmlParseNoXXE` stays in `TXmlParserOption` and is always on; `xmlParseExternalDTD` reads
+  nothing; `xmlParseDTDAttrs` and `xmlParseDTDValidation` use the internal subset only.
+  - `IXMLDocument.ResolveExternals` is kept for MSXML compatibility and changes nothing. Set to
+    True, it used to drop `XML_PARSE_NO_XXE` and add `XML_PARSE_DTDLOAD` for every load after
+    the first.
+  - XSLT: libxslt parses the modules of `xsl:import` and `xsl:include` and the documents of
+    `document()` itself, with entity substitution and the external DTD. `XSLTLib.Load` now
+    installs a document loader that adds `XML_PARSE_NO_XXE`, and a transformation passes it to
+    the documents XInclude reads.
+  - `IXMLSchemaCollection`: libxml2 parses the schema documents of a collection again with
+    entity substitution of its own. While a collection compiles, the external entity loader
+    serves only the collection's documents, so an external entity of a schema document is not
+    read.
+  - DTD validation (`xmlDocHelper.Validate`, `IXMLDocument.Validate`) no longer reads the
+    external subset the document names. It comes only from the `ResourceLoader` passed to
+    `xmlDocHelper.Validate`; without one, a document that needs its external subset fails
+    validation.
+
+### Added
+
+- `libxslt.API`: `xsltSetLoaderFunc`, `xsltSetCtxtParseOptions` and the `xsltDocLoaderFunc` and
+  `xsltLoadType` types.
+
 ## v1.3.0 — 2026-10-13
 
 ### Added

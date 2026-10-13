@@ -655,6 +655,12 @@ type
     /// </summary>
     function  Transform(const stylesheet: xmlDocPtr; out S: RawByteString; errorHandler: xsltErrorHandler = nil): Boolean; overload;
     function  Transform(const stylesheet: xmlDocPtr; Stream: TStream; errorHandler: xsltErrorHandler = nil): Boolean; overload;
+    /// <summary>
+    /// Validates the document against its DTD (<c>xmlCtxtValidateDocument</c>). The external
+    /// subset named by the document type declaration, and anything it refers to, is
+    /// requested from <paramref name="ResourceLoader"/> only: without a loader nothing is
+    /// read, and a document that needs the external subset fails validation.
+    /// </summary>
     function  Validate(ErrorHandler: xmlDocErrorHandler = nil; ResourceLoader: xmlResourceLoader = nil): Boolean;
     function  ValidateNode(Node: xmlNodePtr; ErrorHandler: xmlDocErrorHandler = nil): Boolean;
     /// <summary>
@@ -753,6 +759,14 @@ begin
   except
     Result := Ord(XML_ERR_INTERNAL_ERROR);
   end;
+end;
+
+/// The resource loader of xmlDocHelper.Validate when the caller passes none: the external
+/// DTD subset is not read, as no parse of LX2 reads it.
+function RefuseResource(ctxt: Pointer; const url, publicId: xmlCharPtr; &type: xmlResourceType; flags: Integer; var output: xmlParserInputPtr): Integer; cdecl;
+begin
+  output := nil;
+  Result := Ord(XML_IO_EACCES);
 end;
 
 function IsUtf8EncodingName(const Name: string): Boolean;
@@ -971,6 +985,13 @@ begin
     // evaluated at the document node. libxslt reads it from ctxt.node only with
     // Native\Patches\020-xslt-user-start-node.patch, a stock library starts at the document.
     ctxt.node := node;
+    // document() hands the options of the context to the loader, which adds
+    // XML_PARSE_NO_XXE itself, and XInclude (xsltSetXIncludeDefault, with a library built
+    // with XInclude) parses the documents it includes with them directly: they get
+    // XML_PARSE_NO_XXE here. xsltSetCtxtParseOptions returns the options it replaces, the
+    // XInclude switch among them.
+    var options := xsltSetCtxtParseOptions(ctxt, 0);
+    xsltSetCtxtParseOptions(ctxt, options or XML_PARSE_NO_XXE);
     if Assigned(errorHandler) then
     begin
       ecb.Handler := errorHandler;
@@ -2560,11 +2581,15 @@ begin
     xmlCtxtSetErrorHandler(ctx, xmlDocErrorCallback, @ecb);
   end;
 
+  // Every resource the validation needs goes through the loader of the context. Without
+  // one, libxml2 would read the external subset from wherever the document points.
   if Assigned(ResourceLoader) then
   begin
     rcb.Handler := ResourceLoader;
     xmlCtxtSetResourceLoader(ctx, xmlResourceLoaderCallback, @rcb);
-  end;
+  end
+  else
+    xmlCtxtSetResourceLoader(ctx, RefuseResource, nil);
 
   Result := xmlCtxtValidateDocument(ctx, @Self) = 1;
   xmlFreeParserCtxt(ctx);

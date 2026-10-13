@@ -256,6 +256,49 @@ type
     procedure TestIncludeOfAnAddedFileIsNotReadAgain;
   end;
 
+  // External entities and the external DTD subset are never loaded, whatever the parser
+  // options and the MSXML properties say. Every way into libxml2 gets a document whose
+  // entity or DTD points at a file in a temporary directory; the file holds a marker that
+  // shows up in the result only if the file was read.
+  [TestFixture]
+  TXMLExternalEntityTest = class
+  private
+    FDir: string;
+    FSecret: string;
+    FSecretUri: string;
+    FDtdUri: string;
+    function  SaveFile(const Name, Content: string): string;
+    function  XxeXml: string;
+    procedure AssertNotLoaded(const Output, Context: string);
+  public
+    [SetupFixture]
+    procedure Setup;
+    [TearDownFixture]
+    procedure TearDown;
+    [Test]
+    procedure TestCreateDoesNotLoadExternalEntities;
+    [Test]
+    procedure TestCreateFromFileAndStreamDoNotLoadExternalEntities;
+    [Test]
+    procedure TestParameterEntityIsNotLoaded;
+    [Test]
+    procedure TestExternalDTDIsNotLoaded;
+    [Test]
+    procedure TestInternalEntitiesAreExpanded;
+    [Test]
+    procedure TestDocumentLoadsIgnoreResolveExternals;
+    [Test]
+    procedure TestValidateDoesNotLoadTheExternalDTD;
+    [Test]
+    procedure TestSAXDoesNotLoadExternalEntities;
+    [Test]
+    procedure TestXSLTDocumentFunctionDoesNotLoadExternalEntities;
+    [Test]
+    procedure TestXSLTImportDoesNotLoadExternalEntities;
+    [Test]
+    procedure TestSchemaCompilationDoesNotLoadExternalEntities;
+  end;
+
 implementation
 
 uses
@@ -4008,9 +4051,383 @@ begin
   end;
 end;
 
+{ TXMLExternalEntityTest }
+
+type
+  // The character data a SAX parse reports, in one string.
+  TTextCollector = class(TSAXCustomParser)
+  protected
+    procedure DoCharacters(const Chars: string); override;
+  public
+    Text: string;
+  end;
+
+  // Serves one DTD from memory to xmlDocHelper.Validate, whatever address is asked for.
+  TDtdLoader = class
+    Dtd: RawByteString;
+    Requested: Integer;
+    function Load(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer;
+  end;
+
+procedure TTextCollector.DoCharacters(const Chars: string);
+begin
+  Text := Text + Chars;
+end;
+
+function TDtdLoader.Load(const url, publicId: xmlCharPtr; resType: xmlResourceType; Flags: Integer; var output: xmlParserInputPtr): Integer;
+begin
+  Inc(Requested);
+  // Flags 0: libxml2 copies the buffer.
+  output := xmlNewInputFromMemory(url, Pointer(Dtd), Length(Dtd), xmlParserInputFlags(0));
+  if output = nil then
+    Result := Ord(XML_ERR_NO_MEMORY)
+  else
+    Result := Ord(XML_ERR_OK);
+end;
+
+// The file: URI of a local path, in the form libxml2 opens.
+function FileUri(const Path: string): string;
+begin
+{$IFDEF MSWINDOWS}
+  Result := 'file:///' + Path.Replace('\', '/');
+{$ELSE}
+  Result := 'file://' + Path;
+{$ENDIF}
+end;
+
+// Option sets that ask for entity substitution, the external subset and DTD validation,
+// with and without the member named after XML_PARSE_NO_XXE.
+function LoadingOptionSets: TArray<TXmlParserOptions>;
+begin
+  Result := TArray<TXmlParserOptions>.Create(
+    DefaultParserOptions,
+    DefaultParserOptions - [xmlParseNoXXE],
+    DefaultParserOptions + [xmlParseExternalDTD, xmlParseDTDValidation],
+    [xmlParseSubstituteEntity, xmlParseExternalDTD, xmlParseDTDAttrs]);
+end;
+
+procedure TXMLExternalEntityTest.Setup;
+begin
+  LX2Lib.Initialize;
+  var guid := TGUID.NewGuid.ToString.Trim(['{', '}']);
+  FDir := TPath.Combine(TPath.GetTempPath, 'LX2-xxe-' + guid);
+  TDirectory.CreateDirectory(FDir);
+  FSecret := 'LX2-SECRET-' + guid;
+  FSecretUri := FileUri(SaveFile('secret.txt', FSecret));
+  // Read, the DTD would make <r/> valid, give it an attribute and declare an entity, all
+  // carrying the marker.
+  FDtdUri := FileUri(SaveFile('external.dtd',
+    '<!ELEMENT r ANY><!ATTLIST r a CDATA "' + FSecret + '"><!ENTITY leak "' + FSecret + '">'));
+end;
+
+procedure TXMLExternalEntityTest.TearDown;
+begin
+  if FDir <> '' then
+    TDirectory.Delete(FDir, True);
+end;
+
+function TXMLExternalEntityTest.SaveFile(const Name, Content: string): string;
+begin
+  Result := TPath.Combine(FDir, Name);
+  TFile.WriteAllBytes(Result, TEncoding.UTF8.GetBytes(Content));
+end;
+
+// A general entity of the internal subset whose replacement text is the marker file.
+function TXMLExternalEntityTest.XxeXml: string;
+begin
+  Result := '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x SYSTEM "' + FSecretUri + '">]><r>[&x;]</r>';
+end;
+
+procedure TXMLExternalEntityTest.AssertNotLoaded(const Output, Context: string);
+begin
+  Assert.IsFalse(Output.Contains(FSecret), Context + ': the external file was read: ' + Output);
+end;
+
+procedure TXMLExternalEntityTest.TestCreateDoesNotLoadExternalEntities;
+begin
+  var sets := LoadingOptionSets;
+  for var I := 0 to High(sets) do
+  begin
+    var context := 'option set ' + I.ToString;
+    var doc := xmlDoc.Create(XxeXml, sets[I]);
+    Assert.AreNotEqual<Pointer>(nil, doc, context);
+    try
+      AssertNotLoaded(UTF8ToString(doc.Xml), context);
+    finally
+      xmlFreeDoc(doc);
+    end;
+  end;
+end;
+
+procedure TXMLExternalEntityTest.TestCreateFromFileAndStreamDoNotLoadExternalEntities;
+begin
+  var path := SaveFile('xxe.xml', XxeXml);
+  var sets := LoadingOptionSets;
+  for var I := 0 to High(sets) do
+  begin
+    var context := 'option set ' + I.ToString;
+    var doc := xmlDoc.CreateFromFile(path, sets[I]);
+    Assert.AreNotEqual<Pointer>(nil, doc, context + ', file');
+    try
+      AssertNotLoaded(UTF8ToString(doc.Xml), context + ', file');
+    finally
+      xmlFreeDoc(doc);
+    end;
+
+    var stream := TBytesStream.Create(TEncoding.UTF8.GetBytes(XxeXml));
+    try
+      doc := xmlDoc.Create(stream, sets[I], '');
+      Assert.AreNotEqual<Pointer>(nil, doc, context + ', stream');
+      try
+        AssertNotLoaded(UTF8ToString(doc.Xml), context + ', stream');
+      finally
+        xmlFreeDoc(doc);
+      end;
+    finally
+      stream.Free;
+    end;
+  end;
+end;
+
+// A parameter entity of the internal subset that pulls in the external DTD: the way out
+// when general entities are refused.
+procedure TXMLExternalEntityTest.TestParameterEntityIsNotLoaded;
+begin
+  var xml := '<!DOCTYPE r [<!ENTITY % ext SYSTEM "' + FDtdUri + '"> %ext;]><r>[&leak;]</r>';
+  var sets := LoadingOptionSets;
+  for var I := 0 to High(sets) do
+  begin
+    var context := 'option set ' + I.ToString;
+    var doc := xmlDoc.Create(xml, sets[I]);
+    Assert.AreNotEqual<Pointer>(nil, doc, context);
+    try
+      AssertNotLoaded(UTF8ToString(doc.Xml), context);
+    finally
+      xmlFreeDoc(doc);
+    end;
+  end;
+end;
+
+procedure TXMLExternalEntityTest.TestExternalDTDIsNotLoaded;
+begin
+  var xml := '<!DOCTYPE r SYSTEM "' + FDtdUri + '"><r>[&leak;]</r>';
+  var sets := LoadingOptionSets;
+  for var I := 0 to High(sets) do
+  begin
+    var context := 'option set ' + I.ToString;
+    var doc := xmlDoc.Create(xml, sets[I]);
+    Assert.AreNotEqual<Pointer>(nil, doc, context);
+    try
+      AssertNotLoaded(UTF8ToString(doc.Xml), context);
+    finally
+      xmlFreeDoc(doc);
+    end;
+  end;
+end;
+
+// Entities declared in the document itself are still expanded, nested ones included.
+procedure TXMLExternalEntityTest.TestInternalEntitiesAreExpanded;
+const
+  Xml = '<!DOCTYPE r [<!ENTITY e "inner text"><!ENTITY m "<i>&e;</i>">]><r>&e;|&m;</r>';
+  Expected = 'inner text|inner text';
+begin
+  var doc := xmlDoc.Create(Xml, DefaultParserOptions);
+  Assert.AreNotEqual<Pointer>(nil, doc);
+  try
+    Assert.AreEqual(Expected, UTF8ToString(doc.documentElement.Text), 'helpers');
+    Assert.AreEqual<RawByteString>('<r>inner text|<i>inner text</i></r>', doc.documentElement.Xml);
+  finally
+    xmlFreeDoc(doc);
+  end;
+
+  var dom := CoCreateXMLDocument;
+  Assert.IsTrue(dom.LoadXML(Xml));
+  Assert.AreEqual(Expected, dom.DocumentElement.Text, 'DOM');
+
+  var parser := TTextCollector.Create;
+  try
+    parser.PreserveWhitespaces := True;
+    Assert.IsTrue(parser.Parse(UTF8Encode(Xml)));
+    Assert.AreEqual(Expected, parser.Text, 'SAX');
+  finally
+    parser.Free;
+  end;
+end;
+
+// ResolveExternals is kept for MSXML compatibility and loads nothing. Every load runs
+// twice: the first one changes the parser options the document keeps for the next.
+procedure TXMLExternalEntityTest.TestDocumentLoadsIgnoreResolveExternals;
+begin
+  var path := SaveFile('xxe.xml', XxeXml);
+  var bytes := TEncoding.UTF8.GetBytes(XxeXml);
+  for var resolve in [False, True] do
+  begin
+    var doc := CoCreateXMLDocument;
+    doc.ResolveExternals := resolve;
+    for var pass := 1 to 2 do
+    begin
+      var context := Format('ResolveExternals=%s, pass %d', [BoolToStr(resolve, True), pass]);
+
+      Assert.IsTrue(doc.LoadXML(XxeXml), context + ', LoadXML');
+      AssertNotLoaded(doc.Xml, context + ', LoadXML');
+
+      Assert.IsTrue(doc.Load(path), context + ', Load');
+      AssertNotLoaded(doc.Xml, context + ', Load');
+
+      Assert.IsTrue(doc.LoadFromBytes(bytes), context + ', LoadFromBytes');
+      AssertNotLoaded(doc.Xml, context + ', LoadFromBytes');
+
+      Assert.IsTrue(doc.LoadFromMemory(Pointer(bytes), Length(bytes)), context + ', LoadFromMemory');
+      AssertNotLoaded(doc.Xml, context + ', LoadFromMemory');
+
+      var stream := TBytesStream.Create(bytes);
+      try
+        Assert.IsTrue(doc.LoadFromStream(stream, ''), context + ', LoadFromStream');
+        AssertNotLoaded(doc.Xml, context + ', LoadFromStream');
+      finally
+        stream.Free;
+      end;
+    end;
+  end;
+end;
+
+// The document is valid only against its external DTD. Validation does not read it: the
+// DTD reaches the validator only from a resource loader the caller passes.
+procedure TXMLExternalEntityTest.TestValidateDoesNotLoadTheExternalDTD;
+begin
+  var xml := '<!DOCTYPE r SYSTEM "' + FDtdUri + '"><r/>';
+
+  var dom := CoCreateXMLDocument;
+  dom.ResolveExternals := True;
+  Assert.IsTrue(dom.LoadXML(xml));
+  Assert.AreNotEqual<Integer>(0, dom.Validate.ErrorCode, 'DOM: the external DTD was read');
+
+  var doc := xmlDoc.Create(xml, DefaultParserOptions);
+  Assert.AreNotEqual<Pointer>(nil, doc);
+  try
+    Assert.IsFalse(doc.Validate, 'helpers: the external DTD was read');
+
+    var loader := TDtdLoader.Create;
+    try
+      loader.Dtd := '<!ELEMENT r EMPTY>';
+      Assert.IsTrue(doc.Validate(nil, loader.Load), 'the DTD of the resource loader');
+      Assert.AreEqual(1, loader.Requested);
+    finally
+      loader.Free;
+    end;
+  finally
+    xmlFreeDoc(doc);
+  end;
+end;
+
+procedure TXMLExternalEntityTest.TestSAXDoesNotLoadExternalEntities;
+begin
+  var path := SaveFile('xxe.xml', XxeXml);
+  var bytes := TEncoding.UTF8.GetBytes(XxeXml);
+  var sets := LoadingOptionSets;
+  for var I := 0 to High(sets) do
+  begin
+    var context := 'option set ' + I.ToString;
+    var parser := TTextCollector.Create;
+    try
+      parser.Options := sets[I];
+
+      parser.Parse(bytes);
+      Assert.IsTrue(parser.Text.Contains('['), context + ', Parse: ' + parser.Text);
+      AssertNotLoaded(parser.Text, context + ', Parse');
+
+      parser.Text := '';
+      parser.ParseFile(path);
+      Assert.IsTrue(parser.Text.Contains('['), context + ', ParseFile: ' + parser.Text);
+      AssertNotLoaded(parser.Text, context + ', ParseFile');
+
+      parser.Text := '';
+      var stream := TBytesStream.Create(bytes);
+      try
+        parser.Parse(stream);
+      finally
+        stream.Free;
+      end;
+      Assert.IsTrue(parser.Text.Contains('['), context + ', stream: ' + parser.Text);
+      AssertNotLoaded(parser.Text, context + ', stream');
+    finally
+      parser.Free;
+    end;
+  end;
+end;
+
+// document() reads the file it names; an external entity inside that file is not read.
+procedure TXMLExternalEntityTest.TestXSLTDocumentFunctionDoesNotLoadExternalEntities;
+var
+  S: string;
+begin
+  var target := FileUri(SaveFile('target.xml',
+    '<!DOCTYPE r [<!ENTITY x SYSTEM "' + FSecretUri + '">]><r>target[&x;]</r>'));
+  var doc := xmlDoc.Create('<r/>', []);
+  var style := xmlDoc.Create(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '"><xsl:output method="text"/>' +
+    '<xsl:template match="/"><xsl:value-of select="document(''' + target + ''')"/></xsl:template>' +
+    '</xsl:stylesheet>', []);
+  try
+    Assert.IsTrue(doc.Transform(style, S));
+    Assert.IsTrue(S.Contains('target['), 'document() reads its file: ' + S);
+    AssertNotLoaded(S, 'document()');
+  finally
+    xmlFreeDoc(style);
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// xsl:import reads the module it names; an external entity inside the module is not read.
+procedure TXMLExternalEntityTest.TestXSLTImportDoesNotLoadExternalEntities;
+var
+  S: string;
+begin
+  var module := FileUri(SaveFile('module.xsl',
+    '<!DOCTYPE xsl:stylesheet [<!ENTITY x SYSTEM "' + FSecretUri + '">]>' +
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:template match="/"><out>module[&x;]</out></xsl:template></xsl:stylesheet>'));
+  var doc := xmlDoc.Create('<r/>', []);
+  var style := xmlDoc.Create(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:import href="' + module + '"/><xsl:output method="text"/></xsl:stylesheet>', []);
+  try
+    Assert.IsTrue(doc.Transform(style, S));
+    Assert.IsTrue(S.Contains('module['), 'the imported module applies: ' + S);
+    AssertNotLoaded(S, 'xsl:import');
+  finally
+    xmlFreeDoc(style);
+    xmlFreeDoc(doc);
+  end;
+end;
+
+// The collection hands the schema documents to libxml2 serialized, DTD and entity
+// references included, and libxml2 parses them with entity substitution of its own. Read,
+// the entity would declare one more element.
+procedure TXMLExternalEntityTest.TestSchemaCompilationDoesNotLoadExternalEntities;
+begin
+  // The entity is parsed apart from its parent element: it declares the prefix it uses.
+  var part := FileUri(SaveFile('part.xsd', '<xs:element xmlns:xs="' + XsdNs + '" name="leaked" type="xs:int"/>'));
+  var xsd := '<!DOCTYPE xs:schema [<!ENTITY part SYSTEM "' + part + '">]>' +
+    '<xs:schema xmlns:xs="' + XsdNs + '"><xs:element name="e" type="xs:int"/>&part;</xs:schema>';
+  // Without substitution the reference stays in the tree of the schema document.
+  for var options in TArray<TXmlParserOptions>.Create(DefaultParserOptions, DefaultParserOptions - [xmlParseSubstituteEntity]) do
+  begin
+    var schema := CoCreateXMLDocument;
+    Assert.IsTrue(schema.LoadXML(xsd, options));
+    var schemas := CoCreateSchemaCollection;
+    schemas.Add('', schema);
+
+    var valid := InstanceDoc('<e>1</e>');
+    Assert.IsTrue(schemas.Validate(valid), Diagnostics(schemas, valid));
+    Assert.IsFalse(schemas.Validate(InstanceDoc('<leaked>1</leaked>')), 'the external entity of the schema was read');
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TXMLHelpersTest);
   TDUnitX.RegisterTestFixture(TXMLDOMTest);
   TDUnitX.RegisterTestFixture(TXMLSchemaTest);
+  TDUnitX.RegisterTestFixture(TXMLExternalEntityTest);
 
 end.

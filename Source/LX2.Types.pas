@@ -73,10 +73,21 @@ type
   /// intended to be combined into a <see cref="TXmlParserOptions"/> set and
   /// converted to the native integer bitmask via <see cref="XmlParserOptions"/>.
   /// </summary>
+  /// <remarks>
+  /// LX2 never loads external entities or the external DTD subset, and no member of the set
+  /// turns loading on (see <c>xmlParseNoXXE</c>).
+  /// </remarks>
   TXmlParserOption = (
+    /// <summary>Replaces entity references with their text (<c>XML_PARSE_NOENT</c>).
+    /// Only entities declared in the document itself are expanded; a reference to an
+    /// external entity is left unexpanded.</summary>
     xmlParseSubstituteEntity,
+    /// <summary><c>XML_PARSE_DTDLOAD</c>. Loads nothing: the external DTD subset named by
+    /// the document type declaration is never read.</summary>
     xmlParseExternalDTD,
     xmlParseDTDAttrs,
+    /// <summary>Validates against the DTD while parsing (<c>XML_PARSE_DTDVALID</c>). Only
+    /// the internal subset takes part: the external one is never read.</summary>
     xmlParseDTDValidation,
     xmlParseNoErrors,
     xmlParseNoWarnings,
@@ -89,6 +100,9 @@ type
     xmlParseNoBasePrefix,
     xmlParseHuge,
     xmlParseIgnoreEncoding,
+    /// <summary>Always on: <see cref="XmlParserOptions"/> adds <c>XML_PARSE_NO_XXE</c>
+    /// to every set, whether the set holds this member or not. The member stays so that
+    /// code naming it compiles.</summary>
     xmlParseNoXXE,
     xmlParseUnzip,
     xmlParseNoSysCatalog,
@@ -135,10 +149,12 @@ type
 const
   /// <summary>
   /// Reasonable default parser options for general-purpose document loading:
-  /// substitutes entities, loads DTD attribute defaults, relaxes libxml2's
+  /// substitutes the entities the document declares, applies the attribute defaults of
+  /// its internal DTD subset, relaxes libxml2's
   /// line-number/node-size limits (<c>xmlParseBigLines</c>, <c>xmlParseHuge</c>)
   /// to support large real-world documents without spurious errors, and keeps
-  /// short text inside the nodes (<c>xmlParseCompact</c>).
+  /// short text inside the nodes (<c>xmlParseCompact</c>). External entities and the
+  /// external DTD subset are not read (see <see cref="TXmlParserOption"/>).
   /// </summary>
   DefaultParserOptions = [xmlParseSubstituteEntity, xmlParseDTDAttrs, xmlParseBigLines, xmlParseHuge, xmlParseCompact];
 
@@ -555,6 +571,8 @@ function  Utf8toUtf16Count(Input: PUtf8Char): NativeUInt; overload;
 function  Utf8toUtf16CountAndLen(Input: PUtf8Char; out ByteLen: NativeUInt): NativeUInt;
 
 /// <summary>Converts a <see cref="TXmlParserOptions"/> set into libxml2's native <c>XML_PARSE_*</c> integer bitmask.</summary>
+/// <remarks>The mask always holds <c>XML_PARSE_NO_XXE</c>: a parse that takes its options
+/// from here loads neither external entities nor the external DTD subset.</remarks>
 function  XmlParserOptions(Options: TXmlParserOptions): Integer;
 
 /// <summary>Converts a <see cref="TXmlSaveOptions"/> set into libxml2's native <c>XML_SAVE_*</c> integer bitmask.</summary>
@@ -1333,7 +1351,7 @@ const
     XML_PARSE_COMPACT
   );
 begin
-  Result := 0;
+  Result := XML_PARSE_NO_XXE;
   for var Opt := Low(TXmlParserOption) to High(TXmlParserOption) do
     if Opt in Options then
       Result := Result or Values[Opt];

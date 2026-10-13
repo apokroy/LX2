@@ -444,6 +444,19 @@ type
     genSortKey: xsltGenSortKeyFunc;
   end;
 
+  /// <summary>Kind of document a <see cref="xsltDocLoaderFunc"/> is asked for.</summary>
+  xsltLoadType = (
+    XSLT_LOAD_START = 0,
+    /// <summary>A module of <c>xsl:import</c> or <c>xsl:include</c>.</summary>
+    XSLT_LOAD_STYLESHEET = 1,
+    /// <summary>The target of <c>document()</c>.</summary>
+    XSLT_LOAD_DOCUMENT = 2
+  );
+
+  /// <summary>Loads a document libxslt needs beyond those it is given; <c>ctxt</c> is the
+  /// stylesheet or the transformation context, depending on <c>type</c>.</summary>
+  xsltDocLoaderFunc = function(const URI: xmlCharPtr; dict: xmlDictPtr; options: Integer; ctxt: Pointer; &type: xsltLoadType): xmlDocPtr; cdecl;
+
 
 var
   xsltInit                 : procedure; cdecl;
@@ -466,6 +479,8 @@ var
   xsltFreeTransformContext : procedure(ctxt: xsltTransformContextPtr); cdecl;
   xsltApplyStylesheetUser  : function (style: xsltStylesheetPtr; doc: xmlDocPtr; var params: PAnsiChar; output: PAnsiChar; profile: Pointer; userCtxt: xsltTransformContextPtr): xmlDocPtr; cdecl;
   xsltSetTransformErrorFunc: procedure(ctxt: xsltTransformContextPtr; ctx: Pointer; handler: xmlGenericErrorFunc); cdecl;
+  xsltSetLoaderFunc        : procedure(f: xsltDocLoaderFunc); cdecl;
+  xsltSetCtxtParseOptions  : function (ctxt: xsltTransformContextPtr; options: Integer): Integer; cdecl;
 
 type
   XSLTLib = record
@@ -487,6 +502,27 @@ type
   TXLSErrorHandler = procedure(Context: Pointer; const Msg: string);
 
 implementation
+
+/// libxslt loads the modules of xsl:import and xsl:include and the targets of document()
+/// through this function. It does what the default loader of libxslt does, with
+/// XML_PARSE_NO_XXE added to the options: libxslt asks for entity substitution and the
+/// external DTD subset (XSLT_PARSE_OPTIONS), and these documents, like every document LX2
+/// parses, load neither external entities nor the external subset.
+function DocLoader(const URI: xmlCharPtr; dict: xmlDictPtr; options: Integer; ctxt: Pointer; &type: xsltLoadType): xmlDocPtr; cdecl;
+begin
+  Result := nil;
+  var pctxt := xmlNewParserCtxt;
+  if pctxt = nil then
+    Exit;
+  // The document shares the dictionary of the stylesheet or the transformation.
+  if dict <> nil then
+    xmlCtxtSetDict(pctxt, dict);
+  xmlCtxtUseOptions(pctxt, options or XML_PARSE_NO_XXE);
+  var input := xmlLoadExternalEntity(URI, nil, pctxt);
+  if input <> nil then
+    Result := xmlCtxtParseDocument(pctxt, input);
+  xmlFreeParserCtxt(pctxt);
+end;
 
 { XSLTLib }
 
@@ -549,12 +585,15 @@ begin
   xsltSetXIncludeDefault   := GetProcAddress(Handle, 'xsltSetXIncludeDefault');
   xsltGetXIncludeDefault   := GetProcAddress(Handle, 'xsltGetXIncludeDefault');
   xsltSetTransformErrorFunc:= GetProcAddress(Handle, 'xsltSetTransformErrorFunc');
+  xsltSetLoaderFunc        := GetProcAddress(Handle, 'xsltSetLoaderFunc');
+  xsltSetCtxtParseOptions  := GetProcAddress(Handle, 'xsltSetCtxtParseOptions');
 
 {$endregion}
   end;
 
   xsltInit;
   xsltInitGlobals;
+  xsltSetLoaderFunc(DocLoader);
   FIsLoaded := True;
 end;
 

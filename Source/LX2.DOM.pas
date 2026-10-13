@@ -784,9 +784,14 @@ type
     property  ParseError: IXMLParseError read Get_parseError;
     property  PreserveWhiteSpace: Boolean read Get_PreserveWhiteSpace write Set_PreserveWhiteSpace;
     property  ReadyState: Integer read Get_readyState;
+    /// <summary>Kept for MSXML compatibility: the value is stored and read back and changes
+    /// nothing. External entities and the external DTD subset are never loaded, whatever it
+    /// holds.</summary>
     property  ResolveExternals: Boolean read Get_ResolveExternals write Set_ResolveExternals;
     property  Schemas: IXMLSchemaCollection read Get_Schemas write Set_Schemas;
     property  Url: string read Get_Url;
+    /// <summary>Validates the document against its DTD. Only the internal subset takes part:
+    /// the external subset named by the document type declaration is not read.</summary>
     function  Validate: IXMLParseError;
     function  ValidateNode(const node: IXMLNode): IXMLParseError;
     property  ValidateOnParse: Boolean read Get_ValidateOnParse write Set_ValidateOnParse;

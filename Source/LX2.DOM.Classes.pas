@@ -877,7 +877,9 @@ type
   /// document reaches libxml2 from memory under a <c>lx2schema://schemas/N/name</c> address
   /// through the global external entity loader: libxml2 does not pass the loader set on the
   /// schema parser context (<c>xmlSchemaSetResourceLoader</c>) to the nested contexts, and an
-  /// include inside an imported schema would be read from disk. The compiled schema is cached
+  /// include inside an imported schema would be read from disk. While the set compiles, that
+  /// loader reads nothing but these addresses: an external entity declared in a schema
+  /// document is not loaded. The compiled schema is cached
   /// until the next <see cref="Add"/> or <see cref="Remove"/>; an instance is not meant to be
   /// used from several threads at once.</para>
   /// </remarks>
@@ -4418,16 +4420,6 @@ begin
     Include(FOptions, xmlParseDTDValidation)
   else
     Exclude(FOptions, xmlParseDTDValidation);
-
-  if resolveExternals then
-  begin
-    Exclude(FOptions, xmlParseNoXXE);
-    Include(FOptions, xmlParseExternalDTD);
-  end
-  else
-  begin
-    Exclude(FOptions, xmlParseExternalDTD);
-  end;
 end;
 
 function TXMLDocument.Load(const URL: string): Boolean;
@@ -4714,15 +4706,22 @@ begin
   end;
 end;
 
-/// Global libxml2 external entity loader: the resource addresses of the collection being
-/// compiled are served from memory, everything else goes to the loader installed before it.
+/// Global libxml2 external entity loader. While a collection compiles in this thread, the
+/// resource addresses of that collection are served from memory and nothing else is read:
+/// libxml2 parses the schema documents with entity substitution of its own and without
+/// XML_PARSE_NO_XXE, so an external entity declared in one of them would be read from
+/// wherever it points. Outside a compilation everything goes to the loader installed
+/// before this one.
 function SchemaEntityLoader(const URL, ID: PUTF8Char; context: xmlParserCtxtPtr): xmlParserInputPtr; cdecl;
 begin
   Result := nil;
   try
-    if (CurrentSchemaLoader <> nil) and (URL <> nil) then
-      Result := CurrentSchemaLoader.LoadResource(URL);
-    if (Result = nil) and Assigned(DefaultEntityLoader) then
+    if CurrentSchemaLoader <> nil then
+    begin
+      if URL <> nil then
+        Result := CurrentSchemaLoader.LoadResource(URL);
+    end
+    else if Assigned(DefaultEntityLoader) then
       Result := DefaultEntityLoader(URL, ID, context);
   except
     Result := nil;
