@@ -323,6 +323,19 @@ begin
         Exit(InterfaceValue(IInterface(Value.VUnknown), TRttiInterfaceType(Typ)));
       varByRef or varDispatch, varByRef or varUnknown:
         Exit(InterfaceValue(IInterface(PPointer(Value.VPointer)^), TRttiInterfaceType(Typ)));
+      // A script passes "nothing" as Unassigned, Null or the integer 0 of its nil literal:
+      // all of them are the nil interface, as insertBefore(Node, nil) expects
+      varEmpty, varNull:
+        Exit(InterfaceValue(nil, TRttiInterfaceType(Typ)));
+      varInteger:
+        if Value.VInteger = 0 then
+          Exit(InterfaceValue(nil, TRttiInterfaceType(Typ)));
+      varInt64:
+        if Value.VInt64 = 0 then
+          Exit(InterfaceValue(nil, TRttiInterfaceType(Typ)));
+      varUInt64:
+        if Value.VUInt64 = 0 then
+          Exit(InterfaceValue(nil, TRttiInterfaceType(Typ)));
     end;
 
   if Typ is TRttiStringType then

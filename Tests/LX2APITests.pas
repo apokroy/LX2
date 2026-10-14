@@ -146,6 +146,10 @@ type
     [Test]
     procedure TestTransformNodeToObjectKeepsDetachedNodes;
     [Test]
+    procedure TestTransformAgainAfterErrorsAreRead;
+    [Test]
+    procedure TestRemoveAllChildNodesKeepsHeldChildren;
+    [Test]
     procedure TestReloadedContentStaysUsable;
     [Test]
     procedure TestMovedSubtreeHoldsItsNewDocument;
@@ -1305,6 +1309,17 @@ procedure TXMLDOMTest.TestLateBoundNodeArguments;
     Assert.AreEqual('<Package><Payment Id="2"><Sum>1</Sum></Payment></Package>', string(Package.xml));
     Assert.AreEqual('<Payment Id="1"><Sum>1</Sum></Payment>', string(Payment.documentElement.xml), 'the source document');
 
+    // "Nothing" for a node parameter: the integer 0 of a script's nil literal, Unassigned
+    // and Null all mean the nil node, so insertBefore(X, nil) appends
+    var Third: Variant := Payment.documentElement.cloneNode(True);
+    Third.setAttribute('Id', '3');
+    Package.insertBefore(Third, 0);
+    var Fourth: Variant := Payment.documentElement.cloneNode(True);
+    Fourth.setAttribute('Id', '4');
+    Package.insertBefore(Fourth, Unassigned);
+    Assert.AreEqual('<Package><Payment Id="2"><Sum>1</Sum></Payment><Payment Id="3"><Sum>1</Sum></Payment>' +
+      '<Payment Id="4"><Sum>1</Sum></Payment></Package>', string(Package.xml), 'nil reference node appends');
+
     try
       Package.appendChild(TAnsiParamsProbe.Create as IDispatch);
       Assert.Fail('an object that is not a node was taken');
@@ -1466,6 +1481,45 @@ begin
 
   Assert.AreEqual(NamesBySiblings(Root), NamesByIndex(List));
   Assert.AreEqual('a b', NamesByIndex(List));
+end;
+
+// The XSLT error list of a node is made on first use; a transformation clears it on entry,
+// and clearing must not depend on whether the list exists already.
+procedure TXMLDOMTest.TestTransformAgainAfterErrorsAreRead;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r/>'));
+  var Style := CoCreateXMLDocument;
+  // A transformation from an element starts at the element (as in MSXML), so the template
+  // matches the element as well as the document
+  Assert.IsTrue(Style.LoadXML(
+    '<xsl:stylesheet version="1.0" xmlns:xsl="' + XsltNs + '">' +
+    '<xsl:output method="text"/>' +
+    '<xsl:template match="/|*">done</xsl:template></xsl:stylesheet>'));
+  Assert.AreEqual('done', Doc.TransformNode(Style), 'first');
+  Assert.AreEqual<NativeInt>(0, Doc.XSLTErrors.Count);
+  Assert.AreEqual('done', Doc.TransformNode(Style), 'after the error list was read');
+  var Root := Doc.DocumentElement;
+  Assert.AreEqual('done', Root.TransformNode(Style), 'from the element');
+  Assert.AreEqual('done', Root.TransformNode(Style), 'from the element again');
+  Assert.AreEqual('done', Doc.TransformNode(Style), 'once more');
+end;
+
+// A removed child that something still holds stays usable, as after RemoveChild; the
+// others go with the pass.
+procedure TXMLDOMTest.TestRemoveAllChildNodesKeepsHeldChildren;
+begin
+  var Doc := CoCreateXMLDocument;
+  Assert.IsTrue(Doc.LoadXML('<r><a x="1">t</a><b/><c/></r>'));
+  var Root := Doc.DocumentElement;
+  var A := Root.FirstChild;
+  Root.RemoveAllChildNodes;
+  Assert.IsFalse(Root.HasChildNodes, 'children removed');
+  Assert.AreEqual('a', A.NodeName);
+  Assert.AreEqual('<a x="1">t</a>', A.Xml, 'the held child is intact');
+  Assert.IsNull(A.ParentNode, 'detached');
+  Root.AppendChild(A);
+  Assert.AreEqual('<r><a x="1">t</a></r>', Root.Xml, 'and can be put back');
 end;
 
 // The document's own list follows a reload: the wrapper stays, the libxml2 document under

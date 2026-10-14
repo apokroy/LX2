@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
@@ -103,6 +103,12 @@
   `xmlTextReaderCurrentDoc` returned `xmlNodePtr`, `xmlTextReaderPreservePattern` could not take a
   nil list of namespaces, and the result of `xmlGetNsListSafe` was declared as the array itself
   instead of a pointer to it.
+- `IXMLNode.RemoveAllChildNodes` freed children that wrappers still held: `NodeName`, `Xml` or
+  `AppendChild` on such a node then read freed memory. A child whose subtree has a wrapper is now
+  detached as `RemoveChild` detaches it and stays usable; the others are discarded whole as before.
+- `TDispatchInvokable`: `Unassigned`, `Null` and the integer 0 (the `nil` literal of a script)
+  passed for an interface parameter are the nil interface, so `insertBefore(Node, nil)` appends
+  instead of failing with `EInvalidCast`.
 
 ## v1.3.0 — 2026-10-13
 

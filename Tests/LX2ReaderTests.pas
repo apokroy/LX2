@@ -1438,6 +1438,30 @@ begin
   Assert.AreEqual(3, Sum, 'names of a loaded document are compared by text');
   Assert.IsFalse(R.Read);
 
+  // Skip and ReadToNextSibling stop where the streaming reader stops: on the end tag of the
+  // parent, not on an element one level up (xmlTextReaderNext over a tree would go there)
+  Assert.IsTrue(Doc.LoadXML('<r><a><x/><b/></a><b/></r>'));
+  R := XmlReader.Create(Doc);
+  R.ReadToFollowing('a');
+  Assert.IsTrue(R.ReadToDescendant('b'));
+  Assert.AreEqual(2, R.Depth);
+  Assert.IsFalse(R.ReadToNextSibling('q'), 'no sibling of the last child');
+  Assert.AreEqual(Ord(TXmlNodeType.EndElement), Ord(R.NodeType));
+  Assert.AreEqual('a', R.Name, 'on the end tag of the parent');
+  Assert.IsTrue(R.ReadToNextSibling('b'));
+  Assert.AreEqual(1, R.Depth);
+  R := XmlReader.Create(Doc);
+  R.ReadToFollowing('a');
+  Assert.IsTrue(R.ReadToDescendant('b'));
+  R.Skip;
+  Assert.AreEqual(Ord(TXmlNodeType.EndElement), Ord(R.NodeType), 'Skip on the last child');
+  Assert.AreEqual('a', R.Name);
+  R := XmlReader.Create(Doc);
+  R.ReadToFollowing('a');
+  R.Skip;
+  Assert.AreEqual('b', R.Name, 'Skip over a subtree lands on the next sibling');
+  Assert.AreEqual(1, R.Depth);
+
   Settings.Schemas := CoCreateSchemaCollection;
   Assert.WillRaise(procedure begin XmlReader.Create(Doc, Settings) end, EXmlReaderError, 'no validation over a document');
 end;

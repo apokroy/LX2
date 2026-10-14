@@ -1532,10 +1532,33 @@ begin
 end;
 
 procedure TXmlTextReader.Skip;
+var
+  Moved: Boolean;
+  Depth: Integer;
 begin
   if not Live then
     Exit;
-  var Moved := Step(True);
+  if FWalker then
+  begin
+    // Over a loaded document xmlTextReaderNext takes the xmlTextReaderNextTree path, which on
+    // the last child of an element goes straight to the element's next sibling and leaves its
+    // end tag out. The streaming reader reports that end tag, and so does this one: the subtree
+    // is read to its end tag, then the reader steps once past it, as .NET Skip does
+    if FOnAttribute then
+      FReader.MoveToElement;
+    Moved := True;
+    if (FReader.NodeType = XML_READER_TYPE_ELEMENT) and not FReader.IsEmptyElement then
+    begin
+      Depth := FReader.Depth;
+      repeat
+        Moved := Step(False);
+      until not Moved or ((FReader.NodeType = XML_READER_TYPE_END_ELEMENT) and (FReader.Depth = Depth));
+    end;
+    if Moved then
+      Moved := Step(False);
+  end
+  else
+    Moved := Step(True);
   while Moved and Filtered do
     Moved := Step(False);
 end;
@@ -2324,8 +2347,11 @@ end;
 function NewReader(const Settings: TXmlReaderSettings): TXmlTextReader;
 begin
   // Every reader starts here, so the reader layer initialises the library itself, as the
-  // DOM and SAX layers do
+  // DOM and SAX layers do. The node-free callback goes in here as well: Expand wraps nodes of
+  // the reader's tree, and the wrapper must learn that the reader has freed its node even when
+  // no document object ever installed the callback
   LX2Lib.Initialize;
+  SetNodeFreeCallback;
   Result := TXmlTextReader.Create(Settings);
 end;
 

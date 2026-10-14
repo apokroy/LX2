@@ -1108,6 +1108,13 @@ var
 /// </summary>
 function NodeWrapper(const Node: xmlNodePtr): IXMLNode;
 
+/// <summary>
+/// Installs the libxml2 node-free callback that tells a wrapper its node is gone (NodePtr becomes
+/// nil). The constructors of TXMLDocument call it; a reader (<c>LX2.Reader</c>) calls it too,
+/// because Expand makes wrappers of its own tree in a process that may never create a document.
+/// </summary>
+procedure SetNodeFreeCallback;
+
 implementation
 
 uses
@@ -3354,7 +3361,7 @@ end;
 procedure TXMLNode.ClearXSLTErrors;
 begin
   if FXSLTErrors <> nil then
-    ClearXSLTErrors;
+    FXSLTErrors.Clear;
 end;
 
 procedure TXMLNode.XSLTError(const Msg: string);
@@ -3377,10 +3384,45 @@ begin
   NodePtr.ReconciliateNs;
 end;
 
+// A child whose subtree has no wrapper is discarded whole, as the helper does; one with
+// wrappers is detached the way RemoveChild detaches it (namespaces declared, the subtree kept
+// for its wrappers), so a node a script still holds stays usable, as after RemoveChild.
 procedure TXMLNode.RemoveAllChildNodes;
+
+  function HasWrappers(Top: xmlNodePtr): Boolean;
+  begin
+    var Node := Top;
+    while Node <> nil do
+    begin
+      if Node._private <> nil then
+        Exit(True);
+      Node := NextInSubtree(Top, Node);
+    end;
+    Result := False;
+  end;
+
+var
+  Child, Next: xmlNodePtr;
 begin
-  if NodePtr <> nil then
-    NodePtr.RemoveAllChildNodes;
+  if NodePtr = nil then
+    Exit;
+  NodePtr.TreeChanged;
+  Child := NodePtr.children;
+  while Child <> nil do
+  begin
+    Next := Child.next;
+    if HasWrappers(Child) then
+    begin
+      NodePtr.RemoveChild(Child);
+      ReleaseRemoved(Child);
+    end
+    else
+    begin
+      xmlUnlinkNode(Child);
+      xmlFreeNode(Child);
+    end;
+    Child := Next;
+  end;
 end;
 
 function TXMLNode.RemoveChild(const ChildNode: IXMLNode): IXMLNode;
