@@ -1317,9 +1317,7 @@ procedure TXMLDOMTest.TestLateBoundNodeArguments;
 begin
   var Before := DebugObjectCount;
   Build;
-{$IFDEF DEBUG}
   Assert.AreEqual<NativeInt>(Before, DebugObjectCount, 'wrappers left after the documents are gone');
-{$ENDIF}
 end;
 
 // An object handed to a late-bound caller carries exactly the caller's reference: once the
