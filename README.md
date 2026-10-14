@@ -18,7 +18,7 @@ MIT licensed. libxml2 and libxslt keep their own MIT-style licences (`LIBXML2.CO
 > Late binding to a shared library is still available: leave `LX2.Static` out of the uses
 > clause and `LX2Lib.Load` loads `libxml2.dll` / `libxml2.so.16`.
 
-Bundled versions (sources and static builds): libxml2 2.15.4, libxslt 1.1.45.
+Bundled versions (sources, static and shared builds): libxml2 2.15.4, libxslt 1.1.45.
 
 ## Contents
 
@@ -240,11 +240,15 @@ LX2Lib.Unload;
 ```
 
 `LX2Lib.IsLoaded` and `LX2Lib.LibraryFileName` report the state. Most Linux distributions
-ship an older libxml2 with the `.so.2` soname, which LX2 cannot use, so a shared library has
-to be deployed with the application. `Binaries\Linux64` holds an older build: development
-snapshots of libxml2 2.15 and libxslt 1.1.44 made before those releases, built on Ubuntu 24.04,
-so they need glibc 2.38, and without the local patches of `Native\Patches`. On Linux64 prefer
-static linking, which takes the bundled versions.
+ship an older libxml2 with the `.so.2` soname, which LX2 cannot use, so the libraries go with
+the application. `Binaries\Linux64` holds `libxml2.so.16` and `libxslt.so.1`, which
+`Native\Build.ps1` links from the objects of the Linux64 archive: the bundled versions with the
+local patches and the feature set of the static build (see `Native\README.md`), glibc 2.34 or
+later (Ubuntu 22.04 and newer). Keep them in the directory of the application and load them by
+full path, `LX2Lib.Load(Dir + 'libxml2.so.16')` and `XSLTLib.Load(Dir + 'libxslt.so.1')`
+(`install.sh.sample` copies them there); `libxslt.so.1` finds `libxml2.so.16` next to itself.
+Installed into `/usr/lib` or `/usr/local/lib` they would take the place of a `libxml2.so.16` of
+the distribution, which may have features this build leaves out.
 
 ## Strings and encodings
 
@@ -637,6 +641,6 @@ every minor libxml2 release changes the API; upstream maintains only the newest 
 
 - The binding has been exercised by synthetic tests and the DUnitX suite in `Tests`, and
   the static build on Windows x64 is what the author's own applications use.
-- The Linux64 archive passes the smoke tests under WSL; the WinARM64EC build is linked, not
-  run.
+- The Linux64 archive and the shared libraries pass the smoke tests under WSL on Ubuntu 22.04
+  and 24.04; the WinARM64EC build is linked, not run.
 - Win32 has not been tested.

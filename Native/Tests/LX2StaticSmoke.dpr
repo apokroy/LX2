@@ -2,6 +2,8 @@
 // Native\Build.ps1 -Test. Covers parsing a windows-1251 document (iconv on top of WinAPI),
 // dumping it back to windows-1251, XPath, an XSLT transformation and a parse error report,
 // that is every path that needs the C runtime and Win32 from LX2.Static.
+// Compiled with LX2_SHARED it checks the shared libraries of Binaries\Linux64 instead: no
+// LX2.Static, libxml2.so.16 and libxslt.so.1 are loaded from the directory of the executable.
 
 program LX2StaticSmoke;
 
@@ -12,8 +14,8 @@ uses
   System.Classes,
   System.IOUtils,
   libxml2.API,
-  libxslt.API,
-  LX2.Static;
+  libxslt.API{$IFNDEF LX2_SHARED},
+  LX2.Static{$ENDIF};
 
 const
   Cp1251Privet: AnsiString = #$CF#$F0#$E8#$E2#$E5#$F2; // 'Привет' (hello) in windows-1251
@@ -40,11 +42,21 @@ end;
 
 procedure TestLoad;
 begin
+{$IFDEF LX2_SHARED}
+  var Dir := ExtractFilePath(ParamStr(0));
+  LX2Lib.Load(Dir + 'libxml2.so.16');
+  Check(LX2Lib.IsLoaded, 'LX2Lib.IsLoaded');
+  Check(LX2Lib.LibraryFileName = Dir + 'libxml2.so.16', 'LX2Lib loaded the shared library');
+  XSLTLib.Load(Dir + 'libxslt.so.1');
+  Check(XSLTLib.IsLoaded, 'XSLTLib.IsLoaded');
+  Check(Assigned(xmlTextReaderRead) and Assigned(xsltSetLoaderFunc), 'entry points of the reader and of the XSLT loader');
+{$ELSE}
   LX2Lib.Initialize;
   Check(LX2Lib.IsLoaded, 'LX2Lib.IsLoaded');
   Check(LX2Lib.LibraryFileName = '', 'LX2Lib bound statically, no library file');
   XSLTLib.Initialize;
   Check(XSLTLib.IsLoaded, 'XSLTLib.IsLoaded');
+{$ENDIF}
 end;
 
 procedure TestParseAndEncodings;

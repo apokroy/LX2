@@ -52,6 +52,8 @@ Tests/Win64/
 Native/Gen/
 Native/Tests/Win64/
 Native/Tests/Linux64/
+Native/Tests/Linux64Shared/
+Native/Tests/WinARM64EC/
 
 # Local patches to the imported sources are source code, whatever *.Patch above says.
 !Native/Patches/*.patch

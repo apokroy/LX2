@@ -80,6 +80,16 @@
 - DOM node wrappers cost less to create and free: the error lists of a document no longer
   carry a lock of their own, and the XSLT error list of a node and the success error object of
   a document are made on first use.
+- `Binaries\Linux64`: `libxml2.so.16` and `libxslt.so.1` are linked by `Native\Build.ps1` from
+  the objects of the Linux64 archive: libxml2 2.15.4 and libxslt 1.1.45 with the local patches
+  and the feature set of the static build, glibc 2.34 or later. They replace development
+  snapshots of libxml2 2.15 and libxslt 1.1.44 that needed glibc 2.38 and did not load on
+  Ubuntu 22.04. `install.sh.sample` copies them into the directory of an application instead
+  of `/usr/local/lib`, where they would take the place of a `libxml2.so.16` of the
+  distribution.
+- `Native\Build.ps1` compiles with `-fmacro-prefix-map`: `__FILE__` in the libxslt messages
+  names the source relative to `Native`, so the objects no longer depend on, or carry, the
+  directory of the build machine. The Linux64 archive is rebuilt this way.
 
 ### Fixed
 

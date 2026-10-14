@@ -32,7 +32,10 @@
     the entry points as external 'liblx2native.a'. The shim directory is not used there:
     the C runtime, iconv and pthreads are glibc. The objects may only reference the glibc
     names listed in $GlibcImports; the youngest of them, stat64, sets the floor at glibc 2.33
-    (the oldest target, Ubuntu 22.04, has 2.35).
+    (the oldest target, Ubuntu 22.04, has 2.35). The same objects are linked by ld.lld of RAD
+    Studio against the same SDK into ..\Binaries\Linux64\libxml2.so.16 and libxslt.so.1, for
+    programs that load the libraries instead of linking LX2.Static: the versions, patches and
+    feature set are those of the archive.
 
     WinARM64EC: the same sources with Source\shim except crt_shim.c, target
     arm64ec-pc-windows-msvc (the C runtime headers are those of the Windows SDK and the MSVC
@@ -59,8 +62,9 @@
     Studio version to pick from the registry ('37.0'); by default the newest.
 .PARAMETER Test
     After the build, compile Tests\LX2StaticSmoke.dpr and run it: dcc64 for Win64,
-    dcclinux64 and WSL (when present) for Linux64; for WinARM64EC dccarm64ec only compiles
-    and links it, running needs Windows on ARM.
+    dcclinux64 and WSL (when present) for Linux64, there a second time with LX2_SHARED against
+    the shared libraries; for WinARM64EC dccarm64ec only compiles and links it, running needs
+    Windows on ARM.
 .PARAMETER SkipBuild
     Do not compile the objects: only generate LX2.Static.pas and run the tests.
 .PARAMETER Clang
@@ -102,6 +106,7 @@ $LibArm64EC = Join-Path $Root 'Lib\WinARM64EC'
 $Arm64ECArchive = Join-Path $LibArm64EC $LinuxArchiveName
 $Gen     = Join-Path $Root 'Gen'
 $GenLinux = Join-Path $Gen 'Linux64'
+$BinLinux = Join-Path (Split-Path $Root -Parent) 'Binaries\Linux64'
 
 # ---------------------------------------------------------------------------
 # Tools
@@ -150,7 +155,8 @@ $Ar      = Join-Path $StudioRoot 'bin64\llvm-ar.exe'
 $Objdump = Join-Path $StudioRoot 'bin64\llvm-objdump.exe'
 $LlvmLib = Join-Path $StudioRoot 'bin64\llvm-lib.exe'
 $Dlltool = Join-Path $StudioRoot 'bin64\llvm-dlltool.exe'
-foreach ($tool in $Bcc, $Nm, $Ar, $Objdump, $LlvmLib, $Dlltool) {
+$Lld     = Join-Path $StudioRoot 'bin64\ld.lld.exe'
+foreach ($tool in $Bcc, $Nm, $Ar, $Objdump, $LlvmLib, $Dlltool, $Lld) {
     if (-not (Test-Path $tool)) { throw "Not found: $tool" }
 }
 # librtlhelper.a of the WinARM64EC platform: the C runtime of Arm64EC archives (see the
@@ -361,9 +367,12 @@ function Write-GeneratedHeadersLinux {
 # No -march: the baseline stays x86-64 with SSE2, the libraries do not dispatch on CPUID.
 # -fno-zero-initialized-in-bss: zero-initialised globals go to .data instead of .bss;
 # dcc treats a .bss symbol as a variable of its own and reports hint H2164 for it.
+# __FILE__ (libxslt prints it in XSLT_TODO messages) names the source relative to Native: the
+# objects do not depend on where the tree lies and carry no path of the build machine.
+$PrefixMap = "-fmacro-prefix-map=$Root=Native"
 $CommonFlags = @('--target=x86_64-w64-windows-gnu', '-std=c11', '-O3', '-fno-math-errno', '-DNDEBUG',
                  '-DLIBXML_STATIC', '-DLIBXSLT_STATIC', '-DHAVE_CONFIG_H', '-fno-zero-initialized-in-bss',
-                 '-Wno-deprecated-declarations', '-Wno-unused-parameter',
+                 '-Wno-deprecated-declarations', '-Wno-unused-parameter', $PrefixMap,
                  ('-I' + (Join-Path $Root 'Source\shim'))) + $ForeignFlags + $ProfileFlags
 $LibXml2Include = @(('-I' + (Join-Path $Gen 'libxml2')), ('-I' + (Join-Path $Root 'Source\libxml2\include')), ('-I' + (Join-Path $Root 'Source\libxml2')))
 $LibXsltInclude = @(('-I' + (Join-Path $Gen 'libxslt')), ('-I' + (Join-Path $Root 'Source')), ('-I' + (Join-Path $Root 'Source\libxslt'))) + $LibXml2Include
@@ -419,7 +428,7 @@ function Build-Linux64 {
         # the Windows build only.
         $flags = @('--target=x86_64-linux-gnu', "--sysroot=$sdk", '-fPIC', '-D__STDC__=1', '-std=gnu11', '-O3',
                    '-fno-math-errno', '-DNDEBUG', '-DLIBXML_STATIC', '-DLIBXSLT_STATIC', '-DHAVE_CONFIG_H',
-                   '-Wno-deprecated-declarations', '-Wno-unused-parameter')
+                   '-Wno-deprecated-declarations', '-Wno-unused-parameter', $PrefixMap)
         $xmlInc = @(('-I' + (Join-Path $GenLinux 'libxml2')), ('-I' + (Join-Path $Root 'Source\libxml2\include')), ('-I' + (Join-Path $Root 'Source\libxml2')))
         $xsltInc = @(('-I' + (Join-Path $GenLinux 'libxslt')), ('-I' + (Join-Path $Root 'Source')), ('-I' + (Join-Path $Root 'Source\libxslt'))) + $xmlInc
         Build-Group 'xml'  'Source\libxml2' $xmlInc  $tmp $flags
@@ -441,9 +450,38 @@ function Build-Linux64 {
         & $Ar rcs $LinuxArchive @objs
         if ($LASTEXITCODE -ne 0) { throw "llvm-ar exited with code $LASTEXITCODE" }
         Write-Host ("  {0}: {1} objects, {2:N0} bytes" -f $LinuxArchiveName, $objs.Count, (Get-Item $LinuxArchive).Length)
+        Build-LinuxShared $sdk $objs
     }
     finally {
         Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Shared libraries for programs that load libxml2 and libxslt instead of linking LX2.Static:
+# the objects of the archive, linked against the same SDK, so the glibc they ask for is no
+# younger than the one of the SDK. libxslt.so.1 needs libxml2.so.16 and finds it next to
+# itself (RUNPATH $ORIGIN). Only the public API of libxml2 is exported, its internal functions
+# are hidden in the objects (XML_HIDDEN); libxslt has no such marks and exports its internal
+# names too, which costs nothing to a program that takes the entry points by name.
+function Build-LinuxShared([string]$Sdk, [string[]]$Objs) {
+    New-Item -ItemType Directory -Force $BinLinux | Out-Null
+    $common = @('-m', 'elf_x86_64', '-shared', "--sysroot=$Sdk", '--no-undefined', '--hash-style=both',
+                '--build-id=sha1', '-z', 'relro', '-z', 'now', '-z', 'noexecstack', '-O1', '--as-needed')
+    $libs = @(('-L' + (Join-Path $Sdk 'usr\lib\x86_64-linux-gnu')), ('-L' + (Join-Path $Sdk 'lib\x86_64-linux-gnu')), '-lm', '-lc')
+    $xml = Join-Path $BinLinux 'libxml2.so.16'
+    $xslt = Join-Path $BinLinux 'libxslt.so.1'
+    $steps = @(
+        @{ Out = $xml;  Args = @('-soname', 'libxml2.so.16') + @($Objs | Where-Object { (Split-Path $_ -Leaf) -like 'xml_*' }) },
+        @{ Out = $xslt; Args = @('-soname', 'libxslt.so.1', '-rpath', '$ORIGIN') + @($Objs | Where-Object { (Split-Path $_ -Leaf) -like 'xslt_*' }) + @($xml) }
+    )
+    foreach ($step in $steps) {
+        $res = Invoke-NativeLines { & $Lld @common @($step.Args) -o $step.Out @libs }
+        if ($LASTEXITCODE -ne 0) { throw "ld.lld exited with code $LASTEXITCODE`n$($res -join "`n")" }
+        if ($res) { $res | ForEach-Object { Write-Host "  $_" } }
+        # The youngest glibc symbol version the library asks for is the oldest glibc it loads on.
+        $floor = & $Objdump -T $step.Out | ForEach-Object { if ($_ -match '\bGLIBC_2\.(\d+)\b') { [int]$Matches[1] } } |
+            Sort-Object -Descending | Select-Object -First 1
+        Write-Host ("  {0}: {1:N0} bytes, glibc 2.{2}" -f (Split-Path $step.Out -Leaf), (Get-Item $step.Out).Length, $floor)
     }
 }
 
@@ -496,7 +534,7 @@ function Build-WinARM64EC {
         # with plain linkage, so the objects reference the functions by name.
         $flags = @('--target=arm64ec-pc-windows-msvc', '-std=c11', '-O3', '-fno-math-errno', '-DNDEBUG',
                    '-DLIBXML_STATIC', '-DLIBXSLT_STATIC', '-DHAVE_CONFIG_H', '-Wno-deprecated-declarations',
-                   '-Wno-unused-parameter', ('-I' + (Join-Path $Root 'Source\shim')))
+                   '-Wno-unused-parameter', $PrefixMap, ('-I' + (Join-Path $Root 'Source\shim')))
         Build-Group 'xml'  'Source\libxml2' $LibXml2Include $tmp $flags
         Build-Group 'xslt' 'Source\libxslt' $LibXsltInclude $tmp $flags
         Build-Group 'shim' 'Source\shim'    $LibXml2Include $tmp $flags @('crt_shim.c')
@@ -882,10 +920,22 @@ if ($Test -and ($Platforms -contains 'Linux64')) {
                  "--syslibroot:$sdk", "--libpath:$libPath", '-$O+', (Join-Path $Root 'Tests\LX2StaticSmoke.dpr'))
     $res = Invoke-NativeLines { & (Join-Path $StudioRoot 'bin\dcclinux64.exe') @argList }
     if ($LASTEXITCODE -ne 0) { throw "dcclinux64 exited with code $LASTEXITCODE`n$($res -join "`n")" }
+    # The same test against the shared libraries: without LX2.Static, the libraries copied next
+    # to the executable, which loads them by full path.
+    $outShared = Join-Path $Root 'Tests\Linux64Shared'
+    New-Item -ItemType Directory -Force $outShared | Out-Null
+    Copy-Item (Join-Path $BinLinux 'libxml2.so.16'), (Join-Path $BinLinux 'libxslt.so.1') $outShared -Force
+    $argList = @('-B', '-Q', "-E$outShared", "-N0$outShared", '-NSSystem;Posix', '-DLX2_SHARED', "-U$LX2Src",
+                 ('-U' + (Join-Path $StudioShort 'lib\linux64\release')), "--syslibroot:$sdk", "--libpath:$libPath", '-$O+',
+                 (Join-Path $Root 'Tests\LX2StaticSmoke.dpr'))
+    $res = Invoke-NativeLines { & (Join-Path $StudioRoot 'bin\dcclinux64.exe') @argList }
+    if ($LASTEXITCODE -ne 0) { throw "dcclinux64 (LX2_SHARED) exited with code $LASTEXITCODE`n$($res -join "`n")" }
     if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
-        $wslPath = (& wsl.exe wslpath -u ((Join-Path $out 'LX2StaticSmoke') -replace '\\', '/')).Trim()
-        & wsl.exe -e bash -c "chmod +x '$wslPath' && '$wslPath'"
-        if ($LASTEXITCODE -ne 0) { throw 'Linux64 smoke test failed' }
+        foreach ($exe in (Join-Path $out 'LX2StaticSmoke'), (Join-Path $outShared 'LX2StaticSmoke')) {
+            $wslPath = (& wsl.exe wslpath -u ($exe -replace '\\', '/')).Trim()
+            & wsl.exe -e bash -c "chmod +x '$wslPath' && '$wslPath'"
+            if ($LASTEXITCODE -ne 0) { throw "Linux64 smoke test failed: $exe" }
+        }
     }
     else {
         Write-Host '  no WSL: Linux64 is linked but not run' -ForegroundColor Yellow

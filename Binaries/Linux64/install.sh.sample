@@ -1,2 +1,17 @@
-sudo ln -s libxml2.so.16.1.0 /usr/local/lib/libxml2.so.16
-sudo ln -s libxslt.so.1.1.44 /usr/local/lib/libxslt.so
+#!/bin/sh
+# Copies the shared builds of libxml2 and libxslt into the directory of an application, the
+# only argument. The application loads them by full path:
+#   LX2Lib.Load(Dir + 'libxml2.so.16');
+#   XSLTLib.Load(Dir + 'libxslt.so.1');
+# libxslt.so.1 finds libxml2.so.16 next to itself (RUNPATH $ORIGIN).
+#
+# Do not put them into /usr/lib or /usr/local/lib: they have the feature set of LX2 (no HTTP,
+# XInclude, XPointer, RelaxNG, Schematron, modules or compressed input) and would take the
+# place of a libxml2.so.16 of the distribution for every program on the system.
+set -e
+if [ $# -ne 1 ]; then
+  echo "usage: $0 <application directory>" >&2
+  exit 1
+fi
+here=$(dirname "$0")
+install -m 755 "$here/libxml2.so.16" "$here/libxslt.so.1" "$1"
