@@ -1,7 +1,8 @@
 # Static build of libxml2 and libxslt for LX2
 
 libxml2 and libxslt are compiled from the release sources — into COFF objects for Win64,
-into an ELF archive for Linux64 — and linked into the Delphi executable through the
+into an ELF archive for Linux64, into an Arm64EC archive for WinARM64EC — and linked into
+the Delphi executable through the
 `LX2.Static` unit. `libxml2.dll` and `libxslt.dll` (`libxml2.so`, `libxslt.so`) are not
 needed then; late binding through `LX2Lib.Load(FileName)` remains for builds that do
 not put `LX2.Static` into a uses clause.
@@ -239,5 +240,6 @@ XSLTLib.Initialize;
 
 `LX2.Static` assigns `LX2Lib.StaticBinder` and `XSLTLib.StaticBinder` in its
 `initialization` section; with a binder assigned, `Load` does not load a library file. The
-build covers Win64 and Linux64; Win32 and the other platforms are not built, the unit is
-empty there and `Load` keeps loading the library file (`libxml2.dll`, `libxml2.so.16`).
+build covers Win64, Linux64 and WinARM64EC; Win32 and the other platforms are not built, the
+unit is empty there and `Load` keeps loading the library file (`libxml2.dll`,
+`libxml2.so.16`).

@@ -8,17 +8,17 @@ the library follows the W3C DOM model, and where the two disagree, MSXML compati
 MIT licensed. libxml2 and libxslt keep their own MIT-style licences (`LIBXML2.COPYRIGHT`,
 `LIBXSLT.COPYRIGHT`).
 
-> The libraries are compiled into COFF objects that ship with the repository
-> (`Native\Lib\Win64`) and are linked into your executable by the `LX2.Static` unit.
-> `libxml2.dll` and `libxslt.dll` are no longer required and no longer have to be
-> deployed. You need nothing but Delphi to build: the C compiler is used only to update
-> the libraries. See [Static linking](#static-linking-windows-x64).
+> The libraries ship with the repository already compiled: COFF objects for Windows x64
+> (`Native\Lib\Win64`) and static archives for Linux64 and Windows on ARM
+> (`Native\Lib\Linux64`, `Native\Lib\WinARM64EC`). The `LX2.Static` unit links them into your
+> executable, so `libxml2.dll`, `libxslt.dll` and their `.so` counterparts are not required
+> and not deployed. You need nothing but Delphi to build: the C compiler is used only to
+> update the libraries. See [Static linking](#static-linking).
 >
 > Late binding to a shared library is still available: leave `LX2.Static` out of the uses
-> clause and `LX2Lib.Load` loads `libxml2.dll` / `libxml2.so.16` as before. Linux64 keeps
-> working this way with the binaries in `Binaries\Linux64`.
+> clause and `LX2Lib.Load` loads `libxml2.dll` / `libxml2.so.16`.
 
-Bundled versions: libxml2 2.15.4, libxslt 1.1.45.
+Bundled versions (sources and static builds): libxml2 2.15.4, libxslt 1.1.45.
 
 ## Contents
 
@@ -26,7 +26,7 @@ Bundled versions: libxml2 2.15.4, libxslt 1.1.45.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Static linking (Windows x64)](#static-linking-windows-x64)
+- [Static linking](#static-linking)
 - [Loading a shared library](#loading-a-shared-library)
 - [Strings and encodings](#strings-and-encodings)
 - [External entities and DTDs](#external-entities-and-dtds)
@@ -59,7 +59,7 @@ The library is a stack; pick the level that fits the task.
 ## Requirements
 
 - Delphi 10.3 Rio or later (the library relies on inline variables and record helpers with
-  class methods); developed and tested with Delphi 13.1.
+  class methods); developed and tested with Delphi 13.2.
 - Static linking: Windows x64, Linux64 and Windows on ARM (WinARM64EC, Delphi 13.1 or later;
   linked, not yet run on ARM hardware). A shared library: Windows x64 and Linux64.
 - Win32 compiles but has not been tested.
@@ -174,7 +174,7 @@ begin
 end.
 ```
 
-## Static linking (Windows x64)
+## Static linking
 
 `Native\` holds the sources of libxml2 and libxslt (the library parts of the releases), the
 objects built from them and the scripts that maintain both:
@@ -191,7 +191,7 @@ Native\Build.ps1        compiles the objects, checks them, generates Source\LX2.
 Source\LX2.Static.pas   generated: {$L} per object, runtime imports, API binding
 ```
 
-How it works: `bcc64x` (the clang shipped with RAD Studio) compiles the C sources into COFF
+How it works on Windows x64: `bcc64x` (the clang shipped with RAD Studio) compiles the C sources into COFF
 objects, `LX2.Static` links them with `{$L}`, and the C runtime the libraries need comes
 from `ucrtbase.dll`, which is part of Windows 10 and later. Names that ucrtbase does not
 export (the `printf` family) are provided by a small C shim, the Win32 API is declared by
@@ -201,15 +201,27 @@ libxml2 asks for is available. The unit is generated from the declarations in
 the binding. `Native\README.md` explains the mechanics, the feature set and the invariants
 the build script enforces.
 
+The compilers for Linux64 and WinARM64EC know no `{$L}`, so there the same sources are
+compiled into one archive per platform, `liblx2native.a`, and `LX2.Static` declares the entry
+points as `external 'liblx2native.a'`. On Linux64 the C runtime is glibc; the archive needs
+glibc 2.33 or later (Ubuntu 22.04 has 2.35), and an application is linked against the SDK of
+the oldest system it has to run on, because the symbol versions it asks for come from that SDK.
+On WinARM64EC the C runtime is the `librtlhelper.a` that the Delphi compiler links into every
+executable anyway.
+
 What it means for an application:
 
 - add `LX2.Static` to the uses clause of the project (or install the package, which
   contains it); `LX2Lib.Load` and `XSLTLib.Load` then bind to the objects and
   `LX2Lib.LibraryFileName` is empty;
+- on Linux64 put `Native\Lib\Linux64` on the library path of the platform (`--libpath`); on
+  WinARM64EC put `Native\Lib\WinARM64EC` on the unit search path, which is where the linker
+  of that platform takes its library folders from;
 - nothing to deploy next to the executable;
 - the executable grows by about 2 MB;
-- the objects are built for x86-64 with SSE2 as the baseline and `-O3`; they run on any
-  64-bit Windows 10 or later.
+- the Windows x64 objects are built for x86-64 with SSE2 as the baseline and `-O3`; they run
+  on any 64-bit Windows 10 or later. The WinARM64EC build is linked and its smoke test
+  compiled, but it has not yet run on ARM hardware.
 
 Without `LX2.Static` in uses the behaviour is unchanged: the API unit loads a shared
 library. Both modes can coexist in one code base, the choice is made per executable.
@@ -227,9 +239,12 @@ XSLTLib.Initialize;                      // libxslt, on demand
 LX2Lib.Unload;
 ```
 
-`LX2Lib.IsLoaded` and `LX2Lib.LibraryFileName` report the state. Binaries for Linux64 are in
-`Binaries\Linux64`; most distributions ship an older libxml2 with the `.so.2` soname, which
-LX2 cannot use, so deploy the bundled `.so` files with the application.
+`LX2Lib.IsLoaded` and `LX2Lib.LibraryFileName` report the state. Most Linux distributions
+ship an older libxml2 with the `.so.2` soname, which LX2 cannot use, so a shared library has
+to be deployed with the application. `Binaries\Linux64` holds an older build: development
+snapshots of libxml2 2.15 and libxslt 1.1.44 made before those releases, built on Ubuntu 24.04,
+so they need glibc 2.38, and without the local patches of `Native\Patches`. On Linux64 prefer
+static linking, which takes the bundled versions.
 
 ## Strings and encodings
 
@@ -242,7 +257,8 @@ LX2 cannot use, so deploy the bundled `.so` files with the application.
   `LoadFromStream`; any encoding known to libxml2 and to the Windows code page table works
   (`UTF-8`, `UTF-16`, `windows-1251`, `KOI8-R`, `ISO-8859-x`, ...).
 - `TXmlParserOptions` mirrors `XML_PARSE_*` one to one; `DefaultParserOptions` enables
-  entity substitution, DTD attribute defaults, big lines and huge documents.
+  entity substitution (of the entities the document declares, see below), DTD attribute
+  defaults, big lines and huge documents.
 
 ## External entities and DTDs
 
@@ -621,4 +637,6 @@ every minor libxml2 release changes the API; upstream maintains only the newest 
 
 - The binding has been exercised by synthetic tests and the DUnitX suite in `Tests`, and
   the static build on Windows x64 is what the author's own applications use.
+- The Linux64 archive passes the smoke tests under WSL; the WinARM64EC build is linked, not
+  run.
 - Win32 has not been tested.
