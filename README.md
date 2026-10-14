@@ -34,6 +34,7 @@ Bundled versions: libxml2 2.15.4, libxslt 1.1.45.
 - [LX2.Helpers](#lx2helpers)
 - [LX2.DOM](#lx2dom)
 - [LX2.SAX](#lx2sax)
+- [LX2.Reader](#lx2reader)
 - [XPath](#xpath)
 - [Error handling](#error-handling)
 - [Updating libxml2 and libxslt](#updating-libxml2-and-libxslt)
@@ -47,9 +48,10 @@ The library is a stack; pick the level that fits the task.
 |---|---|---|
 | `libxml2.API`, `libxslt.API` | Raw C API | One-to-one declarations of the libxml2/libxslt types and functions. Function pointers, filled either from a shared library (`LX2Lib.Load`) or from the statically linked objects. |
 | `LX2.Static` | Linking | Generated unit: `{$L}` of the objects, the C runtime imports and the binding of the API pointers. Add it to uses and no DLL is needed. On Linux64 and WinARM64EC it binds to the archive in `Native\Lib\<platform>` instead; empty on Win32. |
-| `LX2.Types` | Common types | Delphi-style option sets (`TXmlParserOptions`, `TXmlSaveOptions`, `TXmlC14NMode`), parse error records and lists, exception classes, fast UTF-8/UTF-16 conversion helpers used by every layer above. |
-| `LX2.Helpers` | Record helpers | `xmlDoc`, `xmlNode`, `xmlAttr`, `xmlNamespaces` gain methods and properties: parse from string/file/stream, navigate, edit, XPath, XSLT, save with any encoding, canonicalize. Zero overhead over the C API: the helpers work on the native pointers. |
+| `LX2.Types` | Common types | Delphi-style option sets (`TXmlParserOptions`, `TXmlSaveOptions`, `TXmlC14NMode`), parse error records and lists, exception classes, `XmlConvert` (the lexical forms of XML Schema types), fast UTF-8/UTF-16 conversion helpers used by every layer above. |
+| `LX2.Helpers` | Record helpers | `xmlDoc`, `xmlNode`, `xmlAttr`, `xmlNamespaces` gain methods and properties: parse from string/file/stream, navigate, edit, XPath, XSLT, save with any encoding, canonicalize; `xmlTextReader` gains the pull reader. Zero overhead over the C API: the helpers work on the native pointers. |
 | `LX2.SAX` | SAX | A thin wrapper over the libxml2 SAX2 parser (`TLX2SAXParserWrapper`), a Delphi-style parser with virtual `Do*` methods (`TSAXCustomParser`) and a handler-interface variant close to the MSXML SAX interfaces (`TSAXParser` + `ISAXContentHandler`). |
+| `LX2.Reader` | Pull reader | `IXmlReader` after `System.Xml.XmlReader`: a forward-only cursor over the nodes, constant memory, records taken one at a time as readers of their subtrees or as small DOM documents. |
 | `LX2.DOM`, `LX2.DOM.Classes` | DOM | Reference-counted interfaces `IXMLDocument`, `IXMLElement`, `IXMLNode`, `IXMLNodeList`, `IXMLAttributes`, `IXMLSchemaCollection` and the rest of the MSXML/W3C set, implemented over the libxml2 tree. |
 | `LX2.XPATH` | XPath | A small engine for simple location paths that ignores namespaces the way MSXML does; everything else goes to the libxml2 XPath evaluator. |
 | `RttiDispatch` | Late binding | `IDispatchInvokable`/`TDispatchInvokable`: the DOM and SAX interfaces can be invoked by name through RTTI, which keeps scripting scenarios of MSXML available without COM. |
@@ -72,12 +74,13 @@ uses
   LX2.Types, LX2.Helpers,   // record helpers over the C API
   LX2.DOM,                  // MSXML-style interfaces
   LX2.SAX,                  // SAX parser
+  LX2.Reader,               // pull reader
   LX2.Static;               // static linking; omit it to load a shared library instead
 ```
 
-Initialisation is implicit: the DOM and SAX layers initialise `LX2Lib` (and `XSLTLib` on
-the first transformation) themselves. Code that calls `libxml2.API` or the helpers directly
-calls `LX2Lib.Initialize` once.
+Initialisation is implicit: the DOM, SAX and reader layers initialise `LX2Lib` (and `XSLTLib`
+on the first transformation) themselves. Code that calls `libxml2.API` or the helpers directly
+calls `LX2Lib.Initialize` once; it may be called from several threads at once.
 
 ## Quick start
 
@@ -262,7 +265,12 @@ Everything the upper layers share:
 - `TXmlParseError` (text, source, line, column, level) and `TXmlParseErrors`, a list with an
   enumerator, filled by the SAX parser and the DOM document;
 - exceptions: `EXmlError` (base), `EXmlParserError`, `EXmlInternalError`,
-  `EXmlNsHrefNotFound`, `EXmlUnsupported`;
+  `EXmlNsHrefNotFound`, `EXmlUnsupported`, `EXmlReaderError`;
+- `XmlConvert`: `ToBoolean`, `ToInteger`, `ToInt64`, `ToDouble`, `ToCurrency` (xs:decimal,
+  exact), `ToDateTime` (xs:dateTime and xs:date, with the time zone on request), their `TryTo*`
+  forms, and `From*` for the other direction. The lexical forms of XML Schema are the same on
+  every locale: `XmlConvert.ToDouble('12.5')` works on a system whose decimal separator is a
+  comma, and `StrToFloat` there does not;
 - `NewUtf16String`, `NewUtf8String`, `NewRawString` and friends: the string builders the
   helpers use to avoid double passes over libxml2 buffers on the hot path.
 
@@ -346,6 +354,28 @@ var Canonical := Doc.Canonicalize(TXmlC14NMode.xmlC14NExclusive);   // also Cano
 Validation against the DTD uses `Doc.Validate(ErrorHandler, ResourceLoader)` and
 `Doc.ValidateNode(Node)`. The external DTD subset comes only from `ResourceLoader`; without
 one it is not read. XML Schema validation goes through `IXMLSchemaCollection` (LX2.DOM).
+
+The pull reader on this level is `xmlTextReader` (see [LX2.Reader](#lx2reader) for the
+interface above it). Names and values are UTF-8, and names come from the dictionary of the
+reader: an atom made once by `Atom` compares with them by pointer, so scanning for records
+allocates nothing per node.
+
+```delphi
+var R := xmlTextReader.CreateFromFile('objects.xml', [xmlParseHuge, xmlParseBigLines]);
+try
+  var AObject := R.Atom('Object');
+  while R.ReadToFollowing(AObject) do
+    Index.Add(R.GetAttribute('GUID'));               // RawByteString, UTF-8
+finally
+  R.Free;
+end;
+```
+
+`Read` raises `EXmlParserError` on malformed XML and returns `False` after it, so a loop never
+ends early in silence. `ValuePtr`, `CurrentNode` and `Expand` are valid until the reader moves:
+libxml2 reuses the nodes it frees, and a pointer kept longer reads another node rather than
+failing. `Text`, `InnerXml` and `OuterXml` are libxml2's own and do not move the reader;
+`ReadElementContent`, `ReadNode` and the `ReadTo*` methods move it as in .NET.
 
 ## LX2.DOM
 
@@ -451,6 +481,103 @@ Input comes through `ParseFile`, `Parse(RawByteString)`, `Parse(TBytes)`,
 well-formed, the errors are collected in `Errors` and also reported through
 `Warning`/`Error`/`FatalError`.
 
+## LX2.Reader
+
+A pull reader after `System.Xml.XmlReader`, over the libxml2 xmlTextReader. The caller moves a
+cursor through the nodes in document order, so the code that reads a document is a plain loop
+rather than a state machine in SAX callbacks, and memory stays constant whatever the size of
+the document. On a 33 MB document of 120 000 records the bare loop takes about half the time of
+a DOM parse, which needs 150 MB more memory, and two and a half times that of SAX
+(`Tests\LX2Bench`).
+
+```delphi
+var R := XmlReader.CreateFromFile('packet.xml');
+for var Doc in R.Elements('Document') do          // Doc: IXmlReader of one record
+begin
+  var Id := Doc.GetAttribute('Id');
+  if Doc.ReadToDescendant('Amount') then
+    Total := Total + Doc.ReadElementContentAsCurrency;
+end;                                               // what the body left unread is passed over
+
+for var Obj in R.ReadElements('Object') do       // Obj: IXMLElement, a copy of the record
+  Index.Add(Obj.GetAttribute('GUID'), Obj);
+```
+
+`XmlReader.CreateFromString`, `CreateFromFile`, `Create(TStream)`, `Create(TBytes)` and
+`Create(IXMLDocument)` (a reader over a loaded document) make readers; each takes an optional
+`TXmlReaderSettings`. The interface is late-bindable like the DOM, so scripts can use it.
+
+The rules a reader follows are those of .NET:
+
+- `Read` moves one node. `ReadElementContentAs*`, `ReadInnerXml`, `ReadOuterXml`, `ReadElement`,
+  `Skip` and a successful `ReadTo*` leave the reader on the node after the element. Called
+  inside `while R.Read do`, the `Read` of the loop then passes over the following node: on
+  indented XML that is the whitespace between records and nothing seems wrong, on minified XML
+  or with `IgnoreWhitespace` every second record is lost. `Elements` and `ReadElements` find
+  every record whatever the body does; a loop of your own moves only in its else branch:
+
+  ```delphi
+  R.MoveToContent;
+  while not R.EOF do
+    if R.IsStartElement('Price') then
+      Total := Total + R.ReadElementContentAsCurrency    // already past the element
+    else
+      R.Read;
+  ```
+- `IsStartElement` and `MoveToContent` move too: past whitespace, comments and processing
+  instructions.
+- An empty element (`<a/>`, `IsEmptyElement`) has no `EndElement`.
+- A name given alone matches the local name in any namespace; with a namespace URI both must
+  match, and an empty URI means no namespace. Compare names that way rather than by `Name`:
+  prefixes differ between senders.
+- Typed reads follow the lexical forms of XML Schema (`XmlConvert`), not the locale.
+  `ReadElementContentAs*` raises `EXmlReaderError` on a child element and on a value outside
+  the type, with the line of the element.
+- `ReadSubtree` gives a reader of the current element; closing it leaves the outer reader on
+  the end tag of the element, never past it.
+- `ReadElement` copies the element into a document of its own (`XNode.ReadFrom`) and declares
+  there every namespace in scope, used or not, so prefixes in values such as `xsi:type="t:Code"`
+  keep their meaning. Attributes `xml:lang` and `xml:space` of the ancestors are not copied.
+- `Expand` gives the current element as DOM nodes of the reader's own tree, without a copy:
+  a loop over the records takes less than half the time of one with `ReadElement`. The nodes
+  live until the reader moves, for a record of `Elements` while the loop body runs; a wrapper
+  kept longer is left without its node (`NodePtr` is nil): reads such as `GetAttribute` return
+  empty values and raise nothing. Copy what has to outlive the record.
+- `ReadElementContentAsBase64(Stream)` decodes as it reads, without a string for the text.
+
+`TXmlReaderSettings` starts with safe defaults: a DOCTYPE raises `EXmlReaderError`
+(`DtdProcessing := Ignore` passes over it, `Parse` applies its internal subset), external
+entities and DTDs are never loaded, the network is never used, `xmlParseHuge` allows text
+nodes up to 1 GB and `xmlParseBigLines` keeps line numbers exact past 65535.
+`IgnoreWhitespace`, `IgnoreComments` and `IgnoreProcessingInstructions` pass over such nodes;
+whitespace-only text is `Whitespace`, or `SignificantWhitespace` under `xml:space="preserve"`.
+`Schemas` validates while reading: without `OnValidationError` the first validation error
+raises `EXmlParserError`, with it every error goes to the handler and the reading goes on.
+
+Where the time goes, measured with Intel VTune on that document: the libxml2 reader builds a
+part of a tree and frees it as it goes, so a bare `Read` loop costs about half a DOM parse, and
+the allocator of the C runtime takes a large share of every DOM: about 60% of a DOM parse is
+`malloc`, `free` and `realloc`. `LX2Lib.UseHostMemoryManager := True` before `Initialize` makes
+a DOM parse about 30% faster and a DOM copy per record about 20% in a single thread (see the
+memory notes of LX2.Helpers about several threads).
+
+| 120 000 records, 33 MB, one thread, C heap | ms |
+|---|---:|
+| DOM parse | 260 |
+| SAX, nothing done | 50 |
+| helper: `Read` loop | 125 |
+| helper: `ReadToFollowing` by atom, `@id` | 140 |
+| `Elements`: `@id`, `ReadToDescendant`, `ReadElementContentAsString` | 210 |
+| `Expand` per record, `@id` | 175 |
+| `ReadElements` (a copy per record), `@id` | 380 |
+
+What libxml2 does not give: the column of a node (`LineNumber` is the line of the start tag,
+the column is known only for parse errors), `IsDefault` (it is always false), entity
+references to expand later (`ResolveEntity`) and fragments with several roots. Malformed XML
+raises `EXmlParserError`, and the reader stays in the `Error` state; libxml2 parses ahead in
+pieces of 512 bytes, so the records before the error in the same piece never come, and
+processing that cannot be undone wants the document checked first.
+
 ## XPath
 
 `SelectNodes` and `SelectSingleNode` exist on both the helpers and the DOM. A query that is a
@@ -468,6 +595,8 @@ resolved through the namespaces in scope, and the helper overload takes an expli
 - The DOM document collects errors in `ParseError` (the last one, MSXML style) and `Errors`
   (all of them); `LoadXML` and friends return `False`. XSLT errors go to `XSLTErrors`.
 - The SAX parser collects `Errors` and calls the `Warning`/`Error`/`FatalError` events.
+- The reader raises `EXmlParserError` on malformed XML and `EXmlReaderError` when the document
+  does not have the shape a method needs; warnings and validation errors go to `Errors`.
 - Programming errors (an unsupported node type, a namespace that cannot be resolved, a
   broken invariant inside the binding) raise `EXmlError` descendants.
 
@@ -493,4 +622,3 @@ every minor libxml2 release changes the API; upstream maintains only the newest 
 - The binding has been exercised by synthetic tests and the DUnitX suite in `Tests`, and
   the static build on Windows x64 is what the author's own applications use.
 - Win32 has not been tested.
-- Planned: wrappers for the reader API.

@@ -39,6 +39,7 @@ contains
   LX2.SAX in '..\Source\LX2.SAX.pas',
   LX2.DOM in '..\Source\LX2.DOM.pas',
   LX2.DOM.Classes in '..\Source\LX2.DOM.Classes.pas',
+  LX2.Reader in '..\Source\LX2.Reader.pas',
   RttiDispatch in '..\Source\RttiDispatch.pas',
   LX2.XPATH in '..\Source\LX2.XPATH.pas',
   LX2.Static in '..\Source\LX2.Static.pas';

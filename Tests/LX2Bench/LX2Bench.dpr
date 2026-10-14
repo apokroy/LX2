@@ -1,6 +1,7 @@
 ﻿// Throughput benchmark of the statically linked libxml2 (LX2.Static): parsing, push
-// parsing, serialization in UTF-8 and windows-1251, C14N, XPath and schema validation,
-// on a synthetic document or on a file. Built and run by Bench.ps1 next to it.
+// parsing, pull reading (the reader helper and LX2.Reader), serialization in UTF-8 and
+// windows-1251, C14N, XPath and schema validation, on a synthetic document or on a file.
+// Built and run by Bench.ps1 next to it.
 //
 //   LX2Bench [--file=<xml>] [--xsd=<schema>] [--items=N] [--runs=N] [--opts=N]
 //            [--longtext] [--hostmm] [--threads=N] [--verify]
@@ -29,7 +30,7 @@ program LX2Bench;
 
 uses
   System.SysUtils, System.Classes, System.Diagnostics, System.SyncObjs, System.Math,
-  System.IOUtils, libxml2.API, LX2.Static;
+  System.IOUtils, libxml2.API, LX2.Types, LX2.Helpers, LX2.DOM, LX2.Reader, LX2.Static;
 
 // --- SAX handlers ---------------------------------------------------------------------
 
@@ -146,6 +147,57 @@ end;
 
 // --- timing ---------------------------------------------------------------------------
 
+// Pull reading of the records of the synthetic document (`item`): the bare loop of the
+// helper, a scan for the records by atom, LX2.Reader with a record reader per record, and
+// a DOM copy per record. On a document from --file the names find nothing, and the
+// workloads measure the scan.
+procedure RunReader;
+var
+  Raw: RawByteString;
+  Count: Int64;
+begin
+  SetString(Raw, PAnsiChar(@Utf8Doc[0]), Length(Utf8Doc) - 1);
+  Best('Reader helper: Read loop', Length(Raw), procedure begin
+    var R := xmlTextReader.Create(Pointer(Raw), Length(Raw), []);
+    while R.Read do
+      ;
+    R.Free;
+  end);
+  Best('Reader helper: records, @id', Length(Raw), procedure begin
+    var R := xmlTextReader.Create(Pointer(Raw), Length(Raw), []);
+    var AItem := R.Atom('item');
+    Count := 0;
+    while R.ReadToFollowing(AItem) do
+      Inc(Count, Length(R.GetAttribute('id')));
+    R.Free;
+  end);
+  Best('IXmlReader: Elements, @id, name', Length(Raw), procedure begin
+    var R := XmlReader.CreateFromString(Raw);
+    Count := 0;
+    for var Item in R.Elements('item') do
+    begin
+      Inc(Count, Length(Item.GetAttribute('id')));
+      if Item.ReadToDescendant('name') then
+        Inc(Count, Length(Item.ReadElementContentAsString));
+    end;
+  end);
+  Best('IXmlReader: ReadElements (DOM)', Length(Raw), procedure begin
+    var R := XmlReader.CreateFromString(Raw);
+    Count := 0;
+    for var El in R.ReadElements('item') do
+      Inc(Count, Length(El.GetAttribute('id')));
+  end);
+  Best('IXmlReader: ReadElement(Doc)', Length(Raw), procedure begin
+    var R := XmlReader.CreateFromString(Raw);
+    var Target := CoCreateXMLDocument;
+    Count := 0;
+    while R.ReadToFollowing('item') do
+      repeat
+        Inc(Count, Length(R.ReadElement(Target).GetAttribute('id')));
+      until not R.IsStartElement('item');
+  end);
+end;
+
 procedure Run;
 var
   Doc: xmlDocPtr;
@@ -185,6 +237,7 @@ begin
     xmlParseChunk(PCtx, @Utf8Doc[0], Length(Utf8Doc) - 1, 1);
     xmlFreeParserCtxt(PCtx);
   end);
+  RunReader;
 
   Doc := xmlReadMemory(@Utf8Doc[0], Length(Utf8Doc) - 1, 'a.xml', nil, Opts);
   if OrderDoc then

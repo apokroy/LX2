@@ -880,7 +880,7 @@ function xmlGetLastError: xmlErrorPtr; cdecl; external;
 function xmlGetLineNo(const node: xmlNodePtr): LongInt; cdecl; external;
 function xmlGetNodePath(const node: xmlNodePtr): xmlCharPtr; cdecl; external;
 function xmlGetNsList(const doc: xmlDocPtr; node: xmlNodePtr): xmlNsPtr; cdecl; external;
-function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArray): Integer; cdecl; external;
+function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArrayPtr): Integer; cdecl; external;
 function xmlGetNsProp(const node: xmlNodePtr; const name, nameSpace: xmlCharPtr): xmlCharPtr; cdecl; external;
 function xmlGetParameterEntity(doc: xmlDocPtr; const name: xmlCharPtr): xmlEntityPtr; cdecl; external;
 function xmlGetPredefinedEntity(const name: xmlCharPtr): xmlEntityPtr; cdecl; external;
@@ -1018,7 +1018,7 @@ function xmlReaderForDoc(cur, URL, encoding: xmlCharPtr; options: Integer): xmlT
 function xmlReaderForFd(fd: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external;
 function xmlReaderForFile(filename, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external;
 function xmlReaderForIO(ioread: xmlInputReadCallback; ioclose: xmlInputCloseCallback; ioctx: Pointer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external;
-function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: Integer; options: Integer): xmlTextReaderPtr; cdecl; external;
+function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external;
 function xmlReaderNewDoc(reader: xmlTextReaderPtr; cur, URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external;
 function xmlReaderNewFd(reader: xmlTextReaderPtr; fd: Integer; URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external;
 function xmlReaderNewFile(reader: xmlTextReaderPtr; char, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external;
@@ -1143,7 +1143,7 @@ function xmlTextReaderConstString(reader: xmlTextReaderPtr; str: xmlCharPtr): xm
 function xmlTextReaderConstValue(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
 function xmlTextReaderConstXmlLang(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
 function xmlTextReaderConstXmlVersion(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
-function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external;
+function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlDocPtr; cdecl; external;
 function xmlTextReaderCurrentNode(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external;
 function xmlTextReaderDepth(reader: xmlTextReaderPtr): Integer; cdecl; external;
 function xmlTextReaderExpand(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external;
@@ -1180,7 +1180,7 @@ function xmlTextReaderNodeType(reader: xmlTextReaderPtr): Integer; cdecl; extern
 function xmlTextReaderNormalization(reader: xmlTextReaderPtr): Integer; cdecl; external;
 function xmlTextReaderPrefix(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external;
 function xmlTextReaderPreserve(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external;
-function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; var namespaces: xmlCharPtr): Integer; cdecl; external;
+function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; namespaces: xmlCharPtrArrayPtr): Integer; cdecl; external;
 function xmlTextReaderQuoteChar(reader: xmlTextReaderPtr): Integer; cdecl; external;
 function xmlTextReaderRead(reader: xmlTextReaderPtr): Integer; cdecl; external;
 function xmlTextReaderReadAttributeValue(reader: xmlTextReaderPtr): Integer; cdecl; external;
@@ -2330,7 +2330,7 @@ function xmlGetLastError: xmlErrorPtr; cdecl; external NativeLib name 'xmlGetLas
 function xmlGetLineNo(const node: xmlNodePtr): LongInt; cdecl; external NativeLib name 'xmlGetLineNo';
 function xmlGetNodePath(const node: xmlNodePtr): xmlCharPtr; cdecl; external NativeLib name 'xmlGetNodePath';
 function xmlGetNsList(const doc: xmlDocPtr; node: xmlNodePtr): xmlNsPtr; cdecl; external NativeLib name 'xmlGetNsList';
-function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArray): Integer; cdecl; external NativeLib name 'xmlGetNsListSafe';
+function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArrayPtr): Integer; cdecl; external NativeLib name 'xmlGetNsListSafe';
 function xmlGetNsProp(const node: xmlNodePtr; const name, nameSpace: xmlCharPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlGetNsProp';
 function xmlGetParameterEntity(doc: xmlDocPtr; const name: xmlCharPtr): xmlEntityPtr; cdecl; external NativeLib name 'xmlGetParameterEntity';
 function xmlGetPredefinedEntity(const name: xmlCharPtr): xmlEntityPtr; cdecl; external NativeLib name 'xmlGetPredefinedEntity';
@@ -2468,7 +2468,7 @@ function xmlReaderForDoc(cur, URL, encoding: xmlCharPtr; options: Integer): xmlT
 function xmlReaderForFd(fd: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForFd';
 function xmlReaderForFile(filename, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForFile';
 function xmlReaderForIO(ioread: xmlInputReadCallback; ioclose: xmlInputCloseCallback; ioctx: Pointer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForIO';
-function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: Integer; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForMemory';
+function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForMemory';
 function xmlReaderNewDoc(reader: xmlTextReaderPtr; cur, URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewDoc';
 function xmlReaderNewFd(reader: xmlTextReaderPtr; fd: Integer; URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewFd';
 function xmlReaderNewFile(reader: xmlTextReaderPtr; char, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewFile';
@@ -2593,7 +2593,7 @@ function xmlTextReaderConstString(reader: xmlTextReaderPtr; str: xmlCharPtr): xm
 function xmlTextReaderConstValue(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstValue';
 function xmlTextReaderConstXmlLang(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstXmlLang';
 function xmlTextReaderConstXmlVersion(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstXmlVersion';
-function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderCurrentDoc';
+function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlDocPtr; cdecl; external NativeLib name 'xmlTextReaderCurrentDoc';
 function xmlTextReaderCurrentNode(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderCurrentNode';
 function xmlTextReaderDepth(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderDepth';
 function xmlTextReaderExpand(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderExpand';
@@ -2630,7 +2630,7 @@ function xmlTextReaderNodeType(reader: xmlTextReaderPtr): Integer; cdecl; extern
 function xmlTextReaderNormalization(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderNormalization';
 function xmlTextReaderPrefix(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderPrefix';
 function xmlTextReaderPreserve(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderPreserve';
-function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; var namespaces: xmlCharPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderPreservePattern';
+function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; namespaces: xmlCharPtrArrayPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderPreservePattern';
 function xmlTextReaderQuoteChar(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderQuoteChar';
 function xmlTextReaderRead(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderRead';
 function xmlTextReaderReadAttributeValue(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderReadAttributeValue';
@@ -3780,7 +3780,7 @@ function xmlGetLastError: xmlErrorPtr; cdecl; external NativeLib name 'xmlGetLas
 function xmlGetLineNo(const node: xmlNodePtr): LongInt; cdecl; external NativeLib name 'xmlGetLineNo';
 function xmlGetNodePath(const node: xmlNodePtr): xmlCharPtr; cdecl; external NativeLib name 'xmlGetNodePath';
 function xmlGetNsList(const doc: xmlDocPtr; node: xmlNodePtr): xmlNsPtr; cdecl; external NativeLib name 'xmlGetNsList';
-function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArray): Integer; cdecl; external NativeLib name 'xmlGetNsListSafe';
+function xmlGetNsListSafe(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArrayPtr): Integer; cdecl; external NativeLib name 'xmlGetNsListSafe';
 function xmlGetNsProp(const node: xmlNodePtr; const name, nameSpace: xmlCharPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlGetNsProp';
 function xmlGetParameterEntity(doc: xmlDocPtr; const name: xmlCharPtr): xmlEntityPtr; cdecl; external NativeLib name 'xmlGetParameterEntity';
 function xmlGetPredefinedEntity(const name: xmlCharPtr): xmlEntityPtr; cdecl; external NativeLib name 'xmlGetPredefinedEntity';
@@ -3918,7 +3918,7 @@ function xmlReaderForDoc(cur, URL, encoding: xmlCharPtr; options: Integer): xmlT
 function xmlReaderForFd(fd: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForFd';
 function xmlReaderForFile(filename, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForFile';
 function xmlReaderForIO(ioread: xmlInputReadCallback; ioclose: xmlInputCloseCallback; ioctx: Pointer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForIO';
-function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: Integer; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForMemory';
+function xmlReaderForMemory(buffer: xmlCharPtr; size: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl; external NativeLib name 'xmlReaderForMemory';
 function xmlReaderNewDoc(reader: xmlTextReaderPtr; cur, URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewDoc';
 function xmlReaderNewFd(reader: xmlTextReaderPtr; fd: Integer; URL, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewFd';
 function xmlReaderNewFile(reader: xmlTextReaderPtr; char, encoding: xmlCharPtr; options: Integer): Integer; cdecl; external NativeLib name 'xmlReaderNewFile';
@@ -4043,7 +4043,7 @@ function xmlTextReaderConstString(reader: xmlTextReaderPtr; str: xmlCharPtr): xm
 function xmlTextReaderConstValue(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstValue';
 function xmlTextReaderConstXmlLang(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstXmlLang';
 function xmlTextReaderConstXmlVersion(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderConstXmlVersion';
-function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderCurrentDoc';
+function xmlTextReaderCurrentDoc(reader: xmlTextReaderPtr): xmlDocPtr; cdecl; external NativeLib name 'xmlTextReaderCurrentDoc';
 function xmlTextReaderCurrentNode(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderCurrentNode';
 function xmlTextReaderDepth(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderDepth';
 function xmlTextReaderExpand(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderExpand';
@@ -4080,7 +4080,7 @@ function xmlTextReaderNodeType(reader: xmlTextReaderPtr): Integer; cdecl; extern
 function xmlTextReaderNormalization(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderNormalization';
 function xmlTextReaderPrefix(reader: xmlTextReaderPtr): xmlCharPtr; cdecl; external NativeLib name 'xmlTextReaderPrefix';
 function xmlTextReaderPreserve(reader: xmlTextReaderPtr): xmlNodePtr; cdecl; external NativeLib name 'xmlTextReaderPreserve';
-function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; var namespaces: xmlCharPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderPreservePattern';
+function xmlTextReaderPreservePattern(reader: xmlTextReaderPtr; pattern: xmlCharPtr; namespaces: xmlCharPtrArrayPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderPreservePattern';
 function xmlTextReaderQuoteChar(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderQuoteChar';
 function xmlTextReaderRead(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderRead';
 function xmlTextReaderReadAttributeValue(reader: xmlTextReaderPtr): Integer; cdecl; external NativeLib name 'xmlTextReaderReadAttributeValue';

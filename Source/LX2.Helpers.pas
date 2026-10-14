@@ -704,6 +704,237 @@ type
     property  Xml: RawByteString read GetXml;
   end;
 
+  /// <summary>
+  /// Record helper over the libxml2 pull parser (<c>xmlTextReader</c>). Names, values and
+  /// markup are UTF-8 (RawByteString with CP_UTF8) or pointers into the reader. The methods
+  /// named after System.Xml.XmlReader keep its positioning rules; <see cref="Text"/>,
+  /// <see cref="InnerXml"/> and <see cref="OuterXml"/> are libxml2 as is and do not move.
+  /// </summary>
+  /// <remarks>
+  /// <para>
+  /// Names (<see cref="NamePtr"/>, <see cref="LocalNamePtr"/>, <see cref="PrefixPtr"/>,
+  /// <see cref="NamespaceURIPtr"/>) live in the dictionary of the reader until
+  /// <see cref="Free"/>, and the methods that look for a name take atoms
+  /// (<see cref="Atom"/>): equal names are then equal pointers, and the text is compared
+  /// only when the pointers differ. A walker is the exception: its names live in its
+  /// document, and every comparison reads the text. The local name of an <c>xmlns:p</c>
+  /// declaration is the one name not in the dictionary. Values (<see cref="ValuePtr"/>)
+  /// and nodes (<see cref="CurrentNode"/>, <see cref="Expand"/>) live until the reader
+  /// moves; libxml2 recycles freed nodes, so a pointer kept longer reads another node
+  /// instead of failing.
+  /// </para>
+  /// <para>
+  /// With one name a method matches the local name in any namespace; with two the
+  /// namespace must match as well, and a nil namespace means none.
+  /// </para>
+  /// <para>
+  /// While the reader is on an attribute libxml2 answers <see cref="AttributeCount"/> with
+  /// 0 and <see cref="GetAttribute"/> with nothing: <see cref="MoveToElement"/> first.
+  /// </para>
+  /// </remarks>
+  xmlTextReaderHelper = record helper for xmlTextReader
+  private type
+    TSelf = type xmlTextReader;
+  private
+    function  GetAttributeCount: Integer; inline;
+    function  GetDepth: Integer; inline;
+    function  GetHasAttributes: Boolean; inline;
+    function  GetHasValue: Boolean; inline;
+    function  GetIsEmptyElement: Boolean; inline;
+    function  GetIsNamespaceDecl: Boolean; inline;
+    function  GetIsWalker: Boolean; inline;
+    function  GetLastError: xmlErrorPtr; inline;
+    function  GetLineNumber: Integer;
+    function  GetLocalName: RawByteString; inline;
+    function  GetLocalNamePtr: xmlCharPtr; inline;
+    function  GetName: RawByteString; inline;
+    function  GetNamePtr: xmlCharPtr; inline;
+    function  GetNamespaceURI: RawByteString; inline;
+    function  GetNamespaceURIPtr: xmlCharPtr; inline;
+    function  GetNodeType: xmlReaderTypes;
+    function  GetPrefix: RawByteString; inline;
+    function  GetPrefixPtr: xmlCharPtr; inline;
+    function  GetReadState: xmlTextReaderMode;
+    function  GetValue: RawByteString; inline;
+    function  GetValuePtr: xmlCharPtr; inline;
+    /// <summary>Raises the pending exception of the error handler, then the error of the
+    /// reader when <paramref name="Code"/> is negative; True for 1, False for 0.</summary>
+    function  CheckResult(Code: Integer): Boolean;
+    /// <summary>Text, CDATA and whitespace from the current node on; comments, processing
+    /// instructions and unexpanded entity references are passed over; stops on any other node.</summary>
+    function  CollectText: RawByteString;
+    procedure RaiseReaderError(const Msg: string);
+    procedure RaiseNotOnElement;
+  public
+    { Creation. A RawByteString, a string (as UTF-8) and TBytes are parsed in place, the
+      reader holding a reference to them; memory given by a pointer is copied; files and
+      streams are read in pieces of 4 KB. Errors are not printed: Read raises the fatal one,
+      LastError holds the last of any level, and ErrorHandler, when given, receives each; an
+      exception it raises is raised again by the Read that met the error. External entities
+      and DTDs and the network are never used, whatever Options say. URL is the base URI and
+      the name in messages; Encoding overrides the declaration of the document. }
+    class function Create(const XML: RawByteString; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil; const URL: RawByteString = ''; const Encoding: Utf8String = ''): xmlTextReaderPtr; overload; static;
+    class function Create(const XML: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil; const URL: RawByteString = ''): xmlTextReaderPtr; overload; static;
+    class function Create(const Data: TBytes; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil; const URL: RawByteString = ''; const Encoding: Utf8String = ''): xmlTextReaderPtr; overload; static;
+    class function Create(const Data: Pointer; Size: NativeUInt; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil; const URL: RawByteString = ''; const Encoding: Utf8String = ''): xmlTextReaderPtr; overload; static;
+    /// <summary>The stream is read as the reader goes and must outlive it; the reader does
+    /// not free it. <paramref name="Encoding"/> overrides the declaration of the document.</summary>
+    class function Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String = ''; ErrorHandler: xmlDocErrorHandler = nil; const URL: RawByteString = ''): xmlTextReaderPtr; overload; static;
+    /// <summary>nil when the file cannot be opened. <paramref name="Encoding"/> overrides the
+    /// declaration of the document.</summary>
+    class function CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler = nil; const Encoding: Utf8String = ''): xmlTextReaderPtr; static;
+    /// <summary>
+    /// A reader over a parsed document (xmlReaderWalker): no parser, no line numbers, no
+    /// schema validation, and EOF is not known (Read returning False is the end). The
+    /// document stays the caller's and must outlive the reader.
+    /// </summary>
+    class function CreateWalker(const Doc: xmlDocPtr): xmlTextReaderPtr; static;
+    /// <summary>Frees the reader and what Create attached to it.</summary>
+    procedure Free;
+    /// <summary>The reader met a fatal error: it reads no further, and Read returns False.</summary>
+    function  Failed: Boolean;
+
+    { Moving }
+    /// <summary>
+    /// Moves to the next node: True on a node, False at the end and after it. A fatal error
+    /// raises EXmlParserError, and every later call returns False. libxml2 parses ahead in
+    /// pieces of 512 bytes, so the nodes before the error in the same piece never come.
+    /// </summary>
+    function  Read: Boolean;
+    /// <summary>
+    /// As XmlReader.Skip (xmlTextReaderNext): past the current element with its subtree,
+    /// past the element of the current attribute, otherwise one Read. The subtree is still
+    /// parsed and freed: the cost is the size of the subtree.
+    /// </summary>
+    function  Skip: Boolean;
+    /// <summary>As XmlReader.MoveToContent: past whitespace, comments, processing
+    /// instructions and the DOCTYPE, from an attribute to its element; returns the type of
+    /// the node it stops on, None at the end.</summary>
+    function  MoveToContent: xmlReaderTypes;
+    /// <summary>MoveToContent, then True on an element (with this name).</summary>
+    function  IsStartElement: Boolean; overload;
+    function  IsStartElement(LocalName: xmlCharPtr): Boolean; overload;
+    function  IsStartElement(LocalName, NamespaceURI: xmlCharPtr): Boolean; overload;
+    /// <summary>Reads on to the next element with this name in document order; False leaves
+    /// the reader at the end.</summary>
+    function  ReadToFollowing(LocalName: xmlCharPtr): Boolean; overload;
+    function  ReadToFollowing(LocalName, NamespaceURI: xmlCharPtr): Boolean; overload;
+    /// <summary>Reads on to an element with this name inside the current element; False
+    /// leaves the reader on the end tag of the current element (at once for an empty one).</summary>
+    function  ReadToDescendant(LocalName: xmlCharPtr): Boolean; overload;
+    function  ReadToDescendant(LocalName, NamespaceURI: xmlCharPtr): Boolean; overload;
+    /// <summary>Skips to the next sibling element with this name; False leaves the reader on
+    /// the end tag of the parent.</summary>
+    function  ReadToNextSibling(LocalName: xmlCharPtr): Boolean; overload;
+    function  ReadToNextSibling(LocalName, NamespaceURI: xmlCharPtr): Boolean; overload;
+    /// <summary>The name interned in the dictionary of the reader (xmlTextReaderConstString),
+    /// equal by pointer to the names of the nodes of a streaming reader; nil for an empty name.</summary>
+    function  Atom(const Name: RawByteString): xmlCharPtr; inline;
+    /// <summary>The current node is an element with this name.</summary>
+    function  IsElement(LocalName: xmlCharPtr): Boolean; overload; inline;
+    function  IsElement(LocalName, NamespaceURI: xmlCharPtr): Boolean; overload; inline;
+
+    { Attributes of the current element }
+    /// <summary>A qualified name: <c>p:a</c> is looked for by the namespace its prefix is
+    /// bound to, <c>xmlns</c> and <c>xmlns:p</c> are the declarations; '' when absent.</summary>
+    function  GetAttribute(const Name: RawByteString): RawByteString; overload;
+    /// <summary>An empty <paramref name="NamespaceURI"/> means an attribute without a namespace.</summary>
+    function  GetAttribute(const LocalName, NamespaceURI: RawByteString): RawByteString; overload;
+    function  TryGetAttribute(const Name: RawByteString; out Value: RawByteString): Boolean; overload;
+    function  TryGetAttribute(const LocalName, NamespaceURI: RawByteString; out Value: RawByteString): Boolean; overload;
+    function  MoveToAttribute(const Name: RawByteString): Boolean; overload;
+    function  MoveToAttribute(const LocalName, NamespaceURI: RawByteString): Boolean; overload;
+    /// <summary>Namespace declarations come first, then the attributes, each in document order.</summary>
+    function  MoveToFirstAttribute: Boolean; inline;
+    function  MoveToNextAttribute: Boolean; inline;
+    function  MoveToElement: Boolean; inline;
+    /// <summary>On an attribute, steps through the text of its value.</summary>
+    function  ReadAttributeValue: Boolean; inline;
+    /// <summary>The URI bound to the prefix in scope, the default namespace for '';
+    /// '' when unbound.</summary>
+    function  LookupNamespace(const Prefix: RawByteString): RawByteString;
+
+    { Content }
+    /// <summary>
+    /// As XmlReader.ReadElementContentAsString: the text of the current element, comments
+    /// and processing instructions left out, '' for an empty one; EXmlReaderError on a
+    /// child element. Leaves the reader on the node after the end tag. A reference to an
+    /// entity that was not expanded contributes nothing.
+    /// </summary>
+    function  ReadElementContent: RawByteString;
+    /// <summary>
+    /// As XmlReader.ReadContentAsString: on an attribute its value (the reader stays);
+    /// otherwise text, CDATA and whitespace up to the next element or end tag, where the
+    /// reader stops. EXmlReaderError on an element.
+    /// </summary>
+    function  ReadContent: RawByteString;
+    /// <summary>Text of the current node with its subtree, the text of child elements
+    /// included (xmlTextReaderReadString); '' for an empty element and an attribute. Does
+    /// not move.</summary>
+    function  Text: RawByteString;
+    /// <summary>Markup of the content of the current element; does not move.</summary>
+    function  InnerXml: RawByteString;
+    /// <summary>Markup of the current element with its subtree, with the declarations of
+    /// the namespaces it uses from its ancestors; does not move.</summary>
+    function  OuterXml: RawByteString;
+
+    { Tree }
+    /// <summary>The current node: an element, text node, attribute (xmlAttrPtr), or a
+    /// namespace declaration (xmlNsPtr, check the type first). Valid until the reader moves.</summary>
+    function  CurrentNode: xmlNodePtr; inline;
+    /// <summary>The current node with its whole subtree parsed (the element for an
+    /// attribute); valid until the reader moves.</summary>
+    function  Expand: xmlNodePtr; inline;
+    /// <summary>
+    /// Copies the current element with its subtree into <paramref name="Doc"/>, unlinked,
+    /// and declares on the copy every namespace in scope of the element, used or not, so
+    /// prefixes in values such as <c>xsi:type="t:Code"</c> keep their meaning; <c>xml:lang</c>
+    /// and <c>xml:space</c> of the ancestors are not copied. Does not move; the copy is the
+    /// caller's. EXmlReaderError when the reader is not on an element.
+    /// </summary>
+    function  CopyNode(const Doc: xmlDocPtr): xmlNodePtr;
+    /// <summary><see cref="CopyNode"/>, then past the element (Skip), as XNode.ReadFrom.</summary>
+    function  ReadNode(const Doc: xmlDocPtr): xmlNodePtr;
+
+    { Validation }
+    /// <summary>Validates while reading against a compiled schema, which must outlive the
+    /// reader. Before the first Read only; False after it and on a walker.</summary>
+    function  SetSchema(const Schema: xmlSchemaPtr): Boolean;
+    /// <summary>True while a schema was set and no validation error has been met.</summary>
+    function  IsValid: Boolean; inline;
+
+    property  AttributeCount: Integer read GetAttributeCount;
+    property  Depth: Integer read GetDepth;
+    property  HasAttributes: Boolean read GetHasAttributes;
+    property  HasValue: Boolean read GetHasValue;
+    property  IsEmptyElement: Boolean read GetIsEmptyElement;
+    property  IsNamespaceDecl: Boolean read GetIsNamespaceDecl;
+    /// <summary>A reader made by <see cref="CreateWalker"/>.</summary>
+    property  IsWalker: Boolean read GetIsWalker;
+    /// <summary>The last error or warning of the parser; nil on a walker.</summary>
+    property  LastError: xmlErrorPtr read GetLastError;
+    /// <summary>Line of the current node (of the start tag for an end tag, of the element
+    /// for an attribute); exact past 65535 with xmlParseBigLines; 0 when unknown: on a
+    /// namespace declaration, in substituted entities.</summary>
+    property  LineNumber: Integer read GetLineNumber;
+    property  LocalName: RawByteString read GetLocalName;
+    property  LocalNamePtr: xmlCharPtr read GetLocalNamePtr;
+    property  Name: RawByteString read GetName;
+    property  NamePtr: xmlCharPtr read GetNamePtr;
+    property  NamespaceURI: RawByteString read GetNamespaceURI;
+    property  NamespaceURIPtr: xmlCharPtr read GetNamespaceURIPtr;
+    /// <summary>Whitespace-only text comes as XML_READER_TYPE_SIGNIFICANT_WHITESPACE
+    /// whatever xml:space says: libxml2 never reports XML_READER_TYPE_WHITESPACE.</summary>
+    property  NodeType: xmlReaderTypes read GetNodeType;
+    property  Prefix: RawByteString read GetPrefix;
+    property  PrefixPtr: xmlCharPtr read GetPrefixPtr;
+    /// <summary>As libxml2 reports it: EOF comes as soon as the input is used up, which may
+    /// be before the last nodes are read; a walker stays in INITIAL.</summary>
+    property  ReadState: xmlTextReaderMode read GetReadState;
+    property  Value: RawByteString read GetValue;
+    property  ValuePtr: xmlCharPtr read GetValuePtr;
+  end;
+
   PXmlErrorCallback = ^TXmlErrorCallback;
   TXmlErrorCallback = record
     Handler: xmlDocErrorHandler;
@@ -2608,6 +2839,762 @@ begin
   var vctxt := xmlCtxtGetValidCtxt(ctx);
   Result := xmlValidateElement(vctxt, @Self, Node) = 1;
   xmlFreeParserCtxt(ctx);
+end;
+
+{ xmlTextReaderHelper }
+
+resourcestring
+  SReaderFailed           = 'The reader stopped without an error report';
+  SReaderNotOnElement     = 'The reader is on a %s node, not on an element';
+  SReaderMixedContent     = 'Element "%s" holds a child element where text is expected';
+  SReaderEndTagExpected   = 'The end tag of "%s" is expected, the reader is on a %s node';
+  SReaderContentOnElement = 'Content is read from text or an attribute, the reader is on element "%s"';
+
+const
+  ReaderTypeNames: array[xmlReaderTypes] of string = ('none', 'element', 'attribute', 'text',
+    'CDATA', 'entity reference', 'entity', 'processing instruction', 'comment', 'document',
+    'document type', 'document fragment', 'notation', 'whitespace', 'significant whitespace',
+    'end element', 'end entity', 'XML declaration');
+
+  /// <summary>Marks the record Create attaches to a reader as the argument of its error
+  /// callback, so that Free and Read recognise it among arguments set through libxml2.</summary>
+  ReaderRelaySignature = $5232584C;
+
+type
+  PReaderRelay = ^TReaderRelay;
+  /// <summary>
+  /// What Create attaches to a reader: the error handler of the caller, the stream it reads,
+  /// and the exception either of them raised inside a libxml2 callback. An exception must
+  /// not unwind through the C frames of libxml2, so it is kept here and raised again when
+  /// the libxml2 call returns.
+  /// </summary>
+  TReaderRelay = record
+    Signature: Cardinal;
+    Handler: xmlDocErrorHandler;
+    Stream: TStream;
+    /// <summary>The document in memory, parsed in place through Input and kept alive here
+    /// as long as the reader.</summary>
+    Text: RawByteString;
+    Bytes: TBytes;
+    /// <summary>The input buffer over Text or Bytes: the reader does not own it.</summary>
+    Input: xmlParserInputBufferPtr;
+    Pending: TObject;
+    /// <summary>Pending came from the stream: it is the cause of the failure of the parser
+    /// that follows it.</summary>
+    PendingFromInput: Boolean;
+    /// <summary>The fatal error has been raised: libxml2 answers every later move with -1,
+    /// and Read returns False for it.</summary>
+    FailureRaised: Boolean;
+  end;
+
+var
+  /// <summary>Readers whose record holds an exception for the next move, in every thread.
+  /// While there are none, Read and Skip return a node without looking up the record.</summary>
+  ReaderPendingCount: Integer = 0;
+
+procedure SetPending(Relay: PReaderRelay; E: TObject; FromInput: Boolean);
+begin
+  Relay.Pending := E;
+  Relay.PendingFromInput := FromInput;
+  AtomicIncrement(ReaderPendingCount);
+end;
+
+function TakePending(Relay: PReaderRelay; out FromInput: Boolean): TObject;
+begin
+  Result := Relay.Pending;
+  FromInput := Relay.PendingFromInput;
+  if Result <> nil then
+  begin
+    Relay.Pending := nil;
+    Relay.PendingFromInput := False;
+    AtomicDecrement(ReaderPendingCount);
+  end;
+end;
+
+procedure ReaderErrorRelay(userData: Pointer; const error: xmlErrorPtr); cdecl;
+var
+  Relay: PReaderRelay absolute userData;
+begin
+  if Assigned(Relay.Handler) and (Relay.Pending = nil) then
+  try
+    Relay.Handler(error^);
+  except
+    SetPending(Relay, AcquireExceptionObject, False);
+  end;
+end;
+
+function ReaderStreamRead(context: Pointer; buffer: PUTF8Char; len: Integer): Integer; cdecl;
+var
+  Relay: PReaderRelay absolute context;
+begin
+  try
+    Result := Relay.Stream.Read(buffer^, len);
+  except
+    if Relay.Pending = nil then
+      SetPending(Relay, AcquireExceptionObject, True);
+    Result := -1;
+  end;
+end;
+
+function ReaderStreamClose(context: Pointer): Integer; cdecl;
+begin
+  Result := 0;
+end;
+
+function NewReaderRelay(ErrorHandler: xmlDocErrorHandler; Stream: TStream): PReaderRelay;
+begin
+  New(Result);
+  Result.Signature := ReaderRelaySignature;
+  Result.Handler := ErrorHandler;
+  Result.Stream := Stream;
+  Result.Input := nil;
+  Result.Pending := nil;
+  Result.PendingFromInput := False;
+  Result.FailureRaised := False;
+end;
+
+/// <summary>Frees the record after its reader, the input buffer the reader parsed included.</summary>
+procedure FreeReaderRelay(Relay: PReaderRelay);
+var
+  FromInput: Boolean;
+begin
+  TakePending(Relay, FromInput).Free;
+  if Relay.Input <> nil then
+    xmlFreeParserInputBuffer(Relay.Input);
+  Dispose(Relay);
+end;
+
+/// <summary>Attaches <paramref name="Relay"/> to a new reader as the argument of its error
+/// callback, or frees it when the reader was not created.</summary>
+function AttachReaderRelay(Reader: xmlTextReaderPtr; Relay: PReaderRelay): xmlTextReaderPtr;
+begin
+  Result := Reader;
+  if Reader = nil then
+    FreeReaderRelay(Relay)
+  else
+    xmlTextReaderSetStructuredErrorHandler(Reader, ReaderErrorRelay, Relay);
+end;
+
+function ReaderRelayOf(Reader: xmlTextReaderPtr): PReaderRelay;
+var
+  F: xmlTextReaderErrorFunc;
+  Arg: Pointer;
+begin
+  xmlTextReaderGetErrorHandler(Reader, F, Arg);
+  if (Arg <> nil) and (PReaderRelay(Arg).Signature = ReaderRelaySignature) then
+    Result := Arg
+  else
+    Result := nil;
+end;
+
+/// <summary>The libxml2 options of a reader: external entities, external DTDs and the
+/// network are never used, and names stay in the dictionary, where the pointers the reader
+/// hands out live as long as it does.</summary>
+function ReaderOptions(const Options: TXmlParserOptions): Integer;
+begin
+  Result := XmlParserOptions(Options - [xmlParseNoDict]) or XML_PARSE_NO_XXE or XML_PARSE_NONET;
+end;
+
+/// <summary>
+/// A reader of the document the record keeps in Text or Bytes, parsed in place: the steps of
+/// xmlReaderForMemory with a static input buffer instead of a copy of the whole document.
+/// The record is attached to the reader, or freed when there is none.
+/// </summary>
+function NewInPlaceReader(Data: Pointer; Size: NativeInt; Relay: PReaderRelay; const URL, Encoding: RawByteString;
+  Options: Integer): xmlTextReaderPtr;
+begin
+  Result := nil;
+  if Size <= MaxInt then
+    Relay.Input := xmlParserInputBufferCreateStatic(Data, Size, XML_CHAR_ENCODING_NONE);
+  if Relay.Input <> nil then
+  begin
+    Result := xmlNewTextReader(Relay.Input, xmlStrPtr(URL));
+    if (Result <> nil) and (xmlTextReaderSetup(Result, nil, xmlStrPtr(URL), xmlStrPtr(Encoding), Options) < 0) then
+    begin
+      xmlFreeTextReader(Result);
+      Result := nil;
+    end;
+  end;
+  Result := AttachReaderRelay(Result, Relay);
+end;
+
+class function xmlTextReaderHelper.Create(const XML: RawByteString; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler; const URL: RawByteString; const Encoding: Utf8String): xmlTextReaderPtr;
+begin
+  var Relay := NewReaderRelay(ErrorHandler, nil);
+  Relay.Text := XML;
+  Result := NewInPlaceReader(Pointer(Relay.Text), Length(Relay.Text), Relay, URL, Encoding, ReaderOptions(Options));
+end;
+
+class function xmlTextReaderHelper.Create(const XML: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler; const URL: RawByteString): xmlTextReaderPtr;
+begin
+  var Relay := NewReaderRelay(ErrorHandler, nil);
+  Relay.Text := UTF8Encode(XML);
+  // The text is UTF-8 now, whatever its declaration says
+  Result := NewInPlaceReader(Pointer(Relay.Text), Length(Relay.Text), Relay, URL, 'UTF-8', ReaderOptions(Options));
+end;
+
+class function xmlTextReaderHelper.Create(const Data: TBytes; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler; const URL: RawByteString; const Encoding: Utf8String): xmlTextReaderPtr;
+begin
+  var Relay := NewReaderRelay(ErrorHandler, nil);
+  Relay.Bytes := Data;
+  Result := NewInPlaceReader(Pointer(Relay.Bytes), Length(Relay.Bytes), Relay, URL, Encoding, ReaderOptions(Options));
+end;
+
+class function xmlTextReaderHelper.Create(const Data: Pointer; Size: NativeUInt; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler; const URL: RawByteString; const Encoding: Utf8String): xmlTextReaderPtr;
+begin
+  if Size > NativeUInt(MaxInt) then
+    Exit(nil);
+  Result := AttachReaderRelay(xmlReaderForMemory(Data, Integer(Size), xmlStrPtr(URL), xmlStrPtr(Encoding),
+    ReaderOptions(Options)), NewReaderRelay(ErrorHandler, nil));
+end;
+
+class function xmlTextReaderHelper.Create(Stream: TStream; const Options: TXmlParserOptions; const Encoding: Utf8String; ErrorHandler: xmlDocErrorHandler; const URL: RawByteString): xmlTextReaderPtr;
+begin
+  var Relay := NewReaderRelay(ErrorHandler, Stream);
+  // libxml2 reads the first bytes while it creates the reader: an exception of the stream
+  // there comes out of Create
+  Result := xmlReaderForIO(ReaderStreamRead, ReaderStreamClose, Relay, xmlStrPtr(URL), xmlStrPtr(Encoding),
+    ReaderOptions(Options));
+  if Result = nil then
+  begin
+    var FromInput: Boolean;
+    var Pending := TakePending(Relay, FromInput);
+    FreeReaderRelay(Relay);
+    if Pending <> nil then
+      raise Pending;
+  end
+  else
+    xmlTextReaderSetStructuredErrorHandler(Result, ReaderErrorRelay, Relay);
+end;
+
+class function xmlTextReaderHelper.CreateFromFile(const FileName: string; const Options: TXmlParserOptions; ErrorHandler: xmlDocErrorHandler; const Encoding: Utf8String): xmlTextReaderPtr;
+begin
+  var Args: TXmlArgs;
+  Result := AttachReaderRelay(xmlReaderForFile(Args.StrPtr(FileName), xmlStrPtr(Encoding), ReaderOptions(Options + [xmlParseUnzip])),
+    NewReaderRelay(ErrorHandler, nil));
+end;
+
+class function xmlTextReaderHelper.CreateWalker(const Doc: xmlDocPtr): xmlTextReaderPtr;
+begin
+  Result := xmlReaderWalker(Doc);
+end;
+
+procedure xmlTextReaderHelper.Free;
+begin
+  if @Self = nil then
+    Exit;
+  var Relay := ReaderRelayOf(@Self);
+  xmlFreeTextReader(@Self);
+  if Relay <> nil then
+    FreeReaderRelay(Relay);
+end;
+
+function xmlTextReaderHelper.CheckResult(Code: Integer): Boolean;
+begin
+  var Relay := ReaderRelayOf(@Self);
+  var Pending: TObject := nil;
+  var FromInput := False;
+  if Relay <> nil then
+    Pending := TakePending(Relay, FromInput);
+  if Code < 0 then
+  begin
+    // libxml2 answers every move after a fatal error with -1 again: it is raised once
+    if Relay <> nil then
+    begin
+      if Relay.FailureRaised then
+      begin
+        Pending.Free;
+        Exit(False);
+      end;
+      Relay.FailureRaised := True;
+    end;
+    // An exception of the stream caused the failure and tells more; one of the error
+    // handler gives way to the error of the parser
+    if FromInput then
+      raise Pending;
+    Pending.Free;
+    var E := xmlTextReaderGetLastError(@Self);
+    if (E <> nil) and (E.code <> 0) then
+      raise EXmlParserError.Create(E^)
+    else
+      raise EXmlParserError.CreateRes(@SReaderFailed);
+  end;
+  if Pending <> nil then
+    raise Pending;
+  Result := Code = 1;
+end;
+
+function xmlTextReaderHelper.Failed: Boolean;
+begin
+  if xmlTextReaderReadState(@Self) = Ord(XML_TEXTREADER_MODE_ERROR) then
+    Exit(True);
+  // A fatal error stops the parser for good, whatever mode it left behind
+  var E := xmlTextReaderGetLastError(@Self);
+  Result := (E <> nil) and (E.level = XML_ERR_FATAL);
+end;
+
+function xmlTextReaderHelper.Read: Boolean;
+begin
+  var Code := xmlTextReaderRead(@Self);
+  // The usual case, a node and no exception kept anywhere, costs no look at the record
+  if (Code = 1) and (ReaderPendingCount = 0) then
+    Exit(True);
+  Result := CheckResult(Code);
+end;
+
+function xmlTextReaderHelper.Skip: Boolean;
+begin
+  var Code := xmlTextReaderNext(@Self);
+  if (Code = 1) and (ReaderPendingCount = 0) then
+    Exit(True);
+  Result := CheckResult(Code);
+end;
+
+function xmlTextReaderHelper.MoveToContent: xmlReaderTypes;
+begin
+  repeat
+    Result := GetNodeType;
+    case Result of
+      XML_READER_TYPE_ATTRIBUTE:
+        begin
+          MoveToElement;
+          Exit(XML_READER_TYPE_ELEMENT);
+        end;
+      XML_READER_TYPE_ELEMENT, XML_READER_TYPE_END_ELEMENT, XML_READER_TYPE_TEXT,
+      XML_READER_TYPE_CDATA, XML_READER_TYPE_ENTITY_REFERENCE, XML_READER_TYPE_END_ENTITY:
+        Exit;
+    end;
+  until not Read;
+  Result := GetNodeType;
+end;
+
+function xmlTextReaderHelper.IsStartElement: Boolean;
+begin
+  Result := MoveToContent = XML_READER_TYPE_ELEMENT;
+end;
+
+function xmlTextReaderHelper.IsStartElement(LocalName: xmlCharPtr): Boolean;
+begin
+  Result := (MoveToContent = XML_READER_TYPE_ELEMENT) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName);
+end;
+
+function xmlTextReaderHelper.IsStartElement(LocalName, NamespaceURI: xmlCharPtr): Boolean;
+begin
+  Result := (MoveToContent = XML_READER_TYPE_ELEMENT) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName) and
+    xmlStrSame(xmlTextReaderConstNamespaceUri(@Self), NamespaceURI);
+end;
+
+function xmlTextReaderHelper.IsElement(LocalName: xmlCharPtr): Boolean;
+begin
+  Result := (xmlTextReaderNodeType(@Self) = Ord(XML_READER_TYPE_ELEMENT)) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName);
+end;
+
+function xmlTextReaderHelper.IsElement(LocalName, NamespaceURI: xmlCharPtr): Boolean;
+begin
+  Result := (xmlTextReaderNodeType(@Self) = Ord(XML_READER_TYPE_ELEMENT)) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName) and
+    xmlStrSame(xmlTextReaderConstNamespaceUri(@Self), NamespaceURI);
+end;
+
+function xmlTextReaderHelper.ReadToFollowing(LocalName: xmlCharPtr): Boolean;
+begin
+  while Read do
+    if IsElement(LocalName) then
+      Exit(True);
+  Result := False;
+end;
+
+function xmlTextReaderHelper.ReadToFollowing(LocalName, NamespaceURI: xmlCharPtr): Boolean;
+begin
+  while Read do
+    if IsElement(LocalName, NamespaceURI) then
+      Exit(True);
+  Result := False;
+end;
+
+function xmlTextReaderHelper.ReadToDescendant(LocalName: xmlCharPtr): Boolean;
+begin
+  Result := ReadToDescendant(LocalName, Pointer(-1));
+end;
+
+function xmlTextReaderHelper.ReadToDescendant(LocalName, NamespaceURI: xmlCharPtr): Boolean;
+var
+  ParentDepth: Integer;
+begin
+  ParentDepth := GetDepth;
+  case GetNodeType of
+    XML_READER_TYPE_ELEMENT:
+      if GetIsEmptyElement then
+        Exit(False);
+    XML_READER_TYPE_NONE:
+      // Not started yet: the whole document is the scope
+      if GetReadState = XML_TEXTREADER_MODE_INITIAL then
+        ParentDepth := -1
+      else
+        Exit(False);
+  else
+    Exit(False);
+  end;
+  while Read and (GetDepth > ParentDepth) do
+    if (xmlTextReaderNodeType(@Self) = Ord(XML_READER_TYPE_ELEMENT)) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName) and
+      ((NamespaceURI = Pointer(-1)) or xmlStrSame(xmlTextReaderConstNamespaceUri(@Self), NamespaceURI)) then
+      Exit(True);
+  Result := False;
+end;
+
+function xmlTextReaderHelper.ReadToNextSibling(LocalName: xmlCharPtr): Boolean;
+begin
+  Result := ReadToNextSibling(LocalName, Pointer(-1));
+end;
+
+function xmlTextReaderHelper.ReadToNextSibling(LocalName, NamespaceURI: xmlCharPtr): Boolean;
+var
+  T: xmlReaderTypes;
+begin
+  repeat
+    if not Skip then
+      Exit(False);
+    T := GetNodeType;
+    if (T = XML_READER_TYPE_ELEMENT) and xmlStrSame(xmlTextReaderConstLocalName(@Self), LocalName) and
+      ((NamespaceURI = Pointer(-1)) or xmlStrSame(xmlTextReaderConstNamespaceUri(@Self), NamespaceURI)) then
+      Exit(True);
+  until T = XML_READER_TYPE_END_ELEMENT;
+  Result := False;
+end;
+
+function xmlTextReaderHelper.Atom(const Name: RawByteString): xmlCharPtr;
+begin
+  if Name = '' then
+    Result := nil
+  else
+    Result := xmlTextReaderConstString(@Self, Pointer(Name));
+end;
+
+function xmlTextReaderHelper.GetAttribute(const Name: RawByteString): RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderGetAttribute(@Self, xmlStrPtr(Name)));
+end;
+
+function xmlTextReaderHelper.GetAttribute(const LocalName, NamespaceURI: RawByteString): RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderGetAttributeNs(@Self, xmlStrPtr(LocalName), xmlStrPtr(NamespaceURI)));
+end;
+
+function xmlTextReaderHelper.TryGetAttribute(const Name: RawByteString; out Value: RawByteString): Boolean;
+begin
+  var P := xmlTextReaderGetAttribute(@Self, xmlStrPtr(Name));
+  Result := P <> nil;
+  Value := xmlCharToRawAndFree(P);
+end;
+
+function xmlTextReaderHelper.TryGetAttribute(const LocalName, NamespaceURI: RawByteString; out Value: RawByteString): Boolean;
+begin
+  var P := xmlTextReaderGetAttributeNs(@Self, xmlStrPtr(LocalName), xmlStrPtr(NamespaceURI));
+  Result := P <> nil;
+  Value := xmlCharToRawAndFree(P);
+end;
+
+function xmlTextReaderHelper.MoveToAttribute(const Name: RawByteString): Boolean;
+begin
+  Result := xmlTextReaderMoveToAttribute(@Self, xmlStrPtr(Name)) = 1;
+end;
+
+function xmlTextReaderHelper.MoveToAttribute(const LocalName, NamespaceURI: RawByteString): Boolean;
+begin
+  // xmlTextReaderMoveToAttributeNs refuses a nil namespace; an unprefixed name is the
+  // attribute without one
+  if NamespaceURI = '' then
+    Result := xmlTextReaderMoveToAttribute(@Self, xmlStrPtr(LocalName)) = 1
+  else
+    Result := xmlTextReaderMoveToAttributeNs(@Self, xmlStrPtr(LocalName), xmlStrPtr(NamespaceURI)) = 1;
+end;
+
+function xmlTextReaderHelper.MoveToFirstAttribute: Boolean;
+begin
+  Result := xmlTextReaderMoveToFirstAttribute(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.MoveToNextAttribute: Boolean;
+begin
+  Result := xmlTextReaderMoveToNextAttribute(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.MoveToElement: Boolean;
+begin
+  Result := xmlTextReaderMoveToElement(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.ReadAttributeValue: Boolean;
+begin
+  Result := xmlTextReaderReadAttributeValue(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.LookupNamespace(const Prefix: RawByteString): RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderLookupNamespace(@Self, xmlStrPtr(Prefix)));
+end;
+
+function xmlTextReaderHelper.CollectText: RawByteString;
+begin
+  Result := '';
+  repeat
+    case GetNodeType of
+      XML_READER_TYPE_TEXT, XML_READER_TYPE_CDATA, XML_READER_TYPE_WHITESPACE, XML_READER_TYPE_SIGNIFICANT_WHITESPACE:
+        if Result = '' then
+          Result := xmlCharToRaw(xmlTextReaderConstValue(@Self))
+        else
+          Result := Result + xmlCharToRaw(xmlTextReaderConstValue(@Self));
+      XML_READER_TYPE_COMMENT, XML_READER_TYPE_PROCESSING_INSTRUCTION, XML_READER_TYPE_ENTITY_REFERENCE,
+      XML_READER_TYPE_END_ENTITY:
+        ;
+    else
+      Exit;
+    end;
+  until not Read;
+end;
+
+function xmlTextReaderHelper.ReadElementContent: RawByteString;
+begin
+  if GetNodeType <> XML_READER_TYPE_ELEMENT then
+    RaiseNotOnElement;
+  if GetIsEmptyElement then
+  begin
+    Read;
+    Exit('');
+  end;
+  // The name lives in the dictionary: it outlives the moves below
+  var Element := xmlTextReaderConstName(@Self);
+  Read;
+  Result := CollectText;
+  case GetNodeType of
+    XML_READER_TYPE_END_ELEMENT:
+      Read;
+    XML_READER_TYPE_ELEMENT:
+      RaiseReaderError(Format(SReaderMixedContent, [xmlCharToStr(Element)]));
+  else
+    RaiseReaderError(Format(SReaderEndTagExpected, [xmlCharToStr(Element), ReaderTypeNames[GetNodeType]]));
+  end;
+end;
+
+function xmlTextReaderHelper.ReadContent: RawByteString;
+begin
+  case GetNodeType of
+    XML_READER_TYPE_ELEMENT:
+      RaiseReaderError(Format(SReaderContentOnElement, [GetName]));
+    XML_READER_TYPE_ATTRIBUTE:
+      Exit(GetValue);
+  end;
+  Result := CollectText;
+end;
+
+function xmlTextReaderHelper.Text: RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderReadString(@Self));
+end;
+
+function xmlTextReaderHelper.InnerXml: RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderReadInnerXml(@Self));
+end;
+
+function xmlTextReaderHelper.OuterXml: RawByteString;
+begin
+  Result := xmlCharToRawAndFree(xmlTextReaderReadOuterXml(@Self));
+end;
+
+function xmlTextReaderHelper.CurrentNode: xmlNodePtr;
+begin
+  Result := xmlTextReaderCurrentNode(@Self);
+end;
+
+function xmlTextReaderHelper.Expand: xmlNodePtr;
+begin
+  Result := xmlTextReaderExpand(@Self);
+end;
+
+function xmlTextReaderHelper.CopyNode(const Doc: xmlDocPtr): xmlNodePtr;
+var
+  List: xmlNsPtrArrayPtr;
+begin
+  if GetNodeType <> XML_READER_TYPE_ELEMENT then
+    RaiseNotOnElement;
+  var Node := xmlTextReaderExpand(@Self);
+  if Node = nil then
+    CheckResult(-1);
+  Result := xmlDocCopyNode(Node, Doc, 1);
+  if Result = nil then
+    LX2InternalError;
+  // The copy declares the namespaces its names use; the rest in scope of the element is
+  // declared as well, as xsl:copy-of does. xmlNewNs declares nothing for a prefix the copy
+  // declares already.
+  List := nil;
+  if (xmlGetNsListSafe(Node.doc, Node, List) = 0) and (List <> nil) then
+  begin
+    var I := 0;
+    while List[I] <> nil do
+    begin
+      xmlNewNs(Result, List[I].href, List[I].prefix);
+      Inc(I);
+    end;
+    xmlFree(List);
+  end;
+end;
+
+function xmlTextReaderHelper.ReadNode(const Doc: xmlDocPtr): xmlNodePtr;
+begin
+  Result := CopyNode(Doc);
+  try
+    Skip;
+  except
+    xmlFreeNode(Result);
+    raise;
+  end;
+end;
+
+function xmlTextReaderHelper.SetSchema(const Schema: xmlSchemaPtr): Boolean;
+begin
+  // A walker has no parser context, and libxml2 dereferences it (xmlTextReaderSetSchema)
+  if GetIsWalker or (GetReadState <> XML_TEXTREADER_MODE_INITIAL) then
+    Exit(False);
+  Result := xmlTextReaderSetSchema(@Self, Schema) = 0;
+end;
+
+function xmlTextReaderHelper.IsValid: Boolean;
+begin
+  Result := xmlTextReaderIsValid(@Self) = 1;
+end;
+
+procedure xmlTextReaderHelper.RaiseReaderError(const Msg: string);
+begin
+  raise EXmlReaderError.Create(Msg, GetLineNumber);
+end;
+
+procedure xmlTextReaderHelper.RaiseNotOnElement;
+begin
+  RaiseReaderError(Format(SReaderNotOnElement, [ReaderTypeNames[GetNodeType]]));
+end;
+
+function xmlTextReaderHelper.GetAttributeCount: Integer;
+begin
+  Result := xmlTextReaderAttributeCount(@Self);
+  if Result < 0 then
+    Result := 0;
+end;
+
+function xmlTextReaderHelper.GetDepth: Integer;
+begin
+  Result := xmlTextReaderDepth(@Self);
+end;
+
+function xmlTextReaderHelper.GetHasAttributes: Boolean;
+begin
+  Result := xmlTextReaderHasAttributes(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.GetHasValue: Boolean;
+begin
+  Result := xmlTextReaderHasValue(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.GetIsEmptyElement: Boolean;
+begin
+  Result := xmlTextReaderIsEmptyElement(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.GetIsNamespaceDecl: Boolean;
+begin
+  Result := xmlTextReaderIsNamespaceDecl(@Self) = 1;
+end;
+
+function xmlTextReaderHelper.GetIsWalker: Boolean;
+begin
+  // A streaming reader always has the error record of its parser context, a walker has no context
+  Result := xmlTextReaderGetLastError(@Self) = nil;
+end;
+
+function xmlTextReaderHelper.GetLastError: xmlErrorPtr;
+begin
+  Result := xmlTextReaderGetLastError(@Self);
+end;
+
+function xmlTextReaderHelper.GetLineNumber: Integer;
+begin
+  var Node := xmlTextReaderCurrentNode(@Self);
+  // A namespace declaration (xmlNs) knows neither its line nor its element
+  if (Node = nil) or (Node.&type = XML_NAMESPACE_DECL) then
+    Exit(0);
+  if Node.&type = XML_ATTRIBUTE_NODE then
+    Node := Node.parent;
+  if Node = nil then
+    Exit(0);
+  Result := xmlGetLineNo(Node);
+  if Result < 0 then
+    Result := 0;
+end;
+
+function xmlTextReaderHelper.GetLocalName: RawByteString;
+begin
+  Result := xmlCharToRaw(xmlTextReaderConstLocalName(@Self));
+end;
+
+function xmlTextReaderHelper.GetLocalNamePtr: xmlCharPtr;
+begin
+  Result := xmlTextReaderConstLocalName(@Self);
+end;
+
+function xmlTextReaderHelper.GetName: RawByteString;
+begin
+  Result := xmlCharToRaw(xmlTextReaderConstName(@Self));
+end;
+
+function xmlTextReaderHelper.GetNamePtr: xmlCharPtr;
+begin
+  Result := xmlTextReaderConstName(@Self);
+end;
+
+function xmlTextReaderHelper.GetNamespaceURI: RawByteString;
+begin
+  Result := xmlCharToRaw(xmlTextReaderConstNamespaceUri(@Self));
+end;
+
+function xmlTextReaderHelper.GetNamespaceURIPtr: xmlCharPtr;
+begin
+  Result := xmlTextReaderConstNamespaceUri(@Self);
+end;
+
+function xmlTextReaderHelper.GetNodeType: xmlReaderTypes;
+begin
+  var T := xmlTextReaderNodeType(@Self);
+  if (T < Ord(Low(xmlReaderTypes))) or (T > Ord(High(xmlReaderTypes))) then
+    T := 0;
+  Result := xmlReaderTypes(T);
+end;
+
+function xmlTextReaderHelper.GetPrefix: RawByteString;
+begin
+  Result := xmlCharToRaw(xmlTextReaderConstPrefix(@Self));
+end;
+
+function xmlTextReaderHelper.GetPrefixPtr: xmlCharPtr;
+begin
+  Result := xmlTextReaderConstPrefix(@Self);
+end;
+
+function xmlTextReaderHelper.GetReadState: xmlTextReaderMode;
+begin
+  var State := xmlTextReaderReadState(@Self);
+  if (State < Ord(Low(xmlTextReaderMode))) or (State > Ord(High(xmlTextReaderMode))) then
+    State := Ord(XML_TEXTREADER_MODE_ERROR);
+  Result := xmlTextReaderMode(State);
+end;
+
+function xmlTextReaderHelper.GetValue: RawByteString;
+begin
+  Result := xmlCharToRaw(xmlTextReaderConstValue(@Self));
+end;
+
+function xmlTextReaderHelper.GetValuePtr: xmlCharPtr;
+begin
+  Result := xmlTextReaderConstValue(@Self);
 end;
 
 end.

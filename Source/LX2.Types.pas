@@ -270,6 +270,22 @@ type
   end;
 
   /// <summary>
+  /// Raised by a reader when the document does not have the shape a method needs (text where
+  /// an element is expected, another element than the one named, child elements in simple
+  /// content) or a value is outside the lexical space of its type. Malformed XML raises
+  /// <see cref="EXmlParserError"/> instead.
+  /// </summary>
+  EXmlReaderError = class(EXmlError)
+  private
+    FLine: Integer;
+  public
+    /// <summary>The line is appended to the message when it is known (above 0).</summary>
+    constructor Create(const Msg: string; Line: Integer); overload;
+    /// <summary>Line of the node the reader was on, 0 when unknown.</summary>
+    property Line: Integer read FLine;
+  end;
+
+  /// <summary>
   /// Immutable pair of (local) Name and Namespace URI, analogous to
   /// <c>System.Xml.XmlQualifiedName</c> in .NET — used as a value type for
   /// comparing/passing around qualified names without a live libxml2 node.
@@ -319,6 +335,69 @@ type
     NsXQueryDataType  = 'http://www.w3.org/2003/11/xpath-datatypes';
     NsCollationBase   = 'http://collations.microsoft.com';
     NsCollCodePoint   = 'http://www.w3.org/2004/10/xpath-functions/collation/codepoint';
+  end;
+
+  /// <summary>
+  /// Conversions between Delphi values and the lexical forms of XML Schema types, the same
+  /// on every locale, as <c>System.Xml.XmlConvert</c> in .NET: the decimal separator is
+  /// always a point and dates follow ISO 8601. The XML whitespace around a value is
+  /// ignored; a value longer than 256 characters is not accepted.
+  /// </summary>
+  /// <remarks>
+  /// The <c>To*</c> functions raise <c>EConvertError</c> on a value outside the lexical
+  /// space of the type; the <c>TryTo*</c> functions return False instead. The overloads
+  /// that take a UTF-8 pointer and a length read the text in place, which is how a reader
+  /// converts the content of a node without making a string of it.
+  /// </remarks>
+  XmlConvert = record
+  public
+    /// <summary>xs:boolean: <c>true</c>, <c>false</c>, <c>1</c> or <c>0</c>.</summary>
+    class function ToBoolean(const S: string): Boolean; static;
+    /// <summary>xs:int: an optional sign and decimal digits, within Integer.</summary>
+    class function ToInteger(const S: string): Integer; static;
+    /// <summary>xs:long: an optional sign and decimal digits, within Int64.</summary>
+    class function ToInt64(const S: string): Int64; static;
+    /// <summary>xs:double: a point as the separator, an optional exponent, <c>INF</c>,
+    /// <c>-INF</c> and <c>NaN</c>.</summary>
+    class function ToDouble(const S: string): Double; static;
+    /// <summary>xs:decimal (no exponent) as Currency; a value with a nonzero fifth fraction
+    /// digit or out of the range of Currency is an error rather than a rounded value.</summary>
+    class function ToCurrency(const S: string): Currency; static;
+    /// <summary>
+    /// xs:dateTime or xs:date. The value is the time as written: a time zone
+    /// (<c>Z</c>, <c>+03:00</c>) is checked and dropped, the overload with
+    /// <paramref name="OffsetMinutes"/> returns it. Fractions of a second beyond
+    /// milliseconds are truncated; <c>24:00:00</c> is midnight of the next day.
+    /// </summary>
+    class function ToDateTime(const S: string): TDateTime; overload; static;
+    class function ToDateTime(const S: string; out OffsetMinutes: Integer; out HasOffset: Boolean): TDateTime; overload; static;
+    class function TryToBoolean(const S: string; out Value: Boolean): Boolean; overload; static;
+    class function TryToInteger(const S: string; out Value: Integer): Boolean; overload; static;
+    class function TryToInt64(const S: string; out Value: Int64): Boolean; overload; static;
+    class function TryToDouble(const S: string; out Value: Double): Boolean; overload; static;
+    class function TryToCurrency(const S: string; out Value: Currency): Boolean; overload; static;
+    class function TryToDateTime(const S: string; out Value: TDateTime): Boolean; overload; static;
+    class function TryToDateTime(const S: string; out Value: TDateTime; out OffsetMinutes: Integer; out HasOffset: Boolean): Boolean; overload; static;
+    class function TryToBoolean(P: PUTF8Char; Len: NativeInt; out Value: Boolean): Boolean; overload; static;
+    class function TryToInteger(P: PUTF8Char; Len: NativeInt; out Value: Integer): Boolean; overload; static;
+    class function TryToInt64(P: PUTF8Char; Len: NativeInt; out Value: Int64): Boolean; overload; static;
+    class function TryToDouble(P: PUTF8Char; Len: NativeInt; out Value: Double): Boolean; overload; static;
+    class function TryToCurrency(P: PUTF8Char; Len: NativeInt; out Value: Currency): Boolean; overload; static;
+    class function TryToDateTime(P: PUTF8Char; Len: NativeInt; out Value: TDateTime; out OffsetMinutes: Integer; out HasOffset: Boolean): Boolean; overload; static;
+    { The lexical forms of values. The names differ by type rather than overload one
+      ToString: TDateTime is a Double, and a literal or an expression would not choose. }
+    /// <summary><c>true</c> or <c>false</c>.</summary>
+    class function FromBoolean(Value: Boolean): string; static;
+    class function FromInt64(Value: Int64): string; static;
+    /// <summary>The shortest of 15 and 17 significant digits that reads back as the same
+    /// value; <c>INF</c>, <c>-INF</c> and <c>NaN</c> for the special values.</summary>
+    class function FromDouble(Value: Double): string; static;
+    class function FromCurrency(Value: Currency): string; static;
+    /// <summary>xs:dateTime without a time zone: <c>2026-10-13T09:05:00</c>, with
+    /// <c>.zzz</c> when there are milliseconds.</summary>
+    class function FromDateTime(Value: TDateTime): string; static;
+    /// <summary>xs:date: <c>2026-10-13</c>; the time of day is not written.</summary>
+    class function FromDate(Value: TDateTime): string; static;
   end;
 
 /// <summary>
@@ -615,8 +694,12 @@ resourcestring
   SNotAChild             = 'The parameter node is not a child of this node';
   SRefNotAChild          = 'Insert position node must be a child of the node to insert under';
   SInsertUnderItself     = 'Inserting a node or its ancestor under itself is not allowed';
+  SXmlConvertInvalid     = '"%s" is not a valid %s value';
 
 implementation
+
+uses
+  System.Math;
 
 type
   PStrRec = ^StrRec;
@@ -1471,6 +1554,17 @@ begin
   FCol    := Error.Col;
 end;
 
+{ EXmlReaderError }
+
+constructor EXmlReaderError.Create(const Msg: string; Line: Integer);
+begin
+  if Line > 0 then
+    inherited CreateFmt('%s (line %d)', [Msg, Line])
+  else
+    inherited Create(Msg);
+  FLine := Line;
+end;
+
 { EXmlNsHrefNotFound }
 
 constructor EXmlNsHrefNotFound.Create(const URI: string);
@@ -1521,5 +1615,561 @@ begin
   else
     Result := Namespace + ':' + Name;
 end;
+
+{ XmlConvert }
+
+const
+  MaxLexical = 256;
+
+type
+  TLexicalBuffer = array[0..MaxLexical - 1] of Char;
+
+var
+  InvariantFormat: TFormatSettings;
+
+function IsXmlBlank(C: Char): Boolean; inline;
+begin
+  Result := (C = ' ') or (C = #10) or (C = #13) or (C = #9);
+end;
+
+function IsXmlBlankByte(B: Byte): Boolean; inline;
+begin
+  Result := (B = $20) or (B = $0A) or (B = $0D) or (B = $09);
+end;
+
+/// <summary>Drops the XML whitespace around a lexical value; False when nothing remains or
+/// the rest is longer than MaxLexical.</summary>
+function TrimLexical(var P: PChar; var Len: Integer): Boolean;
+begin
+  while (Len > 0) and IsXmlBlank(P^) do
+  begin
+    Inc(P);
+    Dec(Len);
+  end;
+  while (Len > 0) and IsXmlBlank(P[Len - 1]) do
+    Dec(Len);
+  Result := (Len > 0) and (Len <= MaxLexical);
+end;
+
+/// <summary>Widens a UTF-8 lexical value into <paramref name="Buf"/>, the whitespace around
+/// it dropped. False on a byte above $7F, which no lexical form of these types holds, and on
+/// a value that does not fit.</summary>
+function WidenLexical(P: PByte; Len: NativeInt; var Buf: TLexicalBuffer; out Count: Integer): Boolean;
+var
+  I: Integer;
+begin
+  Count := 0;
+  while (Len > 0) and IsXmlBlankByte(P^) do
+  begin
+    Inc(P);
+    Dec(Len);
+  end;
+  while (Len > 0) and IsXmlBlankByte(P[Len - 1]) do
+    Dec(Len);
+  if (Len = 0) or (Len > MaxLexical) then
+    Exit(False);
+  for I := 0 to Len - 1 do
+  begin
+    if P[I] >= $80 then
+      Exit(False);
+    Buf[I] := Char(P[I]);
+  end;
+  Count := Len;
+  Result := True;
+end;
+
+function SameLexical(P: PChar; Len: Integer; const S: string): Boolean; inline;
+begin
+  Result := (Len = Length(S)) and CompareMem(P, Pointer(S), Len * SizeOf(Char));
+end;
+
+function IsDigit(C: Char): Boolean; inline;
+begin
+  Result := (C >= '0') and (C <= '9');
+end;
+
+function ParseBoolean(P: PChar; Len: Integer; out Value: Boolean): Boolean;
+begin
+  Value := False;
+  if not TrimLexical(P, Len) then
+    Exit(False);
+  if SameLexical(P, Len, 'true') or SameLexical(P, Len, '1') then
+    Value := True
+  else if not (SameLexical(P, Len, 'false') or SameLexical(P, Len, '0')) then
+    Exit(False);
+  Result := True;
+end;
+
+function ParseInt64(P: PChar; Len: Integer; out Value: Int64): Boolean;
+var
+  Negative: Boolean;
+  Limit, Acc: UInt64;
+  Digit: Cardinal;
+begin
+  Value := 0;
+  if not TrimLexical(P, Len) then
+    Exit(False);
+  Negative := P^ = '-';
+  if Negative or (P^ = '+') then
+  begin
+    Inc(P);
+    Dec(Len);
+    if Len = 0 then
+      Exit(False);
+  end;
+  // The magnitude of Low(Int64) is one more than High(Int64)
+  Limit := UInt64(High(Int64)) + UInt64(Ord(Negative));
+  Acc := 0;
+  while Len > 0 do
+  begin
+    Digit := Cardinal(Ord(P^) - Ord('0'));
+    if (Digit > 9) or (Acc > (Limit - Digit) div 10) then
+      Exit(False);
+    Acc := Acc * 10 + Digit;
+    Inc(P);
+    Dec(Len);
+  end;
+  if Negative then
+    Value := -Int64(Acc)
+  else
+    Value := Int64(Acc);
+  Result := True;
+end;
+
+function ParseInteger(P: PChar; Len: Integer; out Value: Integer): Boolean;
+var
+  V: Int64;
+begin
+  Result := ParseInt64(P, Len, V) and (V >= Low(Integer)) and (V <= High(Integer));
+  if Result then
+    Value := Integer(V)
+  else
+    Value := 0;
+end;
+
+/// <summary>
+/// xs:double: <c>(+|-)?([0-9]+(.[0-9]*)?|.[0-9]+)([Ee](+|-)?[0-9]+)?</c>, <c>INF</c>,
+/// <c>+INF</c>, <c>-INF</c>, <c>NaN</c>. The syntax is checked here, so the RTL conversion
+/// never sees a thousands separator or a locale form.
+/// </summary>
+function ParseDouble(P: PChar; Len: Integer; out Value: Double): Boolean;
+var
+  I, Digits: Integer;
+  S: string;
+begin
+  Value := 0;
+  if not TrimLexical(P, Len) then
+    Exit(False);
+  if SameLexical(P, Len, 'NaN') then
+    Value := NaN
+  else if SameLexical(P, Len, 'INF') or SameLexical(P, Len, '+INF') then
+    Value := Infinity
+  else if SameLexical(P, Len, '-INF') then
+    Value := NegInfinity
+  else
+  begin
+    I := 0;
+    if (P[I] = '+') or (P[I] = '-') then
+      Inc(I);
+    Digits := 0;
+    while (I < Len) and IsDigit(P[I]) do
+    begin
+      Inc(I);
+      Inc(Digits);
+    end;
+    if (I < Len) and (P[I] = '.') then
+    begin
+      Inc(I);
+      while (I < Len) and IsDigit(P[I]) do
+      begin
+        Inc(I);
+        Inc(Digits);
+      end;
+    end;
+    if Digits = 0 then
+      Exit(False);
+    if (I < Len) and ((P[I] = 'E') or (P[I] = 'e')) then
+    begin
+      Inc(I);
+      if (I < Len) and ((P[I] = '+') or (P[I] = '-')) then
+        Inc(I);
+      Digits := 0;
+      while (I < Len) and IsDigit(P[I]) do
+      begin
+        Inc(I);
+        Inc(Digits);
+      end;
+      if Digits = 0 then
+        Exit(False);
+    end;
+    if I <> Len then
+      Exit(False);
+    SetString(S, P, Len);
+    Exit(TryStrToFloat(S, Value, InvariantFormat));
+  end;
+  Result := True;
+end;
+
+/// <summary>
+/// xs:decimal, <c>(+|-)?([0-9]+(.[0-9]*)?|.[0-9]+)</c>, into Currency exactly: the value
+/// is accumulated in units of 1/10000, and a nonzero digit past the fourth fraction digit
+/// or a value out of range fails instead of rounding.
+/// </summary>
+function ParseCurrency(P: PChar; Len: Integer; out Value: Currency): Boolean;
+var
+  I, Digits, Scale: Integer;
+  Negative: Boolean;
+  Limit, IntPart, Fraction, Acc: UInt64;
+begin
+  Value := 0;
+  if not TrimLexical(P, Len) then
+    Exit(False);
+  I := 0;
+  Negative := P[I] = '-';
+  if Negative or (P[I] = '+') then
+    Inc(I);
+  Limit := UInt64(High(Int64)) + UInt64(Ord(Negative));
+  IntPart := 0;
+  Digits := 0;
+  while (I < Len) and IsDigit(P[I]) do
+  begin
+    if IntPart > Limit div 10000 then
+      Exit(False);
+    IntPart := IntPart * 10 + UInt64(Ord(P[I]) - Ord('0'));
+    Inc(I);
+    Inc(Digits);
+  end;
+  if IntPart > Limit div 10000 then
+    Exit(False);
+  Fraction := 0;
+  if (I < Len) and (P[I] = '.') then
+  begin
+    Inc(I);
+    Scale := 1000;
+    while (I < Len) and IsDigit(P[I]) do
+    begin
+      if Scale > 0 then
+      begin
+        Inc(Fraction, UInt64(Ord(P[I]) - Ord('0')) * UInt64(Scale));
+        Scale := Scale div 10;
+      end
+      else if P[I] <> '0' then
+        Exit(False);
+      Inc(I);
+      Inc(Digits);
+    end;
+  end;
+  if (Digits = 0) or (I <> Len) then
+    Exit(False);
+  Acc := IntPart * 10000;
+  if Acc > Limit - Fraction then
+    Exit(False);
+  Inc(Acc, Fraction);
+  if Negative then
+    PInt64(@Value)^ := -Int64(Acc)
+  else
+    PInt64(@Value)^ := Int64(Acc);
+  Result := True;
+end;
+
+/// <summary>
+/// xs:dateTime <c>YYYY-MM-DDThh:mm:ss(.s+)?</c> or xs:date <c>YYYY-MM-DD</c>, each with an
+/// optional zone <c>Z</c> or <c>(+|-)hh:mm</c>. Years are the four-digit ones TDateTime
+/// holds.
+/// </summary>
+function ParseDateTime(P: PChar; Len: Integer; out Value: TDateTime; out OffsetMinutes: Integer; out HasOffset: Boolean): Boolean;
+var
+  I: Integer;
+
+  function Number(Count: Integer; out N: Integer): Boolean;
+  var
+    K: Integer;
+  begin
+    N := 0;
+    if I + Count > Len then
+      Exit(False);
+    for K := I to I + Count - 1 do
+    begin
+      if not IsDigit(P[K]) then
+        Exit(False);
+      N := N * 10 + Ord(P[K]) - Ord('0');
+    end;
+    Inc(I, Count);
+    Result := True;
+  end;
+
+  function Expect(C: Char): Boolean;
+  begin
+    Result := (I < Len) and (P[I] = C);
+    if Result then
+      Inc(I);
+  end;
+
+var
+  Year, Month, Day, Hour, Minute, Second, MSec, Scale, Sign, ZoneHour, ZoneMinute: Integer;
+  DatePart, TimePart: TDateTime;
+begin
+  Value := 0;
+  OffsetMinutes := 0;
+  HasOffset := False;
+  if not TrimLexical(P, Len) then
+    Exit(False);
+  I := 0;
+  if not (Number(4, Year) and Expect('-') and Number(2, Month) and Expect('-') and Number(2, Day)) then
+    Exit(False);
+  if not TryEncodeDate(Year, Month, Day, DatePart) then
+    Exit(False);
+  TimePart := 0;
+  if Expect('T') then
+  begin
+    if not (Number(2, Hour) and Expect(':') and Number(2, Minute) and Expect(':') and Number(2, Second)) then
+      Exit(False);
+    MSec := 0;
+    if Expect('.') then
+    begin
+      if (I >= Len) or not IsDigit(P[I]) then
+        Exit(False);
+      Scale := 100;
+      while (I < Len) and IsDigit(P[I]) do
+      begin
+        Inc(MSec, (Ord(P[I]) - Ord('0')) * Scale);
+        Scale := Scale div 10;
+        Inc(I);
+      end;
+    end;
+    if (Hour = 24) and (Minute = 0) and (Second = 0) and (MSec = 0) then
+    begin
+      Hour := 0;
+      DatePart := DatePart + 1;
+    end;
+    if not TryEncodeTime(Hour, Minute, Second, MSec, TimePart) then
+      Exit(False);
+  end;
+  if Expect('Z') then
+    HasOffset := True
+  else if (I < Len) and ((P[I] = '+') or (P[I] = '-')) then
+  begin
+    if P[I] = '-' then
+      Sign := -1
+    else
+      Sign := 1;
+    Inc(I);
+    if not (Number(2, ZoneHour) and Expect(':') and Number(2, ZoneMinute)) then
+      Exit(False);
+    if (ZoneMinute > 59) or (ZoneHour > 14) or ((ZoneHour = 14) and (ZoneMinute <> 0)) then
+      Exit(False);
+    OffsetMinutes := Sign * (ZoneHour * 60 + ZoneMinute);
+    HasOffset := True;
+  end;
+  if I <> Len then
+    Exit(False);
+  // Before 1899-12-30 the date part of a TDateTime is negative and the time still counts
+  // forward from it: 1899-12-29 06:00 is -1.25.
+  if DatePart < 0 then
+    Value := DatePart - TimePart
+  else
+    Value := DatePart + TimePart;
+  Result := True;
+end;
+
+procedure ConvertError(const S, TypeName: string);
+begin
+  raise EConvertError.CreateResFmt(@SXmlConvertInvalid, [S, TypeName]);
+end;
+
+class function XmlConvert.ToBoolean(const S: string): Boolean;
+begin
+  if not ParseBoolean(PChar(S), Length(S), Result) then
+    ConvertError(S, 'xs:boolean');
+end;
+
+class function XmlConvert.ToInteger(const S: string): Integer;
+begin
+  if not ParseInteger(PChar(S), Length(S), Result) then
+    ConvertError(S, 'xs:int');
+end;
+
+class function XmlConvert.ToInt64(const S: string): Int64;
+begin
+  if not ParseInt64(PChar(S), Length(S), Result) then
+    ConvertError(S, 'xs:long');
+end;
+
+class function XmlConvert.ToDouble(const S: string): Double;
+begin
+  if not ParseDouble(PChar(S), Length(S), Result) then
+    ConvertError(S, 'xs:double');
+end;
+
+class function XmlConvert.ToCurrency(const S: string): Currency;
+begin
+  if not ParseCurrency(PChar(S), Length(S), Result) then
+    ConvertError(S, 'xs:decimal');
+end;
+
+class function XmlConvert.ToDateTime(const S: string): TDateTime;
+var
+  Offset: Integer;
+  HasOffset: Boolean;
+begin
+  Result := ToDateTime(S, Offset, HasOffset);
+end;
+
+class function XmlConvert.ToDateTime(const S: string; out OffsetMinutes: Integer; out HasOffset: Boolean): TDateTime;
+begin
+  if not ParseDateTime(PChar(S), Length(S), Result, OffsetMinutes, HasOffset) then
+    ConvertError(S, 'xs:dateTime');
+end;
+
+class function XmlConvert.TryToBoolean(const S: string; out Value: Boolean): Boolean;
+begin
+  Result := ParseBoolean(PChar(S), Length(S), Value);
+end;
+
+class function XmlConvert.TryToInteger(const S: string; out Value: Integer): Boolean;
+begin
+  Result := ParseInteger(PChar(S), Length(S), Value);
+end;
+
+class function XmlConvert.TryToInt64(const S: string; out Value: Int64): Boolean;
+begin
+  Result := ParseInt64(PChar(S), Length(S), Value);
+end;
+
+class function XmlConvert.TryToDouble(const S: string; out Value: Double): Boolean;
+begin
+  Result := ParseDouble(PChar(S), Length(S), Value);
+end;
+
+class function XmlConvert.TryToCurrency(const S: string; out Value: Currency): Boolean;
+begin
+  Result := ParseCurrency(PChar(S), Length(S), Value);
+end;
+
+class function XmlConvert.TryToDateTime(const S: string; out Value: TDateTime): Boolean;
+var
+  Offset: Integer;
+  HasOffset: Boolean;
+begin
+  Result := ParseDateTime(PChar(S), Length(S), Value, Offset, HasOffset);
+end;
+
+class function XmlConvert.TryToDateTime(const S: string; out Value: TDateTime; out OffsetMinutes: Integer; out HasOffset: Boolean): Boolean;
+begin
+  Result := ParseDateTime(PChar(S), Length(S), Value, OffsetMinutes, HasOffset);
+end;
+
+class function XmlConvert.TryToBoolean(P: PUTF8Char; Len: NativeInt; out Value: Boolean): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := False;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseBoolean(@Buf[0], Count, Value);
+end;
+
+class function XmlConvert.TryToInteger(P: PUTF8Char; Len: NativeInt; out Value: Integer): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := 0;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseInteger(@Buf[0], Count, Value);
+end;
+
+class function XmlConvert.TryToInt64(P: PUTF8Char; Len: NativeInt; out Value: Int64): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := 0;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseInt64(@Buf[0], Count, Value);
+end;
+
+class function XmlConvert.TryToDouble(P: PUTF8Char; Len: NativeInt; out Value: Double): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := 0;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseDouble(@Buf[0], Count, Value);
+end;
+
+class function XmlConvert.TryToCurrency(P: PUTF8Char; Len: NativeInt; out Value: Currency): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := 0;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseCurrency(@Buf[0], Count, Value);
+end;
+
+class function XmlConvert.TryToDateTime(P: PUTF8Char; Len: NativeInt; out Value: TDateTime; out OffsetMinutes: Integer; out HasOffset: Boolean): Boolean;
+var
+  Buf: TLexicalBuffer;
+  Count: Integer;
+begin
+  Value := 0;
+  OffsetMinutes := 0;
+  HasOffset := False;
+  Result := WidenLexical(PByte(P), Len, Buf, Count) and ParseDateTime(@Buf[0], Count, Value, OffsetMinutes, HasOffset);
+end;
+
+class function XmlConvert.FromBoolean(Value: Boolean): string;
+begin
+  if Value then
+    Result := 'true'
+  else
+    Result := 'false';
+end;
+
+class function XmlConvert.FromInt64(Value: Int64): string;
+begin
+  Result := IntToStr(Value);
+end;
+
+class function XmlConvert.FromDouble(Value: Double): string;
+var
+  Back: Double;
+begin
+  if IsNan(Value) then
+    Exit('NaN');
+  if IsInfinite(Value) then
+    if Value > 0 then
+      Exit('INF')
+    else
+      Exit('-INF');
+  Result := FloatToStrF(Value, ffGeneral, 15, 0, InvariantFormat);
+  if not TryStrToFloat(Result, Back, InvariantFormat) or (Back <> Value) then
+    Result := FloatToStrF(Value, ffGeneral, 17, 0, InvariantFormat);
+end;
+
+class function XmlConvert.FromCurrency(Value: Currency): string;
+begin
+  Result := CurrToStr(Value, InvariantFormat);
+end;
+
+class function XmlConvert.FromDateTime(Value: TDateTime): string;
+var
+  Year, Month, Day, Hour, Minute, Second, MSec: Word;
+begin
+  DecodeDate(Value, Year, Month, Day);
+  DecodeTime(Value, Hour, Minute, Second, MSec);
+  if MSec = 0 then
+    Result := Format('%.4d-%.2d-%.2dT%.2d:%.2d:%.2d', [Year, Month, Day, Hour, Minute, Second])
+  else
+    Result := Format('%.4d-%.2d-%.2dT%.2d:%.2d:%.2d.%.3d', [Year, Month, Day, Hour, Minute, Second, MSec]);
+end;
+
+class function XmlConvert.FromDate(Value: TDateTime): string;
+var
+  Year, Month, Day: Word;
+begin
+  DecodeDate(Value, Year, Month, Day);
+  Result := Format('%.4d-%.2d-%.2d', [Year, Month, Day]);
+end;
+
+initialization
+  InvariantFormat := TFormatSettings.Invariant;
 
 end.

@@ -2835,9 +2835,9 @@ var
   /// </summary>
   /// <param name="doc">the document</param>
   /// <param name="node">the current node</param>
-  /// <param name="out">the returned namespace array</param>
+  /// <param name="out">the returned namespace array, nil-terminated; free it with xmlFree</param>
   /// <returns>Returns 0 on success, 1 if no namespaces were found, -1 if a memory allocation failed.</returns>
-  xmlGetNsListSafe          : function(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArray): Integer; cdecl;
+  xmlGetNsListSafe          : function(const doc: xmlDocPtr; node: xmlNodePtr; var &out: xmlNsPtrArrayPtr): Integer; cdecl;
 
   /// <summary>
   /// Find all in-scope namespaces of a node.
@@ -4574,6 +4574,16 @@ type
     XML_READER_TYPE_XML_DECLARATION = 17
   );
 
+  ///<summary>State of a reader, as xmlTextReaderReadState reports it (-1 for a nil reader).</summary>
+  xmlTextReaderMode = (
+    XML_TEXTREADER_MODE_INITIAL = 0,
+    XML_TEXTREADER_MODE_INTERACTIVE = 1,
+    XML_TEXTREADER_MODE_ERROR = 2,
+    XML_TEXTREADER_MODE_EOF = 3,
+    XML_TEXTREADER_MODE_CLOSED = 4,
+    XML_TEXTREADER_MODE_READING = 5
+  );
+
   ///<summary>Signature of an error callback from a reader parser</summary>
   ///<param name="arg"> the user argument</param>
   ///<param name="msg"> the message</param>
@@ -4638,12 +4648,14 @@ var
   xmlTextReaderGetParserLineNumber: function(reader: xmlTextReaderPtr): Integer; cdecl;
   xmlTextReaderGetParserColumnNumber: function(reader: xmlTextReaderPtr): Integer; cdecl;
   xmlTextReaderPreserve        : function (reader: xmlTextReaderPtr): xmlNodePtr; cdecl;
-  xmlTextReaderPreservePattern : function (reader: xmlTextReaderPtr; pattern: xmlCharPtr; var namespaces: xmlCharPtr): Integer; cdecl;
-  xmlTextReaderCurrentDoc      : function (reader: xmlTextReaderPtr): xmlNodePtr; cdecl;
+  ///<summary>namespaces: nil, or [URI, prefix, URI, prefix, ..., nil]; copied during the call.</summary>
+  xmlTextReaderPreservePattern : function (reader: xmlTextReaderPtr; pattern: xmlCharPtr; namespaces: xmlCharPtrArrayPtr): Integer; cdecl;
+  xmlTextReaderCurrentDoc      : function (reader: xmlTextReaderPtr): xmlDocPtr; cdecl;
   xmlTextReaderExpand          : function (reader: xmlTextReaderPtr): xmlNodePtr; cdecl;
   xmlTextReaderNext            : function (reader: xmlTextReaderPtr): Integer; cdecl;
   xmlTextReaderNextSibling     : function (reader: xmlTextReaderPtr): Integer; cdecl;
   xmlTextReaderIsValid         : function (reader: xmlTextReaderPtr): Integer; cdecl;
+  // The bundled build has no RelaxNG: with LX2.Static the three stay nil.
   xmlTextReaderRelaxNGValidate : function (reader: xmlTextReaderPtr; rng: xmlCharPtr): Integer; cdecl;
   xmlTextReaderRelaxNGValidateCtxt:function(reader: xmlTextReaderPtr; ctxt: xmlRelaxNGValidCtxtPtr; options: Integer): Integer; cdecl;
   xmlTextReaderRelaxNGSetSchema: function (reader: xmlTextReaderPtr; schema: xmlRelaxNGPtr): Integer; cdecl;
@@ -4659,7 +4671,7 @@ var
   xmlReaderWalker              : function (doc: xmlDocPtr): xmlTextReaderPtr; cdecl;
   xmlReaderForDoc              : function (cur, URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl;
   xmlReaderForFile             : function (filename, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl;
-  xmlReaderForMemory           : function (buffer: xmlCharPtr; size: Integer; URL, encoding: Integer; options: Integer): xmlTextReaderPtr; cdecl;
+  xmlReaderForMemory           : function (buffer: xmlCharPtr; size: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl;
   xmlReaderForFd               : function (fd: Integer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl;
   xmlReaderForIO               : function (ioread: xmlInputReadCallback; ioclose: xmlInputCloseCallback; ioctx: Pointer; URL, encoding: xmlCharPtr; options: Integer): xmlTextReaderPtr; cdecl;
   xmlReaderNewWalker           : function (reader: xmlTextReaderPtr; doc: xmlDocPtr): Integer; cdecl;
@@ -4748,10 +4760,22 @@ end;
 
 { LX2Lib }
 
+var
+  LoadLock: TObject;
+
 class procedure LX2Lib.Initialize;
 begin
-  if not FIsLoaded then
-    Load;
+  // The layers over the library call it on their first use, possibly from several threads
+  // at once: one of them loads, the others wait for it rather than loading again
+  if FIsLoaded then
+    Exit;
+  TMonitor.Enter(LoadLock);
+  try
+    if not FIsLoaded then
+      Load;
+  finally
+    TMonitor.Exit(LoadLock);
+  end;
 end;
 
 class procedure LX2Lib.Unload;
@@ -5512,8 +5536,10 @@ end;
 
 
 initialization
+  LoadLock := TObject.Create;
 
 finalization
   LX2Lib.Unload;
+  LoadLock.Free;
 
 end.

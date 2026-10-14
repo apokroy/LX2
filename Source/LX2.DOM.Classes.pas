@@ -101,7 +101,9 @@ type
       function MoveNext: Boolean;
     end;
   private
-    FList: TInterfaceList;
+    // A plain list: TInterfaceList locks a monitor of its own on every call, and a document
+    // and every XSLT error list would carry one
+    FList: TList<IInterface>;
     FIndex: NativeInt;
   public
     function  Get_Count: NativeInt; inline;
@@ -111,6 +113,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    procedure Add(const Error: TXmlParseError);
     procedure Clear;
     procedure Reset;
     function  MainError: IXMLParseError;
@@ -144,7 +147,7 @@ type
       function MoveNext: Boolean;
     end;
   private
-    FList: TInterfaceList;
+    FList: TList<IInterface>;
   public
     function  Get_Count: NativeInt; inline;
     function  Get_Item(Index: NativeInt): IXSLTError; inline;
@@ -518,6 +521,7 @@ type
 
   TXMLNode = class(TXMLBase, IXMLNode)
   private
+    // Made by XSLTErrorList on the first use: most nodes never take part in a transformation
     FXSLTErrors: TXSLTErrors;
     // The detached subtree this wrapper keeps alive, nil when its node is in none: in the tree
     // of a document, or in a detached subtree whose top has a wrapper and no record
@@ -536,6 +540,8 @@ type
     procedure SetDetachedTree(Tree: TXMLDetachedTree);
     procedure XPathErrorHandler(const error: xmlError);
     procedure XSLTError(const Msg: string); virtual;
+    function  XSLTErrorList: TXSLTErrors;
+    procedure ClearXSLTErrors; inline;
   protected
     /// <summary>
     /// Child number <paramref name="Index"/>, nil outside the list. Steps from the nearest
@@ -623,7 +629,7 @@ type
     property  NamespaceURI: string read Get_namespaceURI;
     property  Prefix: string read Get_prefix;
     property  BaseName: string read Get_baseName;
-    property  XSLTErrors: TXSLTErrors read FXSLTErrors;
+    property  XSLTErrors: TXSLTErrors read XSLTErrorList;
   end;
 
   /// <summary>
@@ -945,6 +951,10 @@ type
     /// without a document.
     /// </summary>
     procedure Compile;
+    /// <summary>The compiled set, compiled on the first call; nil when it does not compile
+    /// (see <see cref="Errors"/>). It belongs to the collection and lives until the next
+    /// <see cref="Add"/> or <see cref="Remove"/>.</summary>
+    function  CompiledSchema: xmlSchemaPtr;
     function  Validate(const Doc: IXMLDocument): Boolean;
     function  IndexOf(const NamespaceURI: string): NativeInt;
     procedure Add(const NamespaceURI: string; const Doc: IXMLDocument; const Resolver: IXMLResolver = nil);
@@ -967,6 +977,8 @@ type
     FResolveExternals: Boolean;
     FPreserveWhiteSpace: Boolean;
     FOptions: TXmlParserOptions;
+    // The parse error with code 0 that ParseError and Validate report on success, made on
+    // the first such report
     FSuccessError: IXMLParseError;
     FSchemas: IXMLSchemaCollection;
     // How many of the references on this object node wrappers hold through its libxml2
@@ -981,6 +993,7 @@ type
     procedure AddNodeRef;
     procedure ReleaseNodeRef;
     procedure Retire;
+    function  SuccessError: IXMLParseError;
     /// <summary>The record that keeps the detached subtree of <paramref name="Top"/>, nil if
     /// none.</summary>
     function  DetachedTree(Top: xmlNodePtr): TXMLDetachedTree;
@@ -1088,6 +1101,13 @@ type
 var
   DebugObjectCount: NativeInt = 0;
 
+/// <summary>
+/// The wrapper of a node of a document this unit manages (one held by a TXMLDocument): the
+/// existing one, or a new one of the class of the node. A node out of any tree belongs to its
+/// wrapper and is freed with it, unless it has been put into a tree by then.
+/// </summary>
+function NodeWrapper(const Node: xmlNodePtr): IXMLNode;
+
 implementation
 
 uses
@@ -1096,28 +1116,6 @@ uses
 var
   GlobalLock: TObject;
   OldDeregisterNodeFunc: xmlDeregisterNodeFunc;
-
-function ISODateTimeToStr(Value: TDateTime): string;
-const
-  TwoDigit: array[0..60] of array[0..1] of Char = (
-    '00', '01', '02', '03', '04', '05', '06', '07', '08', '09',
-    '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
-    '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
-    '30', '31', '32', '33', '34', '35', '36', '37', '38', '39',
-    '40', '41', '42', '43', '44', '45', '46', '47', '48', '49',
-    '50', '51', '52', '53', '54', '55', '56', '57', '58', '59',
-    '60');
-var
-  Y, M, D, H, S, MS: Word;
-begin
-  DecodeDate(Value, Y, M, D);
-  Result := Y.ToString + '-' + M.ToString + '-' + D.ToString;
-  if Frac(Value) <> 0 then
-  begin
-    DecodeTime(Value, H, M, S, MS);
-    Result := Result + ' ' + H.ToString + ':' + M.ToString + ':' + S.ToString;
-  end;
-end;
 
 /// <summary>
 /// Callback registered once, globally, through <c>xmlDeregisterNodeDefault</c>; libxml2
@@ -1186,6 +1184,30 @@ begin
     if (Wrapper.FDetachedTree <> nil) and (Wrapper.FDetachedTree.FTop = Node) then
       Wrapper.FDetachedTree.Forget;
     Wrapper.NodePtr := nil;
+  end;
+end;
+
+var
+  NodeFreeCallbackSet: Boolean = False;
+
+/// <summary>
+/// Installs <see cref="NodeFreeCallback"/>, once, from the constructor of whichever document
+/// comes first: until then libxml2 frees nodes without telling their wrappers.
+/// </summary>
+procedure SetNodeFreeCallback;
+begin
+  if NodeFreeCallbackSet then
+    Exit;
+  TMonitor.Enter(GlobalLock);
+  try
+    if not NodeFreeCallbackSet then
+    begin
+      LX2Lib.Initialize;
+      OldDeregisterNodeFunc := xmlDeregisterNodeDefault(NodeFreeCallback);
+      NodeFreeCallbackSet := True;
+    end;
+  finally
+    TMonitor.Exit(GlobalLock);
   end;
 end;
 
@@ -1328,6 +1350,12 @@ begin
     Exit(TXMLNode(node._private));
 
   case Node.&type of
+    // A document of this unit has its TXMLDocument in _private. Another one (the tree of a
+    // reader, a document built through the helpers) is not wrapped on the way up from its
+    // nodes: a plain node wrapper in its _private would be taken for a document object, and
+    // a TXMLDocument would free a document someone else owns.
+    XML_DOCUMENT_NODE, XML_HTML_DOCUMENT_NODE:
+      Result := nil;
     XML_ELEMENT_NODE       : Result := TXMLElement.Create(Node);
     XML_ATTRIBUTE_NODE     : Result := TXMLAttribute.Create(xmlAttrPtr(Node));
     XML_TEXT_NODE          : Result := TXMLText.Create(Node);
@@ -1340,6 +1368,11 @@ begin
   else
     Result := TXMLNode.Create(node);
   end;
+end;
+
+function NodeWrapper(const Node: xmlNodePtr): IXMLNode;
+begin
+  Result := Cast(Node);
 end;
 
 /// <summary>Attribute-specific version of <see cref="Cast(xmlNodePtr)"/> that saves the caller expecting a <see cref="TXMLAttribute"/> an explicit type cast.</summary>
@@ -2904,9 +2937,6 @@ begin
   if FHeldDoc <> nil then
     SetDetachedTree(TXMLDocument(FHeldDoc._private).DetachedTreeOf(NodePtr));
 
-  FXSLTErrors := TXSLTErrors.Create;
-  FXSLTErrors._AddRef;
-
   {$IFDEF DEBUG}
   AtomicIncrement(DebugObjectCount);
   {$ENDIF}
@@ -3308,12 +3338,28 @@ end;
 
 function TXMLNode.GetXSLTErrors: IXSLTErrors;
 begin
+  Result := XSLTErrorList;
+end;
+
+function TXMLNode.XSLTErrorList: TXSLTErrors;
+begin
+  if FXSLTErrors = nil then
+  begin
+    FXSLTErrors := TXSLTErrors.Create;
+    FXSLTErrors._AddRef;
+  end;
   Result := FXSLTErrors;
+end;
+
+procedure TXMLNode.ClearXSLTErrors;
+begin
+  if FXSLTErrors <> nil then
+    ClearXSLTErrors;
 end;
 
 procedure TXMLNode.XSLTError(const Msg: string);
 begin
-  FXSLTErrors.FList.Add(TXSLTError.Create(Msg) as IXSLTError);
+  XSLTErrorList.FList.Add(TXSLTError.Create(Msg) as IXSLTError);
 end;
 
 function TXMLNode.HasAttributes: Boolean;
@@ -3396,7 +3442,7 @@ function TXMLNode.Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDocumen
 var
   Res: xmlDocPtr;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(stylesheet).NodePtr), Res, XSLTError);
   if Result then
@@ -3405,28 +3451,28 @@ end;
 
 function TXMLNode.Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
 end;
 
 function TXMLNode.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
 end;
 
 function TXMLNode.Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Stream, XSLTError);
 end;
 
 function TXMLNode.TransformNode(const stylesheet: IXMLDocument): string;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
 end;
@@ -3435,7 +3481,7 @@ function TXMLNode.TransformNodeToObject(const stylesheet, output: IXMLDocument):
 var
   Doc: XmlDocPtr;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
   if Result then
@@ -3444,7 +3490,7 @@ end;
 
 function TXMLNode.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := NodePtr.Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), output, XSLTError);
 end;
@@ -3578,9 +3624,14 @@ begin
   SetAttribute(Name, cBool[Value]);
 end;
 
+/// <remarks>A value without a time of day is written as xs:date, any other as xs:dateTime
+/// (<see cref="XmlConvert.FromDate"/>, <see cref="XmlConvert.FromDateTime"/>).</remarks>
 procedure TXMLElement.SetAttribute(const Name: string; Value: TDateTime);
 begin
-  SetAttribute(Name, ISODateTimeToStr(Value));
+  if Frac(Value) = 0 then
+    SetAttribute(Name, XmlConvert.FromDate(Value))
+  else
+    SetAttribute(Name, XmlConvert.FromDateTime(Value));
 end;
 
 function TXMLElement.SetAttributeNs(const NamespaceURI, Name: string; const Value: string): IXMLAttribute;
@@ -3866,7 +3917,7 @@ end;
 constructor TXMLErrors.Create;
 begin
   inherited Create;
-  FList := TInterfaceList.Create;
+  FList := TList<IInterface>.Create;
   FIndex := -1;
 end;
 
@@ -3874,6 +3925,11 @@ destructor TXMLErrors.Destroy;
 begin
   FreeAndNil(FList);
   inherited;
+end;
+
+procedure TXMLErrors.Add(const Error: TXmlParseError);
+begin
+  FList.Add(TXMLError.Create(Error) as IXMLParseError);
 end;
 
 procedure TXMLErrors.Clear;
@@ -3964,7 +4020,7 @@ end;
 constructor TXSLTErrors.Create;
 begin
   inherited Create;
-  FList := TInterfaceList.Create;
+  FList := TList<IInterface>.Create;
 end;
 
 destructor TXSLTErrors.Destroy;
@@ -3997,28 +4053,24 @@ end;
 
 constructor TXMLDocument.Create;
 begin
-  TMonitor.Enter(GlobalLock);
-  try
-    LX2Lib.Initialize;
-
-    if not Assigned(OldDeregisterNodeFunc) then
-      OldDeregisterNodeFunc := xmlDeregisterNodeDefault(NodeFreeCallback);
-  finally
-    TMonitor.Exit(GlobalLock);
-  end;
-
+  SetNodeFreeCallback;
   Create(xmlNewDoc(nil), True);
+end;
+
+function TXMLDocument.SuccessError: IXMLParseError;
+begin
+  if FSuccessError = nil then
+    FSuccessError := TXMLError.Create;
+  Result := FSuccessError;
 end;
 
 constructor TXMLDocument.Create(doc: xmlDocPtr; DocOwner: Boolean);
 begin
+  SetNodeFreeCallback;
   inherited Create(xmlNodePtr(doc));
 
   FErrors := TXMLErrors.Create;
   FErrors._AddRef;
-
-  FSuccessError := TXMLError.Create;
-  FSuccessError._AddRef;
 
   FDocOwner := DocOwner;
   FValidateOnParse := True;
@@ -4038,8 +4090,6 @@ begin
   inherited;
   if FErrors <> nil then
     FErrors._Release;
-  if FSuccessError <> nil then
-    FSuccessError._Release;
   if FSuccessor <> nil then
     FSuccessor._Release;
   FDetachedTrees.Free;   // empty: each record holds a reference on this object
@@ -4362,7 +4412,7 @@ begin
   if Errors.Count > 0 then
     Result := Errors.MainError
   else
-    Result := FSuccessError;
+    Result := SuccessError;
 end;
 
 function TXMLDocument.Get_PreserveWhiteSpace: Boolean;
@@ -4576,7 +4626,7 @@ function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out Doc: IXMLDoc
 var
   Res: xmlDocPtr;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(stylesheet).NodePtr), Res, XSLTError);
   if Result then
@@ -4585,28 +4635,28 @@ end;
 
 function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: RawByteString): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
 end;
 
 function TXMLDocument.Transform(const Stylesheet: IXMLDocument; out S: string): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), S, XSLTError);
 end;
 
 function TXMLDocument.Transform(const stylesheet: IXMLDocument; Stream: TStream): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Stream, XSLTError);
 end;
 
 function TXMLDocument.TransformNode(const stylesheet: IXMLDocument): string;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Result, XSLTError);
 end;
@@ -4615,7 +4665,7 @@ function TXMLDocument.TransformNodeToObject(const stylesheet, output: IXMLDocume
 var
   Doc: XmlDocPtr;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), Doc, XSLTError);
   if Result then
@@ -4624,7 +4674,7 @@ end;
 
 function TXMLDocument.TransformNodeToStream(const stylesheet: IXMLDocument; const output: TStream): Boolean;
 begin
-  FXSLTErrors.Clear;
+  ClearXSLTErrors;
 
   Result := xmlDocPtr(NodePtr).Transform(xmlDocPtr(TXMLDocument(Stylesheet).NodePtr), output, XSLTError);
 end;
@@ -4636,7 +4686,7 @@ begin
   xmlDocPtr(NodePtr).Validate(ErrorCallback);
 
   if Errors.Count = 0 then
-    Exit(FSuccessError)
+    Exit(SuccessError)
   else
     Result := Errors.MainError;
 end;
@@ -4650,7 +4700,7 @@ begin
   xmlDocPtr(NodePtr).ValidateNode(TXMLNode(Node).NodePtr, ErrorCallback);
 
   if Errors.Count = 0 then
-    Exit(FSuccessError)
+    Exit(SuccessError)
   else
     Result := Errors.MainError;
 end;
@@ -5176,6 +5226,13 @@ begin
   end;
 
   FCompiled := True;
+end;
+
+function TXMLSchemaCollection.CompiledSchema: xmlSchemaPtr;
+begin
+  if not FCompiled then
+    Compile;
+  Result := FSchema;
 end;
 
 function TXMLSchemaCollection.Validate(const Doc: IXMLDocument): Boolean;

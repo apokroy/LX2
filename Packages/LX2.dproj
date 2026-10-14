@@ -171,6 +171,7 @@
         <DCCReference Include="..\Source\LX2.SAX.pas"/>
         <DCCReference Include="..\Source\LX2.DOM.pas"/>
         <DCCReference Include="..\Source\LX2.DOM.Classes.pas"/>
+        <DCCReference Include="..\Source\LX2.Reader.pas"/>
         <DCCReference Include="..\Source\RttiDispatch.pas"/>
         <DCCReference Include="..\Source\LX2.XPATH.pas"/>
         <DCCReference Include="..\Source\LX2.Static.pas"/>

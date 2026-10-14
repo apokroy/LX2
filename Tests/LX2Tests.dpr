@@ -20,7 +20,8 @@ uses
   {$ENDIF }
   DUnitX.TestFramework,
   LX2.Static,
-  LX2APITests in 'LX2APITests.pas';
+  LX2APITests in 'LX2APITests.pas',
+  LX2ReaderTests in 'LX2ReaderTests.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

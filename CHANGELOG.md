@@ -33,6 +33,67 @@
 - `libxslt.API`: `xsltSetLoaderFunc`, `xsltSetCtxtParseOptions` and the `xsltDocLoaderFunc` and
   `xsltLoadType` types.
 
+- `LX2.Reader`: a pull reader after `System.Xml.XmlReader` over the libxml2 xmlTextReader. The
+  caller moves a cursor through the nodes, memory stays constant whatever the size of the
+  document, and the positioning rules are those of .NET (`MoveToContent`, `ReadTo*`,
+  `Read*Element`, `ReadElementContentAs*`, `ReadSubtree`, `ReadInnerXml`/`ReadOuterXml`).
+  - `IXmlReader` is reference counted and late-bindable, like the DOM interfaces; `XmlReader`
+    creates it from a string, bytes, a stream, a file or a loaded `IXMLDocument` and initialises
+    `LX2Lib` itself, as the DOM and SAX layers do; `TXmlReaderSettings` holds the options, with
+    no DTD by default.
+  - `Elements(Name)` walks records as readers of their subtrees and `ReadElements(Name)` as DOM
+    copies (`IXMLElement`). Either finds every record, whatever the loop body reads, where a
+    `while Read` loop around `ReadElementContentAs*` misses every second record of minified XML.
+  - `ReadElement` copies the current element into a document of its own (`XNode.ReadFrom`) and
+    declares there every namespace in scope, so prefixes in values (`xsi:type="t:Code"`) keep
+    their meaning; `ReadElement(Doc)` makes the copy in a given document.
+  - `Expand` gives the current element as DOM nodes of the reader's own tree, without a copy, in
+    less than half the time of `ReadElement`; the nodes live until the reader moves.
+  - Typed content (`Integer`, `Int64`, `Double`, `Currency`, `Boolean`, `TDateTime`) is read in
+    the lexical space of XML Schema, the same on every locale; base64 content is decoded into a
+    stream as the reader goes.
+  - Whitespace-only text is `Whitespace` or, under `xml:space="preserve"`, `SignificantWhitespace`
+    (libxml2 alone calls all of it significant); `IgnoreWhitespace`, `IgnoreComments` and
+    `IgnoreProcessingInstructions` pass over such nodes.
+  - Validation while reading against an `IXMLSchemaCollection`, with `OnValidationError` or, without
+    it, an exception at the first validation error.
+- `xmlTextReaderHelper` in `LX2.Helpers`: the reader on the level of the C API, with UTF-8 names
+  and values, name atoms compared by pointer, `Read` that raises `EXmlParserError` on malformed
+  XML, the .NET positioning methods, `CopyNode`/`ReadNode` and `SetSchema`. Errors are not printed
+  to stderr, and an exception of an error handler or of the input stream is raised from the
+  call that met it instead of unwinding through libxml2. A reader over a `RawByteString`, a
+  `string` or `TBytes` parses the buffer in place, holding a reference to it.
+- `XmlConvert` in `LX2.Types`: conversions between Delphi values and the lexical forms of XML
+  Schema (`xs:boolean`, `xs:int`, `xs:long`, `xs:double`, `xs:decimal` as `Currency`,
+  `xs:dateTime` and `xs:date`), with overloads that read UTF-8 in place.
+- `EXmlReaderError` in `LX2.Types`, `TXMLSchemaCollection.CompiledSchema`, `TXMLErrors.Add` and
+  `NodeWrapper` in `LX2.DOM.Classes`. A node of a document that no `IXMLDocument` holds (the
+  tree of a reader, a document built through the helpers) gets a wrapper with a nil
+  `OwnerDocument`, and the `ParentNode` of its root is nil.
+- `libxml2.API`: `xmlTextReaderMode`.
+
+### Changed
+
+- `IXMLElement.SetAttribute(Name, TDateTime)` writes `xs:date` (`2026-01-05`) or `xs:dateTime`
+  (`2026-01-05T09:03:07`); it wrote `2026-1-5 9:3:7`, which neither XML Schema nor ISO 8601
+  accepts.
+- DOM node wrappers cost less to create and free: the error lists of a document no longer
+  carry a lock of their own, and the XSLT error list of a node and the success error object of
+  a document are made on first use.
+
+### Fixed
+
+- `LX2Lib.Initialize` called from several threads at once could load the library twice, the
+  second load unloading it first (`xmlCleanupParser`) under the parse of another thread. The
+  first caller loads now, the others wait for it.
+- `TXMLDocument.Create(Doc, DocOwner)` did not install the node callback of libxml2: when a
+  document object made that way was the first in the process, the wrappers of nodes libxml2
+  freed afterwards kept pointers to freed memory.
+- `libxml2.API` declarations: `xmlReaderForMemory` took its URL and encoding as `Integer`,
+  `xmlTextReaderCurrentDoc` returned `xmlNodePtr`, `xmlTextReaderPreservePattern` could not take a
+  nil list of namespaces, and the result of `xmlGetNsListSafe` was declared as the array itself
+  instead of a pointer to it.
+
 ## v1.3.0 — 2026-10-13
 
 ### Added

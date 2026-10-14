@@ -594,7 +594,8 @@ type
     procedure SetAttribute(const Name: string; Value: Boolean); overload;
 
     /// <summary>
-    ///
+    /// Sets the attribute to the date as xs:date (<c>2026-10-13</c>) when it has no time of
+    /// day, otherwise as xs:dateTime without a time zone (<c>2026-10-13T09:05:00</c>).
     /// </summary>
     procedure SetAttribute(const Name: string; Value: TDateTime); overload;
 

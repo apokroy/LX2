@@ -115,6 +115,7 @@
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
         <DCCReference Include="LX2APITests.pas"/>
+        <DCCReference Include="LX2ReaderTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
