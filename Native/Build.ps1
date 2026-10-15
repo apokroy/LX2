@@ -580,8 +580,17 @@ function Build-WinARM64EC {
         }
 
         # llvm-lib merges the import members into the archive: one library name on the Pascal side.
+        # It names each member by the path it is given, so the files go by name from the temporary
+        # directory: the archive carries no path of the build machine.
         Remove-Item $Arm64ECArchive -ErrorAction SilentlyContinue
-        $res = Invoke-NativeLines { & $LlvmLib /machine:arm64ec "/out:$Arm64ECArchive" @objs @implibs }
+        $members = @(@($objs) + @($implibs) | ForEach-Object { Split-Path $_ -Leaf })
+        Push-Location $tmp
+        try {
+            $res = Invoke-NativeLines { & $LlvmLib /machine:arm64ec "/out:$Arm64ECArchive" @members }
+        }
+        finally {
+            Pop-Location
+        }
         if ($LASTEXITCODE -ne 0) { throw "llvm-lib exited with code $LASTEXITCODE`n$($res -join "`n")" }
         Write-Host ("  {0}: {1} objects, {2:N0} bytes" -f $LinuxArchiveName, $objs.Count, (Get-Item $Arm64ECArchive).Length)
     }

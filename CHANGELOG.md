@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
 
@@ -89,7 +89,10 @@
   distribution.
 - `Native\Build.ps1` compiles with `-fmacro-prefix-map`: `__FILE__` in the libxslt messages
   names the source relative to `Native`, so the objects no longer depend on, or carry, the
-  directory of the build machine. The Linux64 archive is rebuilt this way.
+  directory of the build machine; `llvm-lib` gets the members of the WinARM64EC archive by name,
+  without the temporary directory they are built in. The Linux64 and WinARM64EC archives and the
+  three Win64 objects that named a source (`xslt_attrvt.o`, `xslt_preproc.o`, `xslt_transform.o`)
+  are rebuilt this way; the other Win64 objects stay the profile-guided build.
 
 ### Fixed
 
